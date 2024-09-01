@@ -1,4 +1,7 @@
-use crate::lexer::{Span, Spanned, Token, Tokens, T};
+use crate::lexer::{Iter, Span, Spanned, Token, Tokens, T};
+use chumsky::extra::Full;
+use chumsky::input::{Input, SpannedInput, Stream};
+use chumsky::prelude::*;
 
 #[derive(Clone, Debug)]
 pub struct Program<Meta> {
@@ -61,253 +64,92 @@ pub enum BinOp {
     Mul,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct Parser<'a> {
-    tokens: &'a Tokens,
-    src: &'a str,
-    index: usize,
-}
+// We should change the error type to `Cheap<Token, Span>` once we're confident there will be no parse errors.
+type Extra<'a> = Full<Simple<'a, Token, Span>, &'a str, ()>;
+type In<'a> = SpannedInput<Token, Span, Stream<Iter<'a>>>;
 
-use std::sync::Mutex;
-static AWA: Mutex<usize> = Mutex::new(0);
-
-impl<'a> Parser<'a> {
-    fn new(tokens: &'a Tokens, src: &'a str) -> Self {
-        Self {
-            tokens,
-            src,
-            index: 0,
-        }
-    }
-    fn byte_position(&self) -> usize {
-        match self.peek() {
-            Some(s) => s.span.start,
-            None => match self.tokens.last() {
-                Some(s) => s.span.start + s.span.len,
-                None => 0,
-            },
-        }
-    }
-    fn span_from_start(&self, start: usize) -> Span {
-        let len = self.byte_position() - start;
-        Span { start, len }
-    }
-    fn peek(&self) -> Option<Spanned> {
-        let y = self.tokens.get(self.index);
-        let mut x = AWA.lock().unwrap();
-        if *x > 200 {
-            panic!()
-        } else {
-            *x += 1
-        }
-        println!("mjau {y:?}");
-        y
-    }
-    fn consume(&mut self) -> Option<Spanned> {
-        let t = self.peek()?;
-        self.index += 1;
-        Some(t)
-    }
-    fn consume_if<F: Fn(Token) -> bool>(&mut self, predicate: F) -> Option<Spanned> {
-        let t = self.peek()?;
-        if predicate(t.token) {
-            self.consume().unwrap();
-            Some(t)
-        } else {
-            None
-        }
-    }
-    fn consume_token(&mut self, token: Token) -> Option<Span> {
-        self.consume_if(|t| t == token)
-            .map(|Spanned { span, .. }| span)
-    }
-    fn parse_program(&mut self) -> Program<Span> {
-        let mut decls = vec![];
-        let start = self.byte_position();
-        while self.peek().is_some() {
-            decls.push(self.parse_decl());
-            let _ = self.consume_token(T::Newline);
-        }
-        return Program {
+pub fn parse_program<'a>() -> impl Parser<'a, In<'a>, Program<Span>, Extra<'a>> {
+    parse_decl()
+        .repeated()
+        .collect()
+        .map_with(|decls, extra| Program {
             decls,
-            meta: self.span_from_start(start),
-        };
-    }
-    fn parse_decl(&mut self) -> Decl<Span> {
-        let start = self.byte_position();
-        let kind = 'kind: {
-            if self.consume_if(|t| t == T::Fn).is_some() {
-                let Some(name) = self.parse_name() else {
-                    break 'kind DeclKind::Error;
-                };
-                if self.consume_token(T::ParenOpen).is_none() {
-                    break 'kind DeclKind::Error;
-                }
-                let Some(Spanned {
-                    token: block_begin, ..
-                }) = self.consume()
-                else {
-                    break 'kind DeclKind::Error;
-                };
-                let parameters = match block_begin {
-                    T::Newline => {
-                        if self.consume_token(T::Indent).is_none() {
-                            break 'kind DeclKind::Error;
-                        }
-                        let mut parameters = vec![];
-                        loop {
-                            let Some(pname) = self.parse_name() else {
-                                break 'kind DeclKind::Error;
-                            };
-                            let Some(tname) = self.parse_name() else {
-                                break 'kind DeclKind::Error;
-                            };
-                            parameters.push((pname, tname));
-                            if self.consume_token(T::Newline).is_none() {
-                                break 'kind DeclKind::Error;
-                            }
-                            if self.consume_token(T::Dedent).is_some() {
-                                break;
-                            }
-                        }
-                        if self.consume_token(T::ParenClose).is_none() {
-                            break 'kind DeclKind::Error;
-                        }
-                        parameters
-                    }
-                    T::ParenClose => vec![],
-                    _ => break 'kind DeclKind::Error,
-                };
-                // parse return type
-                let returns = if self.consume_token(T::ThinArrow).is_some() {
-                    let Some(rname) = self.parse_name() else {
-                        break 'kind DeclKind::Error;
-                    };
-                    Some(rname)
-                } else {
-                    None
-                };
-                let body = self.parse_block();
-                DeclKind::Function {
-                    name,
-                    parameters,
-                    returns,
-                    body,
-                }
-            } else {
-                DeclKind::Error
-            }
-        };
-        if matches!(kind, DeclKind::Error) {
-            // TODO: actually skip to the next line/block
-            self.consume();
-        }
-        Decl {
-            kind,
-            meta: self.span_from_start(start),
-        }
-    }
-    fn parse_block(&mut self) -> Block<Span> {
-        let start = self.byte_position();
-        let statements = 'blk: {
-            if self.consume_token(T::Colon).is_none() {
-                break 'blk vec![];
-            }
-            if self.consume_token(T::Newline).is_none() {
-                break 'blk vec![];
-            }
-            if self.consume_token(T::Indent).is_none() {
-                break 'blk vec![];
-            }
-            let mut statements = vec![];
-            while self.consume_token(T::Dedent).is_none() {
-                statements.push(self.parse_statement())
-            }
-            statements
-        };
-        Block {
+            meta: extra.span(),
+        })
+        .then_ignore(end())
+}
+
+pub fn parse_decl<'a>() -> impl Parser<'a, In<'a>, Decl<Span>, Extra<'a>> {
+    parse_function().map_with(|kind, extra| Decl {
+        kind,
+        meta: extra.span(),
+    })
+}
+
+pub fn parse_function<'a>() -> impl Parser<'a, In<'a>, DeclKind<Span>, Extra<'a>> {
+    just(T::Fn)
+        .ignore_then(parse_name())
+        .then(parse_list(
+            just(T::ParenOpen),
+            just(T::ParenClose),
+            parse_name().then(parse_name()),
+        ))
+        .then(just(T::ThinArrow).ignore_then(parse_name()).or_not())
+        .then(parse_block())
+        .map(|(((name, parameters), returns), body)| DeclKind::Function {
+            name,
+            parameters,
+            returns,
+            body,
+        })
+}
+
+pub fn parse_block<'a>() -> impl Parser<'a, In<'a>, Block<Span>, Extra<'a>> {
+    just(T::Colon).ignore_then(parse_list(empty(), empty(), parse_statement()).map_with(
+        |statements, extra| Block {
             statements,
-            meta: self.span_from_start(start),
-        }
-    }
-    fn parse_statement(&mut self) -> Statement<Span> {
-        let start = self.byte_position();
-        let expr = self.parse_expr();
-        let _ = self.consume_token(T::Newline);
-        let kind = StatementKind::Expr(expr);
-        Statement {
-            kind,
-            meta: self.span_from_start(start),
-        }
-    }
-    fn parse_expr(&mut self) -> Expr<Span> {
-        self.parse_expr_with_precedence(0, false)
-    }
-    fn parse_expr_with_precedence(&mut self, p: u8, mut indent: bool) -> Expr<Span> {
-        println!("parse_expr_with_precedence({p}, {indent})");
-        let start = self.byte_position();
-        let kind = 'kind: {
-            let Some(var) = self.parse_name() else {
-                break 'kind ExprKind::Error;
-            };
-            let mut expr = ExprKind::Var(var);
-            loop {
-                if self.consume_token(T::Newline).is_some() {
-                    println!("    nl");
-                    if self.consume_token(T::Indent).is_some() {
-                        println!("    indent");
-                        if indent {
-                            todo!("multiple indents error");
-                        } else {
-                            indent = true;
-                        }
-                    }
-                    println!("    and so {indent} {:?}", self.peek());
-                    if !indent || self.consume_token(T::Dedent).is_some() {
-                        println!("    ergo break");
-                        break;
-                    }
-                    println!("    ergo onward");
-                }
-                let Some((op, lp, rp)) = self.peek().and_then(|v| get_infix_operator(v.token))
-                else {
-                    break;
-                };
-                println!("> {op:?} {lp} {rp}");
-                if lp < p {
-                    break;
-                }
-                let lhs = Expr {
-                    kind: expr,
-                    meta: self.span_from_start(start),
-                };
-                self.consume().unwrap();
-                let rhs = self.parse_expr_with_precedence(rp, indent);
-                expr = ExprKind::BinOp(op, Box::new(lhs), Box::new(rhs));
-            }
-            expr
-        };
-        println!("expr returning {kind:?}");
-        Expr {
-            kind,
-            meta: self.span_from_start(start),
-        }
-    }
-    fn parse_name(&mut self) -> Option<String> {
-        let span = self.consume_token(T::Name)?;
-        Some(self.src[span.start..span.start + span.len].to_owned())
-    }
+            meta: extra.span(),
+        },
+    ))
 }
 
-fn get_infix_operator(t: Token) -> Option<(BinOp, u8, u8)> {
-    let x = match t {
-        T::Plus => (BinOp::Add, 1, 2),
-        T::Times => (BinOp::Mul, 3, 4),
-        _ => return None,
-    };
-    Some(x)
+pub fn parse_statement<'a>() -> impl Parser<'a, In<'a>, Statement<Span>, Extra<'a>> {
+    parse_expr(true).map_with(|expr, extra| Statement {
+        kind: StatementKind::Expr(expr),
+        meta: extra.span(),
+    })
 }
 
-pub fn parse(tokens: &Tokens, src: &str) -> Program<Span> {
-    Parser::new(tokens, src).parse_program()
+pub fn parse_expr<'a>(consume_newline: bool) -> impl Parser<'a, In<'a>, Statement<Span>, Extra<'a>> {
+    todo()
+}
+
+pub fn parse_list<'a, E, P, P2, Awa>(
+    open: P2,
+    close: P2,
+    elem: P,
+) -> impl Parser<'a, In<'a>, Vec<E>, Extra<'a>>
+where
+    P2: Parser<'a, In<'a>, Awa, Extra<'a>>,
+    P: Parser<'a, In<'a>, E, Extra<'a>>,
+{
+    let elems = elem.then_ignore(just(T::Newline)).repeated().collect();
+    open.ignore_then(just(T::Newline))
+        .ignore_then(just(T::Indent))
+        .ignore_then(elems)
+        .then_ignore(just(T::Dedent))
+        .then_ignore(close)
+}
+
+pub fn parse_name<'a>() -> impl Parser<'a, In<'a>, String, Extra<'a>> {
+    just(T::Name).map_with(|_, extra| {
+        let src: &str = *extra.state();
+        let span: Span = extra.span();
+        src[span.start..span.start + span.len].to_owned()
+    })
+}
+
+pub fn parse<'a>(tokens: &'a Tokens, mut src: &'a str) -> Program<Span> {
+    let stream = Stream::from_iter(tokens.iter()).spanned(tokens.eof_span());
+    parse_program().parse_with_state(stream, &mut src).unwrap()
 }

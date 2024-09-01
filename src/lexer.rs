@@ -1,4 +1,7 @@
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+use chumsky::span::Span as ChumskySpan;
+use core::ops::Range;
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[repr(u8)]
 pub enum Token {
     Error,
@@ -33,6 +36,24 @@ pub struct Span {
     pub len: usize,
 }
 
+impl ChumskySpan for Span {
+    type Context = ();
+    type Offset = usize;
+    fn new((): (), Range { start, end }: Range<usize>) -> Self {
+        Span {
+            start,
+            len: end - start,
+        }
+    }
+    fn context(&self) {}
+    fn start(&self) -> usize {
+        self.start
+    }
+    fn end(&self) -> usize {
+        self.start + self.len
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Spanned {
     pub token: Token,
@@ -48,6 +69,11 @@ pub struct Tokens {
     pub has_error: bool,
 }
 
+use core::iter::{Copied, Zip};
+use core::slice::Iter as SliceIter;
+
+pub type Iter<'a> = Zip<Copied<SliceIter<'a, Token>>, Copied<SliceIter<'a, Span>>>;
+
 impl Tokens {
     pub fn new() -> Self {
         Self::default()
@@ -57,6 +83,7 @@ impl Tokens {
         self.kinds.push(token);
         self.spans.push(span);
     }
+    /*
     pub fn get(&self, i: usize) -> Option<Spanned> {
         let token = *self.kinds.get(i)?;
         let span = self.spans[i];
@@ -74,6 +101,21 @@ impl Tokens {
     }
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+    */
+    pub fn iter(&self) -> Iter {
+        self.kinds.iter().copied().zip(self.spans.iter().copied())
+    }
+    pub fn eof_span(&self) -> Span {
+        let last_span = self
+            .spans
+            .last()
+            .copied()
+            .unwrap_or(Span { start: 0, len: 0 });
+        Span {
+            start: last_span.start + last_span.len,
+            len: 0,
+        }
     }
 }
 
