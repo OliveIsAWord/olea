@@ -1,19 +1,10 @@
-
-fn woof(
-    x u8
-    y u8
-) -> u8:
-    x
-        + y
-        * z
-      meow
-
-end
-
-fn wow(
- x u8
- y u8
-):
-    awa
-
-end
+(
+  (ExternMod "vec" "vec.yafl")
+  (ExternMod "pt" "piece_table.yafl")
+  (Use "vec" ("push"))
+  (Func Public "foo" (
+      ((qualifiers) (base . "push"))
+      ((qualifiers "vec") (base . "new"))
+      ((qualifiers "pt") (base . "seek"))
+  ))
+)

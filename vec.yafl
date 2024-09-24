@@ -1,0 +1,13 @@
+(
+  (Func Private "new_unchecked" (
+      ((qualifiers) (base . "new"))
+  ))
+  (Func Public "new" (
+      ((qualifiers) (base . "new_unchecked"))
+      ((qualifiers) (base . "push"))
+  ))
+  (Func Public "push" (
+      ((qualifiers) (base . "new"))
+      ((qualifiers) (base . "push"))
+  ))
+)

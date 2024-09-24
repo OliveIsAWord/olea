@@ -5,4 +5,5 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-chumsky = "1.0.0-alpha.7"
+serde = { version = "1.0.209", features = ["derive"] }
+serde-lexpr = "0.1.3"
