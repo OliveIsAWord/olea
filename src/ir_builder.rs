@@ -75,10 +75,12 @@ impl IrBuilder {
                 };
                 let lhs_reg = self.build_expr(lhs).unwrap();
                 let rhs_reg = self.build_expr(rhs).unwrap();
-                self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg))
-                    .some()
+                self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg)).some()
             }
-            E::Var(string) => self.get_var(string).some(),
+            E::Var(string) => {
+                let var_reg = self.get_var(string);
+                self.push_store(StoreKind::Read(var_reg)).some()
+            }
             E::If(cond, then_body, else_body) => {
                 let cond_reg = self.build_expr(cond).unwrap();
                 let then_id = self.reserve_block_id();
@@ -89,7 +91,6 @@ impl IrBuilder {
                     JumpLocation::Block(then_id),
                     JumpLocation::Block(else_id),
                 ));
-
                 // compile both branches
                 let returns = [(then_id, then_body), (else_id, else_body)].map(|(id, body)| {
                     self.switch_to_new_block(id);
@@ -106,6 +107,13 @@ impl IrBuilder {
                     }
                     _ => None,
                 }
+            }
+            E::Block(b) => self.build_block(b),
+            E::Assign(var, body) => {
+                let value_reg = self.build_expr(body).unwrap();
+                let var_reg = self.get_var(var);
+                self.push_write(var_reg, value_reg);
+                None
             }
         }
     }
@@ -132,12 +140,11 @@ impl IrBuilder {
     }
 
     fn get_var(&mut self, name: &str) -> Register {
-        for scope in self.scopes.iter().rev() {
-            if let Some(&reg) = scope.get(name) {
-                return self.push_store(StoreKind::Read(reg));
-            }
-        }
-        panic!("variable {name:?} not found")
+        self.scopes
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(name).copied())
+            .expect("variable {name:?} not found")
     }
 
     fn push_write(&mut self, dst: Register, src: Register) {

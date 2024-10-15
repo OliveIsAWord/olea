@@ -1,5 +1,5 @@
 (
   (Let "foo" (Int . 32) (Int . 1))
   (Expr . (BinOp Add (Var . "foo") (Int . 1)))
-  (Expr . (If (Var . "foo") (Int . 0) (Int . 1)))
+  (Expr . (If (Var . "foo") (Block (Expr . (Assign "foo" (Int . 1001))) (Expr . (Int . 0))) (Int . 1)))
 )

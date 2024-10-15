@@ -17,6 +17,8 @@ pub enum Expr {
     Var(String),
     BinOp(BinOp, Box<Expr>, Box<Expr>),
     If(Box<Expr>, Box<Expr>, Box<Expr>),
+    Assign(String, Box<Expr>),
+    Block(Block),
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
