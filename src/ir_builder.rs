@@ -72,6 +72,7 @@ impl IrBuilder {
                 use BinOp as B;
                 let op_kind = match op {
                     A::Add => B::Add,
+                    A::Sub => B::Sub,
                 };
                 let lhs_reg = self.build_expr(lhs).unwrap();
                 let rhs_reg = self.build_expr(rhs).unwrap();
@@ -81,22 +82,29 @@ impl IrBuilder {
                 let var_reg = self.get_var(string);
                 self.push_store(StoreKind::Read(var_reg)).some()
             }
+            E::Assign(var, body) => {
+                let value_reg = self.build_expr(body).unwrap();
+                let var_reg = self.get_var(var);
+                self.push_write(var_reg, value_reg);
+                None
+            }
+            E::Block(b) => self.build_block(b),
             E::If(cond, then_body, else_body) => {
                 let cond_reg = self.build_expr(cond).unwrap();
                 let then_id = self.reserve_block_id();
                 let else_id = self.reserve_block_id();
                 let end_id = self.reserve_block_id();
                 self.push_inst(Inst::CondJump(
-                    Condition::Zero(cond_reg),
+                    Condition::NonZero(cond_reg),
                     JumpLocation::Block(then_id),
                     JumpLocation::Block(else_id),
                 ));
-                // compile both branches
+                // compile both branches (todo: cond and then_body should share scope)
                 let returns = [(then_id, then_body), (else_id, else_body)].map(|(id, body)| {
                     self.switch_to_new_block(id);
                     self.enter_scope();
                     let then_yield = self.build_expr(body);
-                    self.push_jump(JumpLocation::Block(end_id));
+                    self.push_jump_block(end_id);
                     self.exit_scope();
                     then_yield
                 });
@@ -108,11 +116,31 @@ impl IrBuilder {
                     _ => None,
                 }
             }
-            E::Block(b) => self.build_block(b),
-            E::Assign(var, body) => {
-                let value_reg = self.build_expr(body).unwrap();
-                let var_reg = self.get_var(var);
-                self.push_write(var_reg, value_reg);
+            E::While(cond, body) => {
+                // jump to condition evaluation
+                let cond_id = self.reserve_block_id();
+                let body_id = self.reserve_block_id();
+                let end_id = self.reserve_block_id();
+                self.push_jump_block(cond_id);
+
+                // condition evaluation, jump to either inner body or end of expression
+                self.switch_to_new_block(cond_id);
+                self.enter_scope(); // with code like `while x is Some(y): ...`, `y` should be accessible from the body
+                let cond_reg = self.build_expr(cond).unwrap();
+                self.push_inst(Inst::CondJump(
+                    Condition::NonZero(cond_reg),
+                    JumpLocation::Block(body_id),
+                    JumpLocation::Block(end_id),
+                ));
+
+                // body evaluation, jump back to condition
+                self.switch_to_new_block(body_id);
+                self.build_expr(body);
+                self.push_jump_block(cond_id);
+                self.exit_scope();
+
+                // continue evaluation after while loop
+                self.switch_to_new_block(end_id);
                 None
             }
         }
@@ -120,6 +148,7 @@ impl IrBuilder {
 
     pub fn finish(mut self) -> Function {
         self.switch_to_new_block(420);
+        assert_eq!(self.scopes.len(), 1);
         Function {
             blocks: self.blocks,
         }
@@ -157,8 +186,8 @@ impl IrBuilder {
         reg
     }
 
-    fn push_jump(&mut self, location: JumpLocation) {
-        self.push_inst(Inst::Jump(location));
+    fn push_jump_block(&mut self, id: usize) {
+        self.push_inst(Inst::Jump(JumpLocation::Block(id)));
     }
 
     fn push_inst(&mut self, inst: Inst) {

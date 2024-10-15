@@ -31,12 +31,13 @@ pub enum StoreKind {
 #[derive(Clone, Debug)]
 pub enum BinOp {
     Add,
+    Sub,
 }
 
 #[derive(Clone, Debug)]
 pub enum Condition {
     // Always,
-    Zero(Register),
+    NonZero(Register),
 }
 
 #[derive(Clone, Debug)]
