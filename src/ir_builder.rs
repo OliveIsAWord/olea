@@ -64,9 +64,9 @@ impl IrBuilder {
 
     fn build_expr(&mut self, expr: &ast::Expr) -> Option<Register> {
         use ast::Expr as E;
-        use SimpleKind as Sk;
+        use StoreKind as Sk;
         match expr {
-            &E::Int(i) => self.push_simple(Sk::Int(i.into())).some(),
+            &E::Int(i) => self.push_store(Sk::Int(i.into())).some(),
             E::BinOp(op, lhs, rhs) => {
                 use ast::BinOp as A;
                 use BinOp as B;
@@ -75,7 +75,7 @@ impl IrBuilder {
                 };
                 let lhs_reg = self.build_expr(lhs).unwrap();
                 let rhs_reg = self.build_expr(rhs).unwrap();
-                self.push_simple(Sk::BinOp(op_kind, lhs_reg, rhs_reg))
+                self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg))
                     .some()
             }
             E::Var(string) => self.get_var(string).some(),
@@ -102,7 +102,7 @@ impl IrBuilder {
                 self.switch_to_new_block(end_id);
                 match returns {
                     [Some(then_reg), Some(else_reg)] => {
-                        self.push_simple(Sk::Phi(then_reg, else_reg)).some()
+                        self.push_store(Sk::Phi(then_reg, else_reg)).some()
                     }
                     _ => None,
                 }
@@ -126,7 +126,7 @@ impl IrBuilder {
     }
 
     fn new_var(&mut self, name: String) -> Register {
-        let reg = self.push_simple(SimpleKind::StackAlloc(69));
+        let reg = self.push_store(StoreKind::StackAlloc(69));
         self.scopes.last_mut().unwrap().insert(name, reg);
         reg
     }
@@ -134,7 +134,7 @@ impl IrBuilder {
     fn get_var(&mut self, name: &str) -> Register {
         for scope in self.scopes.iter().rev() {
             if let Some(&reg) = scope.get(name) {
-                return self.push_simple(SimpleKind::Read(reg));
+                return self.push_store(StoreKind::Read(reg));
             }
         }
         panic!("variable {name:?} not found")
@@ -144,9 +144,9 @@ impl IrBuilder {
         self.push_inst(Inst::Write(dst, src));
     }
 
-    fn push_simple(&mut self, sk: SimpleKind) -> Register {
+    fn push_store(&mut self, sk: StoreKind) -> Register {
         let reg = self.new_reg();
-        self.push_inst(Inst::Simple(reg, sk));
+        self.push_inst(Inst::Store(reg, sk));
         reg
     }
 

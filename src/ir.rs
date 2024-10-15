@@ -12,14 +12,14 @@ pub struct Block {
 
 #[derive(Clone, Debug)]
 pub enum Inst {
-    Simple(Register, SimpleKind),
+    Store(Register, StoreKind),
     Write(Register, Register),
     Jump(JumpLocation),
     CondJump(Condition, JumpLocation, JumpLocation),
 }
 
 #[derive(Clone, Debug)]
-pub enum SimpleKind {
+pub enum StoreKind {
     Int(u128),
     // Copy(Register),
     Phi(Register, Register),
