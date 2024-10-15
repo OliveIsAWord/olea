@@ -1,10 +1,5 @@
 (
-  (ExternMod "vec" "vec.yafl")
-  (ExternMod "pt" "piece_table.yafl")
-  (Use "vec" ("push"))
-  (Func Public "foo" (
-      ((qualifiers) (base . "push"))
-      ((qualifiers "vec") (base . "new"))
-      ((qualifiers "pt") (base . "seek"))
-  ))
+  (Let "foo" (Int . 32) (Int . 1))
+  (Expr . (BinOp Add (Var . "foo") (Int . 1)))
+  (Expr . (If (Var . "foo") (Int . 0) (Int . 1)))
 )
