@@ -1,6 +1,6 @@
 {
 
-description = "A compiler for a yet unnamed yet another fox32 language.";
+description = "The Olea programming language";
 
 inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -11,7 +11,7 @@ outputs = { self, nixpkgs }: let
 in {
   packages = allSystems (pkgs: {
     default = pkgs.rustPlatform.buildRustPackage {
-      pname = "yafl";
+      pname = "olea";
       version = "0.1.0";
       src = self;
       cargoLock.lockFile = ./Cargo.lock;
