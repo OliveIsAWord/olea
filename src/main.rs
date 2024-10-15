@@ -7,7 +7,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let st: ast::Block = serde_lexpr::from_str(&src)?;
     println!("{st:?}");
     let mut builder = ir_builder::IrBuilder::new();
-    builder.build_block(&st);
+    builder.build_block(&st, false);
     let ir = builder.finish();
     println!("{ir:?}");
     Ok(())

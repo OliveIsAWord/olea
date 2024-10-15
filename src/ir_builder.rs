@@ -9,12 +9,30 @@ trait ToSome {
     fn some(self) -> Option<Self>
     where
         Self: Sized;
+
+    fn some_if(self, condition: bool) -> Option<Self>
+    where
+        Self: Sized;
 }
 
 impl<T> ToSome for T {
     fn some(self) -> Option<Self> {
         Some(self)
     }
+
+    fn some_if(self, condition: bool) -> Option<Self> {
+        condition.then_some(self)
+    }
+}
+
+fn unvoid_assert<T: std::fmt::Debug>(unvoid: bool, item: Option<T>) -> Option<T> {
+    match (unvoid, &item) {
+        (true, Some(_)) | (false, None) => (),
+        (false, Some(_)) | (true, None) => {
+            panic!("unvoid assert\nunvoid: {unvoid}\nitem: {item:?}")
+        }
+    }
+    item
 }
 
 #[derive(Clone, Debug)]
@@ -39,34 +57,48 @@ impl IrBuilder {
         }
     }
 
-    pub fn build_block(&mut self, ast::Block(stmts): &ast::Block) -> Option<Register> {
+    pub fn build_block(
+        &mut self,
+        ast::Block(stmts): &ast::Block,
+        unvoid: bool,
+    ) -> Option<Register> {
         self.enter_scope();
         let mut last_stmt_return = None;
-        for stmt in stmts {
-            last_stmt_return = self.build_stmt(stmt);
+        for (i, stmt) in stmts.iter().enumerate() {
+            let is_last = i == stmts.len() - 1;
+            last_stmt_return = self.build_stmt(stmt, unvoid && is_last);
         }
         self.exit_scope();
-        last_stmt_return
+        unvoid_assert(unvoid, last_stmt_return)
     }
 
-    fn build_stmt(&mut self, stmt: &ast::Stmt) -> Option<Register> {
+    fn build_stmt(&mut self, stmt: &ast::Stmt, unvoid: bool) -> Option<Register> {
         use ast::Stmt as S;
-        match stmt {
+        let reg = match stmt {
             S::Let(name, _ty, body) => {
                 let alloc_reg = self.new_var(name.clone());
-                let value_reg = self.build_expr(body).unwrap();
+                let value_reg = self.build_expr_unvoid(body);
                 self.push_write(alloc_reg, value_reg);
                 None
             }
-            S::Expr(expr) => self.build_expr(expr),
-        }
+            S::Expr(expr) => self.build_expr(expr, unvoid),
+        };
+        unvoid_assert(unvoid, reg)
     }
 
-    fn build_expr(&mut self, expr: &ast::Expr) -> Option<Register> {
+    fn build_expr_void(&mut self, expr: &ast::Expr) {
+        assert_eq!(self.build_expr(expr, false), None);
+    }
+
+    fn build_expr_unvoid(&mut self, expr: &ast::Expr) -> Register {
+        self.build_expr(expr, true).unwrap()
+    }
+
+    fn build_expr(&mut self, expr: &ast::Expr, unvoid: bool) -> Option<Register> {
         use ast::Expr as E;
         use StoreKind as Sk;
-        match expr {
-            &E::Int(i) => self.push_store(Sk::Int(i.into())).some(),
+        let reg = match expr {
+            &E::Int(i) => self.push_store(Sk::Int(i.into())).some_if(unvoid),
             E::BinOp(op, lhs, rhs) => {
                 use ast::BinOp as A;
                 use BinOp as B;
@@ -74,45 +106,52 @@ impl IrBuilder {
                     A::Add => B::Add,
                     A::Sub => B::Sub,
                 };
-                let lhs_reg = self.build_expr(lhs).unwrap();
-                let rhs_reg = self.build_expr(rhs).unwrap();
-                self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg)).some()
+                let lhs_reg = self.build_expr_unvoid(lhs);
+                let rhs_reg = self.build_expr_unvoid(rhs);
+                self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg))
+                    .some_if(unvoid)
             }
             E::Var(string) => {
                 let var_reg = self.get_var(string);
-                self.push_store(StoreKind::Read(var_reg)).some()
+                self.push_store(StoreKind::Read(var_reg)).some_if(unvoid)
             }
             E::Assign(var, body) => {
-                let value_reg = self.build_expr(body).unwrap();
+                let value_reg = self.build_expr_unvoid(body);
                 let var_reg = self.get_var(var);
                 self.push_write(var_reg, value_reg);
                 None
             }
-            E::Block(b) => self.build_block(b),
+            E::Block(b) => self.build_block(b, unvoid),
             E::If(cond, then_body, else_body) => {
-                let cond_reg = self.build_expr(cond).unwrap();
                 let then_id = self.reserve_block_id();
                 let else_id = self.reserve_block_id();
                 let end_id = self.reserve_block_id();
+
+                // evaluate condition, jump to either branch
+                self.enter_scope();
+                let cond_reg = self.build_expr_unvoid(cond);
                 self.push_inst(Inst::CondJump(
                     Condition::NonZero(cond_reg),
                     JumpLocation::Block(then_id),
                     JumpLocation::Block(else_id),
                 ));
-                // compile both branches (todo: cond and then_body should share scope)
-                let returns = [(then_id, then_body), (else_id, else_body)].map(|(id, body)| {
-                    self.switch_to_new_block(id);
-                    self.enter_scope();
-                    let then_yield = self.build_expr(body);
-                    self.push_jump_block(end_id);
-                    self.exit_scope();
-                    then_yield
-                });
-                self.switch_to_new_block(end_id);
-                match returns {
-                    [Some(then_reg), Some(else_reg)] => {
-                        self.push_store(Sk::Phi(then_reg, else_reg)).some()
-                    }
+
+                // evaluate true branch, jump to end
+                self.switch_to_new_block(then_id);
+                let then_yield = self.build_expr(then_body, unvoid);
+                self.push_jump_block(end_id);
+                self.exit_scope();
+
+                // evaluate false branch, jump to end
+                self.switch_to_new_block(else_id);
+                self.enter_scope();
+                let else_yield = self.build_expr(else_body, unvoid);
+                self.push_jump_block(end_id);
+                self.exit_scope();
+
+                match (then_yield, else_yield) {
+                    (Some(a), Some(b)) => self.push_store(StoreKind::Phi(a, b)).some(),
+
                     _ => None,
                 }
             }
@@ -126,7 +165,7 @@ impl IrBuilder {
                 // condition evaluation, jump to either inner body or end of expression
                 self.switch_to_new_block(cond_id);
                 self.enter_scope(); // with code like `while x is Some(y): ...`, `y` should be accessible from the body
-                let cond_reg = self.build_expr(cond).unwrap();
+                let cond_reg = self.build_expr_unvoid(cond);
                 self.push_inst(Inst::CondJump(
                     Condition::NonZero(cond_reg),
                     JumpLocation::Block(body_id),
@@ -135,7 +174,7 @@ impl IrBuilder {
 
                 // body evaluation, jump back to condition
                 self.switch_to_new_block(body_id);
-                self.build_expr(body);
+                self.build_expr_void(body);
                 self.push_jump_block(cond_id);
                 self.exit_scope();
 
@@ -143,7 +182,9 @@ impl IrBuilder {
                 self.switch_to_new_block(end_id);
                 None
             }
-        }
+        };
+        // println!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");
+        unvoid_assert(unvoid, reg)
     }
 
     pub fn finish(mut self) -> Function {
