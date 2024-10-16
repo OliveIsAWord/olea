@@ -35,12 +35,20 @@ fn unvoid_assert<T: std::fmt::Debug>(unvoid: bool, item: Option<T>) -> Option<T>
     item
 }
 
+const fn to_ir_ty(ty: &ast::Type) -> Ty {
+    use ast::Type as T;
+    match ty {
+        &T::Int(width) => Ty::Int(width),
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct IrBuilder {
     current_block: Vec<Inst>,
     current_block_id: usize,
     next_block_id: usize,
     blocks: HashMap<usize, Block>,
+    tys: HashMap<Register, Ty>,
     scopes: Vec<HashMap<String, Register>>,
     next_reg_id: u128,
 }
@@ -52,6 +60,7 @@ impl IrBuilder {
             current_block_id: 0,
             next_block_id: 1,
             blocks: HashMap::new(),
+            tys: HashMap::new(),
             scopes: vec![HashMap::new()],
             next_reg_id: 0,
         }
@@ -75,8 +84,8 @@ impl IrBuilder {
     fn build_stmt(&mut self, stmt: &ast::Stmt, unvoid: bool) -> Option<Register> {
         use ast::Stmt as S;
         let reg = match stmt {
-            S::Let(name, _ty, body) => {
-                let alloc_reg = self.new_var(name.clone());
+            S::Let(name, ty, body) => {
+                let alloc_reg = self.new_var(name.clone(), to_ir_ty(ty));
                 let value_reg = self.build_expr_unvoid(body);
                 self.push_write(alloc_reg, value_reg);
                 None
@@ -98,7 +107,7 @@ impl IrBuilder {
         use ast::Expr as E;
         use StoreKind as Sk;
         let reg = match expr {
-            &E::Int(i) => self.push_store(Sk::Int(i.into())).some_if(unvoid),
+            &E::Int(i) => self.push_store(Sk::Int(i.into(), 32)).some_if(unvoid),
             E::BinOp(op, lhs, rhs) => {
                 use ast::BinOp as A;
                 use BinOp as B;
@@ -150,8 +159,7 @@ impl IrBuilder {
                 self.exit_scope();
 
                 match (then_yield, else_yield) {
-                    (Some(a), Some(b)) => self.push_store(StoreKind::Phi(a, b)).some(),
-
+                    (Some(a), Some(b)) => self.push_store(StoreKind::Phi(vec![a, b])).some(),
                     _ => None,
                 }
             }
@@ -190,9 +198,12 @@ impl IrBuilder {
     pub fn finish(mut self) -> Function {
         self.switch_to_new_block(420);
         assert_eq!(self.scopes.len(), 1);
-        Function {
+        let f = Function {
             blocks: self.blocks,
-        }
+            tys: self.tys,
+        };
+        f.type_check();
+        f
     }
 
     fn enter_scope(&mut self) {
@@ -203,8 +214,8 @@ impl IrBuilder {
         self.scopes.pop();
     }
 
-    fn new_var(&mut self, name: String) -> Register {
-        let reg = self.push_store(StoreKind::StackAlloc(69));
+    fn new_var(&mut self, name: String, ty: Ty) -> Register {
+        let reg = self.push_store(StoreKind::StackAlloc(ty));
         self.scopes.last_mut().unwrap().insert(name, reg);
         reg
     }
@@ -222,7 +233,7 @@ impl IrBuilder {
     }
 
     fn push_store(&mut self, sk: StoreKind) -> Register {
-        let reg = self.new_reg();
+        let reg = self.new_reg(sk.ty(&self.tys));
         self.push_inst(Inst::Store(reg, sk));
         reg
     }
@@ -235,13 +246,14 @@ impl IrBuilder {
         self.current_block.push(inst);
     }
 
-    fn new_reg(&mut self) -> Register {
-        let id = self.next_reg_id;
+    fn new_reg(&mut self, ty: Ty) -> Register {
+        let reg = Register(self.next_reg_id);
         self.next_reg_id = self
             .next_reg_id
             .checked_add(1)
             .expect("register allocation overflow");
-        Register(id)
+        self.tys.insert(reg, ty);
+        reg
     }
 
     pub fn switch_to_new_block(&mut self, id: usize) {
