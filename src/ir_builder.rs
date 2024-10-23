@@ -269,17 +269,7 @@ impl IrBuilder {
 
     pub fn switch_to_new_block(&mut self, id: usize) {
         let insts = std::mem::take(&mut self.current_block);
-        let defined_regs = insts
-            .iter()
-            .filter_map(|inst| match inst {
-                &Inst::Store(r, _) => Some(r),
-                _ => None,
-            })
-            .collect();
-        let block = Block {
-            insts,
-            defined_regs,
-        };
+        let block = Block::new(insts);
         self.blocks.insert(self.current_block_id, block);
         self.current_block_id = id;
     }

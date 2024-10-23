@@ -23,18 +23,12 @@ pub fn remove_redundant_reads(f: &mut Function) {
     for locs in stack_reads.values_mut() {
         locs.sort();
     }
-    println!("{stack_reads:?}");
     for (src, locs) in stack_reads {
         for (original_block_id, i) in locs {
-            println!(
-                "optimizing ({original_block_id}, {i}): {:?}",
-                f.blocks.get_mut(&original_block_id).unwrap().insts[i]
-            );
             let mut closed = Set::new();
             let mut open = vec![usize::MAX];
             let mut registers = Set::new();
             while let Some(block_id) = open.pop() {
-                println!("open: {block_id} {open:?}");
                 if !closed.insert(block_id) {
                     continue;
                 }
@@ -97,18 +91,12 @@ pub fn remove_redundant_writes(f: &mut Function) {
     for locs in stack_writes.values_mut() {
         locs.sort();
     }
-    println!("{stack_writes:?}");
     for (src, locs) in stack_writes {
         for (original_block_id, i) in locs {
-            println!(
-                "optimizing ({original_block_id}, {i}): {:?}",
-                f.blocks.get_mut(&original_block_id).unwrap().insts[i]
-            );
             let mut closed = Set::new();
             let mut open = vec![usize::MAX];
             let mut is_used = false;
             'check: while let Some(block_id) = open.pop() {
-                println!("open: {block_id} {open:?}");
                 if !closed.insert(block_id) {
                     continue;
                 }
@@ -121,7 +109,6 @@ pub fn remove_redundant_writes(f: &mut Function) {
                 };
                 let mut reached_end = block_id != original_block_id;
                 for inst in insts {
-                    println!("{inst:?}");
                     match inst {
                         &Inst::Write(stack, _) if stack == src => {
                             reached_end = false;
@@ -146,6 +133,35 @@ pub fn remove_redundant_writes(f: &mut Function) {
             if !is_used {
                 f.blocks.get_mut(&original_block_id).unwrap().insts[i] = Inst::Nop;
             }
+        }
+    }
+}
+
+pub fn dead_code_elimination(f: &mut Function) {
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for block in f.blocks.values_mut() {
+            block.gen_def_use();
+            println!(
+                "defined: {:?}\nused: {:?}",
+                block.defined_regs, block.used_regs
+            );
+        }
+        let used: Set<_> = f
+            .blocks
+            .values()
+            .flat_map(|b| &b.used_regs)
+            .copied()
+            .collect();
+        for block in f.blocks.values_mut() {
+            let old_len = block.insts.len();
+            block.insts.retain(|inst| match inst {
+                Inst::Store(r, _) => used.contains(r),
+                Inst::Write(_, _) | Inst::Jump(_) | Inst::CondJump(..) => true,
+                Inst::Nop => false,
+            });
+            changed |= block.insts.len() != old_len;
         }
     }
 }

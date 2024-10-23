@@ -55,9 +55,19 @@ pub enum Ty {
 pub struct Block {
     pub insts: Vec<Inst>,
     pub defined_regs: Set<Register>,
+    pub used_regs: Set<Register>,
 }
 
 impl Block {
+    pub fn new(insts: Vec<Inst>) -> Self {
+        let mut this = Block {
+            insts,
+            defined_regs: Set::new(),
+            used_regs: Set::new(),
+        };
+        this.gen_def_use();
+        this
+    }
     pub fn successors(&self) -> impl Iterator<Item = usize> {
         let mut ids = vec![];
         let mut add = |loc: &JumpLocation| match loc {
@@ -75,6 +85,54 @@ impl Block {
             _ => unreachable!(),
         }
         ids.into_iter()
+    }
+    pub fn gen_def_use(&mut self) {
+        let mut def = Set::new();
+        let mut used = Set::new();
+        self.visit_regs(|&mut r, is_def| {
+            if is_def {
+                def.insert(r);
+            } else {
+                used.insert(r);
+            }
+        });
+        self.defined_regs = def;
+        self.used_regs = used;
+    }
+    pub fn visit_regs<F: FnMut(&mut Register, bool)>(&mut self, mut f: F) {
+        for inst in &mut self.insts {
+            use StoreKind as Sk;
+            match inst {
+                Inst::Store(r, sk) => {
+                    f(r, true);
+                    match sk {
+                        Sk::BinOp(_, r1, r2) => {
+                            f(r1, false);
+                            f(r2, false);
+                        }
+                        Sk::Read(r) => {
+                            f(r, false);
+                        }
+                        Sk::Phi(regs) => {
+                            let mut new_regs: Vec<_> = regs.iter().copied().collect();
+                            for r in &mut new_regs {
+                                f(r, false)
+                            }
+                            *regs = new_regs.into_iter().collect();
+                        }
+                        Sk::Int(..) | Sk::StackAlloc(_) => {}
+                    }
+                }
+                Inst::Write(r1, r2) => {
+                    f(r1, false);
+                    f(r2, false);
+                }
+                Inst::CondJump(cond, ..) => match cond {
+                    Condition::NonZero(r) => f(r, false),
+                },
+                Inst::Jump(_) | Inst::Nop => {}
+            }
+        }
     }
 }
 
