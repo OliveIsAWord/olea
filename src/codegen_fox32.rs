@@ -1,5 +1,5 @@
+use crate::compiler_types::{Map, Set};
 use crate::ir::*;
-use std::collections::{HashMap, HashSet};
 
 const NUM_REGISTERS: usize = 32;
 
@@ -25,14 +25,14 @@ impl StoreLoc {
 
 #[derive(Clone, Debug)]
 struct RegAllocInfo {
-    pub regs: HashMap<Register, StoreLoc>,
-    pub local_locs: HashMap<Register, u32>,
+    pub regs: Map<Register, StoreLoc>,
+    pub local_locs: Map<Register, u32>,
     pub stack_size: u32,
 }
 
 fn reg_alloc(f: &Function) -> RegAllocInfo {
     let mut stack_size = 0;
-    let local_locs: HashMap<Register, u32> = f
+    let local_locs: Map<Register, u32> = f
         .blocks
         .values()
         .flat_map(|b| &b.insts)
@@ -45,7 +45,7 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
             _ => None,
         })
         .collect();
-    let mut regs = HashMap::new();
+    let mut regs = Map::new();
     // sort the registers because it looks nice
     let mut ir_regs: Vec<_> = f.tys.keys().copied().collect();
     ir_regs.sort();
@@ -89,8 +89,8 @@ pub fn gen_function(f: &Function) -> String {
         local_locs,
         stack_size,
     } = reg_alloc(f);
-    let phi_map: HashMap<Register, (usize, Register)> = {
-        let mut map = HashMap::new();
+    let phi_map: Map<Register, (usize, Register)> = {
+        let mut map = Map::new();
         let iter = f
             .blocks
             .iter()
@@ -119,7 +119,7 @@ pub fn gen_function(f: &Function) -> String {
     };
     write_label!(code, "{function_name}_entry");
     write_inst!(code, "sub rsp, {}", stack_size);
-    let mut indices: HashSet<usize> = f.blocks.keys().copied().collect();
+    let mut indices: Set<usize> = f.blocks.keys().copied().collect();
     let mut i = 0;
     loop {
         assert!(indices.remove(&i));

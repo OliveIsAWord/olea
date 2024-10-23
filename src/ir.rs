@@ -1,18 +1,18 @@
-use std::collections::{HashMap, HashSet};
+use crate::compiler_types::{Map, Set};
 
 #[derive(Clone, Debug)]
 pub struct Function {
-    pub blocks: HashMap<usize, Block>,
-    pub predecessors: HashMap<usize, HashSet<usize>>,
-    pub tys: HashMap<Register, Ty>,
+    pub blocks: Map<usize, Block>,
+    pub predecessors: Map<usize, Set<usize>>,
+    pub tys: Map<Register, Ty>,
 }
 
 impl Function {
-    pub fn new(blocks: HashMap<usize, Block>, tys: HashMap<Register, Ty>) -> Self {
+    pub fn new(blocks: Map<usize, Block>, tys: Map<Register, Ty>) -> Self {
         let mut this = Function {
             blocks,
             tys,
-            predecessors: HashMap::new(),
+            predecessors: Map::new(),
         };
         this.gen_predecessors();
         this
@@ -35,7 +35,7 @@ impl Function {
             .chain(blocks)
     }
     pub fn gen_predecessors(&mut self) {
-        let mut p: HashMap<_, _> = self.blocks.keys().map(|&id| (id, HashSet::new())).collect();
+        let mut p: Map<_, _> = self.blocks.keys().map(|&id| (id, Set::new())).collect();
         for (&id, block) in &self.blocks {
             for succ_id in block.successors() {
                 p.get_mut(&succ_id).unwrap().insert(id);
@@ -54,7 +54,7 @@ pub enum Ty {
 #[derive(Clone, Debug)]
 pub struct Block {
     pub insts: Vec<Inst>,
-    pub defined_regs: HashSet<Register>,
+    pub defined_regs: Set<Register>,
 }
 
 impl Block {
@@ -88,7 +88,7 @@ pub enum Inst {
 }
 
 impl Inst {
-    fn type_check(&self, tys: &HashMap<Register, Ty>) {
+    fn type_check(&self, tys: &Map<Register, Ty>) {
         let ty_of = |r| tys.get(r).unwrap();
         match self {
             Self::Store(r, sk) => assert_eq!(ty_of(r), &sk.ty(tys)),
@@ -117,14 +117,14 @@ impl Inst {
 pub enum StoreKind {
     Int(u128, u64),
     // Copy(Register),
-    Phi(HashSet<Register>),
+    Phi(Set<Register>),
     BinOp(BinOp, Register, Register),
     StackAlloc(Ty),
     Read(Register),
 }
 
 impl StoreKind {
-    pub fn ty(&self, tys: &HashMap<Register, Ty>) -> Ty {
+    pub fn ty(&self, tys: &Map<Register, Ty>) -> Ty {
         let all = |regs: &[Register]| {
             let (first, rest) = (regs[0], &regs[1..]);
             let ty = tys.get(&first).unwrap();

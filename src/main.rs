@@ -1,5 +1,6 @@
 mod ast;
 mod codegen_fox32;
+mod compiler_types;
 mod ir;
 mod ir_builder;
 mod ir_optimizer;
@@ -15,8 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ir_optimizer::remove_redundant_writes(&mut ir);
     println!("removed redundant writes!\n{ir}\n");
     if false {
-    let code = codegen_fox32::gen_function(&ir);
-    println!("; Generated source code:\n{code}");
+        let code = codegen_fox32::gen_function(&ir);
+        println!("; Generated source code:\n{code}");
     }
     Ok(())
 }

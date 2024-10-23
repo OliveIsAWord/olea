@@ -1,8 +1,8 @@
+use crate::compiler_types::{Map, Set};
 use crate::ir::*;
-use std::collections::{HashMap, HashSet};
 
 pub fn remove_redundant_reads(f: &mut Function) {
-    let mut stack_reads: HashMap<Register, Vec<(usize, usize)>> = f
+    let mut stack_reads: Map<Register, Vec<(usize, usize)>> = f
         .blocks
         .values()
         .flat_map(|b| &b.insts)
@@ -30,9 +30,9 @@ pub fn remove_redundant_reads(f: &mut Function) {
                 "optimizing ({original_block_id}, {i}): {:?}",
                 f.blocks.get_mut(&original_block_id).unwrap().insts[i]
             );
-            let mut closed = HashSet::new();
+            let mut closed = Set::new();
             let mut open = vec![usize::MAX];
-            let mut registers = HashSet::new();
+            let mut registers = Set::new();
             while let Some(block_id) = open.pop() {
                 println!("open: {block_id} {open:?}");
                 if !closed.insert(block_id) {
@@ -74,7 +74,7 @@ pub fn remove_redundant_reads(f: &mut Function) {
 }
 
 pub fn remove_redundant_writes(f: &mut Function) {
-    let mut stack_writes: HashMap<Register, Vec<(usize, usize)>> = f
+    let mut stack_writes: Map<Register, Vec<(usize, usize)>> = f
         .blocks
         .values()
         .flat_map(|b| &b.insts)
@@ -104,7 +104,7 @@ pub fn remove_redundant_writes(f: &mut Function) {
                 "optimizing ({original_block_id}, {i}): {:?}",
                 f.blocks.get_mut(&original_block_id).unwrap().insts[i]
             );
-            let mut closed = HashSet::new();
+            let mut closed = Set::new();
             let mut open = vec![usize::MAX];
             let mut is_used = false;
             'check: while let Some(block_id) = open.pop() {

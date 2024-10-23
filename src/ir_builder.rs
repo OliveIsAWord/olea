@@ -1,8 +1,8 @@
 use crate::ast;
+use crate::compiler_types::Map;
 #[allow(clippy::wildcard_imports)]
 // We can make these imports explicit when it's less likely to create churn.
 use crate::ir::*;
-use std::collections::HashMap;
 
 /// This trait defines a helper method for transforming a `T` into an `Option<T>` with a postfix syntax.
 trait ToSome {
@@ -47,9 +47,9 @@ struct IrBuilder {
     current_block: Vec<Inst>,
     current_block_id: usize,
     next_block_id: usize,
-    blocks: HashMap<usize, Block>,
-    tys: HashMap<Register, Ty>,
-    scopes: Vec<HashMap<String, Register>>,
+    blocks: Map<usize, Block>,
+    tys: Map<Register, Ty>,
+    scopes: Vec<Map<String, Register>>,
     next_reg_id: u128,
 }
 
@@ -59,9 +59,9 @@ impl IrBuilder {
             current_block: vec![],
             current_block_id: 0,
             next_block_id: 1,
-            blocks: HashMap::new(),
-            tys: HashMap::new(),
-            scopes: vec![HashMap::new()],
+            blocks: Map::new(),
+            tys: Map::new(),
+            scopes: vec![Map::new()],
             next_reg_id: 0,
         }
     }
@@ -218,7 +218,7 @@ impl IrBuilder {
     }
 
     fn enter_scope(&mut self) {
-        self.scopes.push(HashMap::new());
+        self.scopes.push(Map::new());
     }
 
     fn exit_scope(&mut self) {
