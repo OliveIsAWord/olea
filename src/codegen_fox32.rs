@@ -218,6 +218,7 @@ pub fn gen_function(f: &Function) -> String {
                         JumpLocation::Return(regs) => write_exit(&mut code, regs, "ifz "),
                     }
                 }
+                Inst::Nop => write_inst!(code, "nop"),
             }
         }
         // obviously bad 2 lines of code

@@ -37,19 +37,8 @@ impl Function {
     pub fn gen_predecessors(&mut self) {
         let mut p: HashMap<_, _> = self.blocks.keys().map(|&id| (id, HashSet::new())).collect();
         for (&id, block) in &self.blocks {
-            let mut add = |loc: &JumpLocation| match loc {
-                JumpLocation::Return(_) => {}
-                JumpLocation::Block(succ_id) => {
-                    p.get_mut(succ_id).unwrap().insert(id);
-                }
-            };
-            match block.insts.last().unwrap() {
-                Inst::Jump(loc) => add(loc),
-                Inst::CondJump(_, loc1, loc2) => {
-                    add(loc1);
-                    add(loc2);
-                }
-                _ => unreachable!(),
+            for succ_id in block.successors() {
+                p.get_mut(&succ_id).unwrap().insert(id);
             }
         }
         self.predecessors = p;
@@ -68,12 +57,34 @@ pub struct Block {
     pub defined_regs: HashSet<Register>,
 }
 
+impl Block {
+    pub fn successors(&self) -> impl Iterator<Item = usize> {
+        let mut ids = vec![];
+        let mut add = |loc: &JumpLocation| match loc {
+            JumpLocation::Return(_) => {}
+            &JumpLocation::Block(succ_id) => {
+                ids.push(succ_id);
+            }
+        };
+        match self.insts.last().unwrap() {
+            Inst::Jump(loc) => add(loc),
+            Inst::CondJump(_, loc1, loc2) => {
+                add(loc1);
+                add(loc2);
+            }
+            _ => unreachable!(),
+        }
+        ids.into_iter()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Inst {
     Store(Register, StoreKind),
     Write(Register, Register),
     Jump(JumpLocation),
     CondJump(Condition, JumpLocation, JumpLocation),
+    Nop,
 }
 
 impl Inst {
@@ -97,6 +108,7 @@ impl Inst {
                 }
                 // TODO: any sort of JumpLocation checking?
             }
+            Self::Nop => {}
         }
     }
 }
@@ -221,6 +233,7 @@ impl std::fmt::Display for Function {
                     Inst::CondJump(cond, loc_true, loc_false) => {
                         write!(f, "Jump if {cond} then {loc_true} else {loc_false}")
                     }
+                    Inst::Nop => write!(f, "Nop"),
                 }?;
             }
         }

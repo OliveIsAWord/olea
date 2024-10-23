@@ -11,8 +11,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut ir = ir_builder::build(&st);
     println!("{ir}\n");
     ir_optimizer::remove_redundant_reads(&mut ir);
-    println!("{ir}\n");
+    println!("removed redundant reads!\n{ir}\n");
+    ir_optimizer::remove_redundant_writes(&mut ir);
+    println!("removed redundant writes!\n{ir}\n");
+    if false {
     let code = codegen_fox32::gen_function(&ir);
     println!("; Generated source code:\n{code}");
+    }
     Ok(())
 }
