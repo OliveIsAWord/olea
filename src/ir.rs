@@ -1,12 +1,22 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Debug)]
 pub struct Function {
     pub blocks: HashMap<usize, Block>,
+    pub predecessors: HashMap<usize, HashSet<usize>>,
     pub tys: HashMap<Register, Ty>,
 }
 
 impl Function {
+    pub fn new(blocks: HashMap<usize, Block>, tys: HashMap<Register, Ty>) -> Self {
+        let mut this = Function {
+            blocks,
+            tys,
+            predecessors: HashMap::new(),
+        };
+        this.gen_predecessors();
+        this
+    }
     pub fn type_check(&self) {
         let tys = &self.tys;
         self.blocks
@@ -24,6 +34,26 @@ impl Function {
             .map(|i| (i, self.blocks.get(&i).unwrap()))
             .chain(blocks)
     }
+    pub fn gen_predecessors(&mut self) {
+        let mut p: HashMap<_, _> = self.blocks.keys().map(|&id| (id, HashSet::new())).collect();
+        for (&id, block) in &self.blocks {
+            let mut add = |loc: &JumpLocation| match loc {
+                JumpLocation::Return(_) => {}
+                JumpLocation::Block(succ_id) => {
+                    p.get_mut(succ_id).unwrap().insert(id);
+                }
+            };
+            match block.insts.last().unwrap() {
+                Inst::Jump(loc) => add(loc),
+                Inst::CondJump(_, loc1, loc2) => {
+                    add(loc1);
+                    add(loc2);
+                }
+                _ => unreachable!(),
+            }
+        }
+        self.predecessors = p;
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -35,6 +65,7 @@ pub enum Ty {
 #[derive(Clone, Debug)]
 pub struct Block {
     pub insts: Vec<Inst>,
+    pub defined_regs: HashSet<Register>,
 }
 
 #[derive(Clone, Debug)]
@@ -74,7 +105,7 @@ impl Inst {
 pub enum StoreKind {
     Int(u128, u64),
     // Copy(Register),
-    Phi(Vec<Register>),
+    Phi(HashSet<Register>),
     BinOp(BinOp, Register, Register),
     StackAlloc(Ty),
     Read(Register),
@@ -92,7 +123,7 @@ impl StoreKind {
         };
         match self {
             &Self::Int(_, width) => Ty::Int(width),
-            Self::Phi(regs) => all(regs),
+            Self::Phi(regs) => all(&regs.iter().copied().collect::<Vec<_>>()), // TODO silly and bad
             &Self::BinOp(_, lhs, rhs) => all(&[lhs, rhs]),
             Self::StackAlloc(ty) => Ty::Pointer(Box::new(ty.clone())),
             Self::Read(r) => match tys.get(r).unwrap() {

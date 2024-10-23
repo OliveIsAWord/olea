@@ -85,10 +85,7 @@ impl IrBuilder {
         self.push_inst(Inst::Jump(JumpLocation::Return(return_regs)));
         self.switch_to_new_block(420);
         assert_eq!(self.scopes.len(), 1);
-        let f = Function {
-            blocks: self.blocks,
-            tys: self.tys,
-        };
+        let f = Function::new(self.blocks, self.tys);
         f.type_check();
         f
     }
@@ -184,7 +181,7 @@ impl IrBuilder {
                 self.switch_to_new_block(end_id);
 
                 match (then_yield, else_yield) {
-                    (Some(a), Some(b)) => self.push_store(StoreKind::Phi(vec![a, b])).some(),
+                    (Some(a), Some(b)) => self.push_store(StoreKind::Phi([a, b].into())).some(),
                     _ => None,
                 }
             }
@@ -271,8 +268,17 @@ impl IrBuilder {
     }
 
     pub fn switch_to_new_block(&mut self, id: usize) {
+        let insts = std::mem::take(&mut self.current_block);
+        let defined_regs = insts
+            .iter()
+            .filter_map(|inst| match inst {
+                &Inst::Store(r, _) => Some(r),
+                _ => None,
+            })
+            .collect();
         let block = Block {
-            insts: std::mem::take(&mut self.current_block),
+            insts,
+            defined_regs,
         };
         self.blocks.insert(self.current_block_id, block);
         self.current_block_id = id;

@@ -110,12 +110,12 @@ pub fn gen_function(f: &Function) -> String {
     println!("{phi_map:?}");
     let function_name = "foo";
     let write_exit = |code: &mut String, returns: &[Register], prefix: &str| {
-         write_inst!(*code, "{prefix}add rsp, {stack_size}");
-         for r in returns {
-             let r_reg = regs.get(r).unwrap().foo();
-             write_inst!(*code, "{prefix}push {r_reg}");
-         }
-         write_inst!(*code, "{prefix}ret");
+        write_inst!(*code, "{prefix}add rsp, {stack_size}");
+        for r in returns {
+            let r_reg = regs.get(r).unwrap().foo();
+            write_inst!(*code, "{prefix}push {r_reg}");
+        }
+        write_inst!(*code, "{prefix}ret");
     };
     write_label!(code, "{function_name}_entry");
     write_inst!(code, "sub rsp, {}", stack_size);
