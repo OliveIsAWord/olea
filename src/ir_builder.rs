@@ -43,7 +43,7 @@ const fn to_ir_ty(ty: &ast::Type) -> Ty {
 }
 
 #[derive(Clone, Debug)]
-pub struct IrBuilder {
+struct IrBuilder {
     current_block: Vec<Inst>,
     current_block_id: usize,
     next_block_id: usize,
@@ -54,7 +54,7 @@ pub struct IrBuilder {
 }
 
 impl IrBuilder {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             current_block: vec![],
             current_block_id: 0,
@@ -66,11 +66,34 @@ impl IrBuilder {
         }
     }
 
-    pub fn build_block(
-        &mut self,
-        ast::Block(stmts): &ast::Block,
-        unvoid: bool,
-    ) -> Option<Register> {
+    fn build_function(
+        mut self,
+        ast::Function {
+            name: _,
+            parameters: _,
+            returns,
+            body,
+        }: &ast::Function,
+    ) -> Function {
+        let reg = self.build_block(body, returns.is_some());
+        let return_regs = if returns.is_some() {
+            vec![reg.unwrap()]
+        } else {
+            assert_eq!(reg, None);
+            vec![]
+        };
+        self.push_inst(Inst::Jump(JumpLocation::Return(return_regs)));
+        self.switch_to_new_block(420);
+        assert_eq!(self.scopes.len(), 1);
+        let f = Function {
+            blocks: self.blocks,
+            tys: self.tys,
+        };
+        f.type_check();
+        f
+    }
+
+    fn build_block(&mut self, ast::Block(stmts): &ast::Block, unvoid: bool) -> Option<Register> {
         self.enter_scope();
         let mut last_stmt_return = None;
         for (i, stmt) in stmts.iter().enumerate() {
@@ -158,6 +181,8 @@ impl IrBuilder {
                 self.push_jump_block(end_id);
                 self.exit_scope();
 
+                self.switch_to_new_block(end_id);
+
                 match (then_yield, else_yield) {
                     (Some(a), Some(b)) => self.push_store(StoreKind::Phi(vec![a, b])).some(),
                     _ => None,
@@ -193,17 +218,6 @@ impl IrBuilder {
         };
         // println!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");
         unvoid_assert(unvoid, reg)
-    }
-
-    pub fn finish(mut self) -> Function {
-        self.switch_to_new_block(420);
-        assert_eq!(self.scopes.len(), 1);
-        let f = Function {
-            blocks: self.blocks,
-            tys: self.tys,
-        };
-        f.type_check();
-        f
     }
 
     fn enter_scope(&mut self) {
@@ -272,4 +286,12 @@ impl IrBuilder {
             .expect("block allocation overflow");
         id
     }
+}
+
+pub fn build(program: &ast::Program) -> Function {
+    let [ast::Decl::Function(f)] = &program.decls[..] else {
+        todo!("actually compiling program {program:?}");
+    };
+    let builder = IrBuilder::new();
+    builder.build_function(f)
 }

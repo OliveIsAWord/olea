@@ -1,6 +1,31 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Program {
+    pub decls: Vec<Decl>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum Decl {
+    Constant(Constant),
+    Function(Function),
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Constant {
+    pub name: String,
+    pub value: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Function {
+    pub name: String,
+    pub parameters: Vec<(String, Type)>,
+    pub returns: Option<Type>,
+    pub body: Block,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Type {
     Int(u64),
 }

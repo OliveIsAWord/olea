@@ -14,6 +14,16 @@ impl Function {
             .flat_map(|b| &b.insts)
             .for_each(|i| i.type_check(tys));
     }
+    pub fn iter(&self) -> impl Iterator<Item = (usize, &Block)> {
+        let blocks = self
+            .blocks
+            .iter()
+            .filter_map(|(&i, block)| if i == 0 { None } else { Some((i, block)) });
+        Some(0)
+            .into_iter()
+            .map(|i| (i, self.blocks.get(&i).unwrap()))
+            .chain(blocks)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -46,6 +56,7 @@ impl Inst {
             },
             Self::Jump(location) => match location {
                 JumpLocation::Block(_) => (),
+                JumpLocation::Return(_) => (), // TODO
             },
             Self::CondJump(condition, _branch1, _branch2) => {
                 match condition {
@@ -107,8 +118,81 @@ pub enum Condition {
 #[derive(Clone, Debug)]
 pub enum JumpLocation {
     Block(usize),
+    Return(Vec<Register>),
     // Register(Register),
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Register(pub u128);
+
+impl std::fmt::Display for Register {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "r{}", self.0)
+    }
+}
+
+impl std::fmt::Display for JumpLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Block(i) => write!(f, "block_{i}"),
+            Self::Return(regs) => write!(f, "Return({regs:?})"),
+        }
+    }
+}
+
+impl std::fmt::Display for Condition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::NonZero(r) => write!(f, "NonZero({r})"),
+        }
+    }
+}
+
+impl std::fmt::Display for Function {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        for (i, block) in self.iter() {
+            if i != 0 {
+                writeln!(f)?;
+            }
+            write!(f, "block_{i}:")?;
+            for inst in &block.insts {
+                write!(f, "\n    ")?;
+                match inst {
+                    Inst::Store(r, sk) => {
+                        use StoreKind as Sk;
+                        write!(f, "{r} = ")?;
+                        match sk {
+                            Sk::StackAlloc(ty) => write!(f, "StackAlloc({ty:?})"),
+                            Sk::Int(i, ty) => write!(f, "{i}_u{ty}"),
+                            Sk::Read(r) => write!(f, "*{r}"),
+                            Sk::BinOp(op, lhs, rhs) => write!(
+                                f,
+                                "{lhs} {} {rhs}",
+                                match op {
+                                    BinOp::Add => "+",
+                                    BinOp::Sub => "-",
+                                }
+                            ),
+                            Sk::Phi(regs) => {
+                                write!(f, "Phi(")?;
+                                for (i, reg) in regs.iter().enumerate() {
+                                    if i != 0 {
+                                        write!(f, ", ")?;
+                                    }
+                                    write!(f, "{reg}")?;
+                                }
+                                write!(f, ")")
+                            }
+                        }
+                    }
+                    Inst::Write(dst, src) => write!(f, "*{dst} = {src}"),
+                    Inst::Jump(loc) => write!(f, "Jump {loc}"),
+                    Inst::CondJump(cond, loc_true, loc_false) => {
+                        write!(f, "Jump if {cond} then {loc_true} else {loc_false}")
+                    }
+                }?;
+            }
+        }
+        Ok(())
+    }
+}

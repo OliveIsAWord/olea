@@ -1,6 +1,12 @@
-(
-  (Let "x" (Int . 32) (Int . 5))
-  (Expr . (While (Var . "x")
-       (Assign "x" (BinOp Sub (Var . "x") (Int . 1)))
+((decls
+  (Function (name . "fooy") (parameters) (returns (Int . 32)) (body
+    (Let "x" (Int . 32) (Int . 5))
+    (Let "y" (Int . 32) (Int . 0))
+    (Expr While (Var . "x") (Block
+      (Let "z" (Int . 32) (If (BinOp Sub (Var . "x") (Int . 4)) (Var . "x") (Int . 1)))
+      (Expr Assign "y" (BinOp Add (Var . "y") (Var . "z")))
+      (Expr Assign "x" (BinOp Sub (Var . "x") (Int . 1)))
+    ))
+    (Expr Var . "y")
   ))
-)
+))

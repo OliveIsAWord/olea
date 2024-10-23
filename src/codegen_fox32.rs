@@ -46,7 +46,10 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
         })
         .collect();
     let mut regs = HashMap::new();
-    for (i, (&reg, _ty)) in f.tys.iter().enumerate() {
+    // sort the registers because it looks nice
+    let mut ir_regs: Vec<_> = f.tys.keys().copied().collect();
+    ir_regs.sort();
+    for (i, &reg) in ir_regs.iter().enumerate() {
         if i >= NUM_REGISTERS {
             todo!("stack allocation");
         }
@@ -59,6 +62,7 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
     }
 }
 
+// TODO: accept function name as additional argument
 macro_rules! write_label {
     ($dst:expr, $($arg:tt)*) => {{
         use ::std::fmt::Write;
@@ -78,41 +82,6 @@ macro_rules! write_inst {
     }}
 }
 
-/*
-struct Sorterrr<'a, V> {
-    map: &'a HashMap<usize, V>,
-    next_index: usize,
-    items_to_yield: usize,
-}
-
-impl<'a, V> Sorterrr<'a, V> {
-    pub fn new(map: &'a HashMap<usize, V>) -> Self {
-        Self {
-            map,
-            next_index: 0,
-            items_to_yield: map.len(),
-        }
-    }
-}
-
-impl<'a, V> Iterator for Sorterrr<'a, V> {
-    type Item = (usize, &'a V);
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.items_to_yield == 0 {
-            return None;
-        }
-        self.items_to_yield -= 1;
-        loop {
-            let i = self.next_index;
-            self.next_index += 1;
-            if let Some(v) = self.map.get(&i) {
-                break Some((i, v));
-            }
-        }
-    }
-}
-*/
-
 pub fn gen_function(f: &Function) -> String {
     let mut code = String::new();
     let RegAllocInfo {
@@ -120,7 +89,34 @@ pub fn gen_function(f: &Function) -> String {
         local_locs,
         stack_size,
     } = reg_alloc(f);
+    let phi_map: HashMap<Register, (usize, Register)> = {
+        let mut map = HashMap::new();
+        let iter = f
+            .blocks
+            .iter()
+            .flat_map(|(&id, b)| b.insts.iter().map(move |inst| (id, inst)));
+        for (id, inst) in iter {
+            match inst {
+                Inst::Store(dst, StoreKind::Phi(regs)) => {
+                    for &reg in regs {
+                        map.insert(reg, (id, *dst));
+                    }
+                }
+                _ => {}
+            }
+        }
+        map
+    };
+    println!("{phi_map:?}");
     let function_name = "foo";
+    let write_exit = |code: &mut String, returns: &[Register], prefix: &str| {
+         write_inst!(*code, "{prefix}add rsp, {stack_size}");
+         for r in returns {
+             let r_reg = regs.get(r).unwrap().foo();
+             write_inst!(*code, "{prefix}push {r_reg}");
+         }
+         write_inst!(*code, "{prefix}ret");
+    };
     write_label!(code, "{function_name}_entry");
     write_inst!(code, "sub rsp, {}", stack_size);
     let mut indices: HashSet<usize> = f.blocks.keys().copied().collect();
@@ -128,12 +124,24 @@ pub fn gen_function(f: &Function) -> String {
     loop {
         assert!(indices.remove(&i));
         let block = f.blocks.get(&i).unwrap();
+        let mut registers_to_merge = vec![];
+        let merge_phis = |code: &mut String, registers_to_merge: &[Register]| {
+            for r in registers_to_merge.iter().rev() {
+                let r_reg = regs.get(r).unwrap().foo();
+                let (_, dst) = phi_map.get(r).unwrap();
+                let dst_reg = regs.get(dst).unwrap().foo();
+                write_inst!(*code, "mov {dst_reg}, {r_reg}");
+            }
+        };
         write_label!(code, "{function_name}_{i}");
         let mut next_i = None;
         for inst in &block.insts {
             use StoreKind as Sk;
             match inst {
                 Inst::Store(r, sk) => {
+                    if phi_map.contains_key(r) {
+                        registers_to_merge.push(*r);
+                    }
                     let reg = regs.get(r).unwrap();
                     match sk {
                         Sk::StackAlloc(_) => {
@@ -157,7 +165,7 @@ pub fn gen_function(f: &Function) -> String {
                             write_inst!(code, "mov {}, {}", reg.foo(), lhs_reg.bar());
                             write_inst!(code, "{} {}, {}", op_mnemonic, reg.foo(), rhs_reg.bar());
                         }
-                        e @ Sk::Phi(..) => todo!("{e:?}"),
+                        Sk::Phi(_) => (),
                     }
                 }
                 Inst::Write(dst, src) => {
@@ -165,17 +173,22 @@ pub fn gen_function(f: &Function) -> String {
                     let src_reg = regs.get(src).unwrap();
                     write_inst!(code, "mov [{}], {}", dst_reg.bar(), src_reg.foo());
                 }
-                Inst::Jump(loc) => match loc {
-                    &JumpLocation::Block(jump_index) => {
-                        if indices.contains(&jump_index) {
-                            assert_eq!(next_i, None);
-                            next_i = Some(jump_index);
-                        } else {
-                            write_inst!(code, "jmp {function_name}_{jump_index}");
+                Inst::Jump(loc) => {
+                    merge_phis(&mut code, &registers_to_merge);
+                    match loc {
+                        &JumpLocation::Block(jump_index) => {
+                            if indices.contains(&jump_index) {
+                                assert_eq!(next_i, None);
+                                next_i = Some(jump_index);
+                            } else {
+                                write_inst!(code, "jmp {function_name}_{jump_index}");
+                            }
                         }
+                        JumpLocation::Return(regs) => write_exit(&mut code, regs, ""),
                     }
-                },
+                }
                 Inst::CondJump(cond, branch_true, branch_false) => {
+                    merge_phis(&mut code, &registers_to_merge);
                     match cond {
                         Condition::NonZero(r) => {
                             let reg = regs.get(r).unwrap();
@@ -191,6 +204,7 @@ pub fn gen_function(f: &Function) -> String {
                                 write_inst!(code, "ifnz jmp {function_name}_{jump_index}");
                             }
                         }
+                        JumpLocation::Return(regs) => write_exit(&mut code, regs, "ifnz "),
                     }
                     match branch_false {
                         &JumpLocation::Block(jump_index) => {
@@ -200,6 +214,8 @@ pub fn gen_function(f: &Function) -> String {
                                 write_inst!(code, "ifz jmp {function_name}_{jump_index}");
                             }
                         }
+
+                        JumpLocation::Return(regs) => write_exit(&mut code, regs, "ifz "),
                     }
                 }
             }
