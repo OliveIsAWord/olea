@@ -127,10 +127,15 @@ impl Block {
                     f(r1, false);
                     f(r2, false);
                 }
-                Inst::CondJump(cond, ..) => match cond {
-                    Condition::NonZero(r) => f(r, false),
-                },
-                Inst::Jump(_) | Inst::Nop => {}
+                Inst::CondJump(cond, branch1, branch2) => {
+                    match cond {
+                        Condition::NonZero(r) => f(r, false),
+                    }
+                    branch1.visit_regs(|r| f(r, false));
+                    branch2.visit_regs(|r| f(r, false));
+                }
+                Inst::Jump(branch) => branch.visit_regs(|r| f(r, false)),
+                Inst::Nop => {}
             }
         }
     }
@@ -221,6 +226,19 @@ pub enum JumpLocation {
     Block(usize),
     Return(Vec<Register>),
     // Register(Register),
+}
+
+impl JumpLocation {
+    pub fn visit_regs<F: FnMut(&mut Register)>(&mut self, mut f: F) {
+        match self {
+            Self::Block(_) => {}
+            Self::Return(regs) => {
+                for r in regs {
+                    f(r)
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
