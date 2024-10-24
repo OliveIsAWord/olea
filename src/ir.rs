@@ -45,7 +45,7 @@ impl Function {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Ty {
     Int(u64),
     Pointer(Box<Self>),
@@ -113,6 +113,9 @@ impl Block {
                         Sk::Read(r) => {
                             f(r, false);
                         }
+                        Sk::Copy(r) => {
+                            f(r, false);
+                        }
                         Sk::Phi(regs) => {
                             let mut new_regs: Vec<_> = regs.iter().copied().collect();
                             for r in &mut new_regs {
@@ -176,10 +179,10 @@ impl Inst {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum StoreKind {
     Int(u128, u64),
-    // Copy(Register),
+    Copy(Register),
     Phi(Set<Register>),
     BinOp(BinOp, Register, Register),
     StackAlloc(Ty),
@@ -201,6 +204,7 @@ impl StoreKind {
             Self::Phi(regs) => all(&regs.iter().copied().collect::<Vec<_>>()), // TODO silly and bad
             &Self::BinOp(_, lhs, rhs) => all(&[lhs, rhs]),
             Self::StackAlloc(ty) => Ty::Pointer(Box::new(ty.clone())),
+            Self::Copy(r) => tys.get(r).unwrap().clone(),
             Self::Read(r) => match tys.get(r).unwrap() {
                 Ty::Pointer(inner) => inner.as_ref().clone(),
                 e => panic!("typeck error: attempted to Read from {r:?} of type {e:?}"),
@@ -209,7 +213,7 @@ impl StoreKind {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum BinOp {
     Add,
     Sub,
@@ -283,6 +287,7 @@ impl std::fmt::Display for Function {
                         match sk {
                             Sk::StackAlloc(ty) => write!(f, "StackAlloc({ty:?})"),
                             Sk::Int(i, ty) => write!(f, "{i}_u{ty}"),
+                            Sk::Copy(r) => write!(f, "{r}"),
                             Sk::Read(r) => write!(f, "*{r}"),
                             Sk::BinOp(op, lhs, rhs) => write!(
                                 f,

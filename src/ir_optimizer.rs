@@ -143,10 +143,6 @@ pub fn dead_code_elimination(f: &mut Function) {
         changed = false;
         for block in f.blocks.values_mut() {
             block.gen_def_use();
-            println!(
-                "defined: {:?}\nused: {:?}",
-                block.defined_regs, block.used_regs
-            );
         }
         let used: Set<_> = f
             .blocks
@@ -164,4 +160,104 @@ pub fn dead_code_elimination(f: &mut Function) {
             changed |= block.insts.len() != old_len;
         }
     }
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct DominatorTree {
+    children: Map<usize, Self>,
+}
+
+impl DominatorTree {
+    pub fn new(blocks: &Map<usize, Block>) -> Self {
+        let mut this = Self {
+            children: blocks
+                .keys()
+                .map(|&id| {
+                    (
+                        id,
+                        Self {
+                            children: Map::new(),
+                        },
+                    )
+                })
+                .collect(),
+        };
+        this.make_immediate(blocks);
+        this
+    }
+    fn make_immediate(&mut self, blocks: &Map<usize, Block>) {
+        fn traverse_except(blocks: &Map<usize, Block>, except: usize) -> Set<usize> {
+            let mut unreachable: Set<_> =
+                blocks.keys().copied().filter(|&id| id != except).collect();
+            let mut open = vec![0];
+            while let Some(id) = open.pop() {
+                if unreachable.remove(&id) {
+                    open.extend(blocks.get(&id).unwrap().successors());
+                }
+            }
+            unreachable
+        }
+        let mut closed = Set::new();
+        // TODO: this is an unlovely quadratic loop. if this is a problem, fix it or change algorithms
+        while let Some(child_id) = self
+            .children
+            .keys()
+            .copied()
+            .find(|child_id| !closed.contains(child_id))
+        {
+            closed.insert(child_id);
+            let mut new_children = traverse_except(blocks, child_id)
+                .into_iter()
+                .filter_map(|dommed_id| self.children.remove_entry(&dommed_id))
+                .collect();
+            self.children
+                .get_mut(&child_id)
+                .unwrap()
+                .children
+                .append(&mut new_children);
+        }
+        for child in self.children.values_mut() {
+            child.make_immediate(blocks);
+        }
+    }
+}
+
+pub fn common_subexpression_elimination(f: &mut Function) {
+    use StoreKind as Sk;
+    let dom_tree = DominatorTree::new(&f.blocks);
+    fn visit(
+        id: usize,
+        children: &DominatorTree,
+        blocks: &mut Map<usize, Block>,
+        ancestor_subs: &mut Vec<Map<Sk, Register>>,
+    ) {
+        let block = blocks.get_mut(&id).unwrap();
+        ancestor_subs.push(Map::new());
+        for inst in &mut block.insts {
+            let Inst::Store(r, sk) = inst else { continue };
+            match sk {
+                Sk::Int(..) | Sk::Phi(_) | Sk::BinOp(..) => {}
+                | Sk::Read(_) // impure, can erase a write
+                | Sk::StackAlloc(_) // unique allocation, can't be copied
+                | Sk:: Copy(_) // pointless to copy a copy
+                => continue,
+            }
+            match ancestor_subs.iter().rev().find_map(|map| map.get(sk)) {
+                Some(&r_sub) => *sk = Sk::Copy(r_sub),
+                None => {
+                    ancestor_subs.last_mut().unwrap().insert(sk.clone(), *r);
+                }
+            }
+        }
+        for (&id, child) in &children.children {
+            visit(id, child, blocks, ancestor_subs);
+        }
+        ancestor_subs.pop().unwrap();
+    }
+    visit(
+        0,
+        dom_tree.children.get(&0).unwrap(),
+        &mut f.blocks,
+        &mut vec![],
+    );
 }
