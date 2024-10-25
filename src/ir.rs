@@ -23,6 +23,9 @@ impl Function {
             .values()
             .flat_map(|b| &b.insts)
             .for_each(|i| i.type_check(tys));
+        for Block { exit, .. } in self.blocks.values() {
+            exit.type_check(tys);
+        }
     }
     pub fn iter(&self) -> impl Iterator<Item = (usize, &Block)> {
         let blocks = self
@@ -54,14 +57,16 @@ pub enum Ty {
 #[derive(Clone, Debug)]
 pub struct Block {
     pub insts: Vec<Inst>,
+    pub exit: Exit,
     pub defined_regs: Set<Register>,
     pub used_regs: Set<Register>,
 }
 
 impl Block {
-    pub fn new(insts: Vec<Inst>) -> Self {
+    pub fn new(insts: Vec<Inst>, exit: Exit) -> Self {
         let mut this = Block {
             insts,
+            exit,
             defined_regs: Set::new(),
             used_regs: Set::new(),
         };
@@ -69,22 +74,7 @@ impl Block {
         this
     }
     pub fn successors(&self) -> impl Iterator<Item = usize> {
-        let mut ids = vec![];
-        let mut add = |loc: &JumpLocation| match loc {
-            JumpLocation::Return(_) => {}
-            &JumpLocation::Block(succ_id) => {
-                ids.push(succ_id);
-            }
-        };
-        match self.insts.last().unwrap() {
-            Inst::Jump(loc) => add(loc),
-            Inst::CondJump(_, loc1, loc2) => {
-                add(loc1);
-                add(loc2);
-            }
-            _ => unreachable!(),
-        }
-        ids.into_iter()
+        self.exit.successors()
     }
     pub fn gen_def_use(&mut self) {
         let mut def = Set::new();
@@ -130,15 +120,17 @@ impl Block {
                     f(r1, false);
                     f(r2, false);
                 }
-                Inst::CondJump(cond, branch1, branch2) => {
-                    match cond {
-                        Condition::NonZero(r) => f(r, false),
-                    }
-                    branch1.visit_regs(|r| f(r, false));
-                    branch2.visit_regs(|r| f(r, false));
-                }
-                Inst::Jump(branch) => branch.visit_regs(|r| f(r, false)),
                 Inst::Nop => {}
+            }
+        }
+        match &mut self.exit {
+            Exit::Jump(branch) => branch.visit_regs(|r| f(r, false)),
+            Exit::CondJump(cond, branch1, branch2) => {
+                match cond {
+                    Condition::NonZero(r) => f(r, false),
+                }
+                branch1.visit_regs(|r| f(r, false));
+                branch2.visit_regs(|r| f(r, false));
             }
         }
     }
@@ -148,8 +140,6 @@ impl Block {
 pub enum Inst {
     Store(Register, StoreKind),
     Write(Register, Register),
-    Jump(JumpLocation),
-    CondJump(Condition, JumpLocation, JumpLocation),
     Nop,
 }
 
@@ -162,18 +152,6 @@ impl Inst {
                 Ty::Pointer(inner) => assert_eq!(inner.as_ref(), ty_of(src)),
                 e => panic!("typeck error: attempted to Write to {dst:?} of type {e:?}"),
             },
-            Self::Jump(location) => match location {
-                JumpLocation::Block(_) => (),
-                JumpLocation::Return(_) => (), // TODO
-            },
-            Self::CondJump(condition, _branch1, _branch2) => {
-                match condition {
-                    Condition::NonZero(r) => match ty_of(r) {
-                        Ty::Int(_) | Ty::Pointer(_) => (),
-                    },
-                }
-                // TODO: any sort of JumpLocation checking?
-            }
             Self::Nop => {}
         }
     }
@@ -217,6 +195,49 @@ impl StoreKind {
 pub enum BinOp {
     Add,
     Sub,
+}
+
+#[derive(Clone, Debug)]
+pub enum Exit {
+    Jump(JumpLocation),
+    CondJump(Condition, JumpLocation, JumpLocation),
+}
+
+impl Exit {
+    pub fn type_check(&self, tys: &Map<Register, Ty>) {
+        let ty_of = |r| tys.get(r).unwrap();
+        match self {
+            Self::Jump(location) => match location {
+                JumpLocation::Block(_) => (),
+                JumpLocation::Return(_) => (), // TODO
+            },
+            Self::CondJump(condition, _branch1, _branch2) => {
+                match condition {
+                    Condition::NonZero(r) => match ty_of(r) {
+                        Ty::Int(_) | Ty::Pointer(_) => (),
+                    },
+                }
+                // TODO: any sort of JumpLocation checking?
+            }
+        }
+    }
+    pub fn successors(&self) -> impl Iterator<Item = usize> {
+        let mut ids = vec![];
+        let mut add = |loc: &JumpLocation| match loc {
+            JumpLocation::Return(_) => {}
+            &JumpLocation::Block(succ_id) => {
+                ids.push(succ_id);
+            }
+        };
+        match self {
+            Self::Jump(loc) => add(loc),
+            Self::CondJump(_, loc1, loc2) => {
+                add(loc1);
+                add(loc2);
+            }
+        }
+        ids.into_iter()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -271,6 +292,17 @@ impl std::fmt::Display for Condition {
     }
 }
 
+impl std::fmt::Display for Exit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Jump(loc) => write!(f, "Jump {loc}"),
+            Self::CondJump(cond, loc_true, loc_false) => {
+                write!(f, "Jump if {cond} then {loc_true} else {loc_false}")
+            }
+        }
+    }
+}
+
 impl std::fmt::Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         for (i, block) in self.iter() {
@@ -310,13 +342,10 @@ impl std::fmt::Display for Function {
                         }
                     }
                     Inst::Write(dst, src) => write!(f, "*{dst} = {src}"),
-                    Inst::Jump(loc) => write!(f, "Jump {loc}"),
-                    Inst::CondJump(cond, loc_true, loc_false) => {
-                        write!(f, "Jump if {cond} then {loc_true} else {loc_false}")
-                    }
                     Inst::Nop => write!(f, "Nop"),
                 }?;
             }
+            write!(f, "\n    {}", block.exit)?;
         }
         Ok(())
     }

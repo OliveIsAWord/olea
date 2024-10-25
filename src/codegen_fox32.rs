@@ -125,6 +125,7 @@ pub fn gen_function(f: &Function) -> String {
         assert!(indices.remove(&i));
         let block = f.blocks.get(&i).unwrap();
         let mut registers_to_merge = vec![];
+        // TODO: this function and its usage is almost certainly wrong and/or bad
         let merge_phis = |code: &mut String, registers_to_merge: &[Register]| {
             for r in registers_to_merge.iter().rev() {
                 let r_reg = regs.get(r).unwrap().foo();
@@ -134,7 +135,6 @@ pub fn gen_function(f: &Function) -> String {
             }
         };
         write_label!(code, "{function_name}_{i}");
-        let mut next_i = None;
         for inst in &block.insts {
             use StoreKind as Sk;
             match inst {
@@ -177,54 +177,63 @@ pub fn gen_function(f: &Function) -> String {
                     let src_reg = regs.get(src).unwrap();
                     write_inst!(code, "mov [{}], {}", dst_reg.bar(), src_reg.foo());
                 }
-                Inst::Jump(loc) => {
-                    merge_phis(&mut code, &registers_to_merge);
-                    match loc {
-                        &JumpLocation::Block(jump_index) => {
-                            if indices.contains(&jump_index) {
-                                assert_eq!(next_i, None);
-                                next_i = Some(jump_index);
-                            } else {
-                                write_inst!(code, "jmp {function_name}_{jump_index}");
-                            }
-                        }
-                        JumpLocation::Return(regs) => write_exit(&mut code, regs, ""),
-                    }
-                }
-                Inst::CondJump(cond, branch_true, branch_false) => {
-                    merge_phis(&mut code, &registers_to_merge);
-                    match cond {
-                        Condition::NonZero(r) => {
-                            let reg = regs.get(r).unwrap();
-                            write_inst!(code, "cmp {}, 0", reg.foo());
-                        }
-                    }
-                    match branch_true {
-                        &JumpLocation::Block(jump_index) => {
-                            if indices.contains(&jump_index) {
-                                assert_eq!(next_i, None);
-                                next_i = Some(jump_index);
-                            } else {
-                                write_inst!(code, "ifnz jmp {function_name}_{jump_index}");
-                            }
-                        }
-                        JumpLocation::Return(regs) => write_exit(&mut code, regs, "ifnz "),
-                    }
-                    match branch_false {
-                        &JumpLocation::Block(jump_index) => {
-                            if next_i.is_none() && indices.contains(&jump_index) {
-                                next_i = Some(jump_index);
-                            } else {
-                                write_inst!(code, "ifz jmp {function_name}_{jump_index}");
-                            }
-                        }
-
-                        JumpLocation::Return(regs) => write_exit(&mut code, regs, "ifz "),
-                    }
-                }
                 Inst::Nop => write_inst!(code, "nop"),
             }
         }
+        merge_phis(&mut code, &registers_to_merge);
+        let next_i = match &block.exit {
+            Exit::Jump(loc) => match loc {
+                &JumpLocation::Block(jump_index) => {
+                    if indices.contains(&jump_index) {
+                        Some(jump_index)
+                    } else {
+                        write_inst!(code, "jmp {function_name}_{jump_index}");
+                        None
+                    }
+                }
+                JumpLocation::Return(regs) => {
+                    write_exit(&mut code, regs, "");
+                    None
+                }
+            },
+            Exit::CondJump(cond, branch_true, branch_false) => {
+                match cond {
+                    Condition::NonZero(r) => {
+                        let reg = regs.get(r).unwrap();
+                        write_inst!(code, "cmp {}, 0", reg.foo());
+                    }
+                }
+                let next_true = match branch_true {
+                    &JumpLocation::Block(jump_index) => {
+                        if indices.contains(&jump_index) {
+                            Some(jump_index)
+                        } else {
+                            write_inst!(code, "ifnz jmp {function_name}_{jump_index}");
+                            None
+                        }
+                    }
+                    JumpLocation::Return(regs) => {
+                        write_exit(&mut code, regs, "ifnz ");
+                        None
+                    }
+                };
+                let next_false = match branch_false {
+                    &JumpLocation::Block(jump_index) => {
+                        if next_true.is_none() && indices.contains(&jump_index) {
+                            Some(jump_index)
+                        } else {
+                            write_inst!(code, "ifz jmp {function_name}_{jump_index}");
+                            None
+                        }
+                    }
+                    JumpLocation::Return(regs) => {
+                        write_exit(&mut code, regs, "ifz ");
+                        None
+                    }
+                };
+                next_true.or(next_false)
+            }
+        };
         // obviously bad 2 lines of code
         if next_i.is_some() && indices.contains(&next_i.unwrap()) {
             i = next_i.unwrap();

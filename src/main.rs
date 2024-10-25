@@ -19,9 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("dead code elimination!\n{ir}\n");
     ir_optimizer::common_subexpression_elimination(&mut ir);
     println!("common subexpression elimination!\n{ir}\n");
-    if false {
-        let code = codegen_fox32::gen_function(&ir);
-        println!("; Generated source code:\n{code}");
-    }
+    let code = codegen_fox32::gen_function(&ir);
+    println!("; Generated source code:\n{code}");
     Ok(())
 }

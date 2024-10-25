@@ -82,8 +82,7 @@ impl IrBuilder {
             assert_eq!(reg, None);
             vec![]
         };
-        self.push_inst(Inst::Jump(JumpLocation::Return(return_regs)));
-        self.switch_to_new_block(420);
+        self.switch_to_new_block(Exit::Jump(JumpLocation::Return(return_regs)), 420);
         assert_eq!(self.scopes.len(), 1);
         let f = Function::new(self.blocks, self.tys);
         f.type_check();
@@ -159,26 +158,25 @@ impl IrBuilder {
                 // evaluate condition, jump to either branch
                 self.enter_scope();
                 let cond_reg = self.build_expr_unvoid(cond);
-                self.push_inst(Inst::CondJump(
-                    Condition::NonZero(cond_reg),
-                    JumpLocation::Block(then_id),
-                    JumpLocation::Block(else_id),
-                ));
+                self.switch_to_new_block(
+                    Exit::CondJump(
+                        Condition::NonZero(cond_reg),
+                        JumpLocation::Block(then_id),
+                        JumpLocation::Block(else_id),
+                    ),
+                    then_id,
+                );
 
                 // evaluate true branch, jump to end
-                self.switch_to_new_block(then_id);
                 let then_yield = self.build_expr(then_body, unvoid);
-                self.push_jump_block(end_id);
                 self.exit_scope();
+                self.switch_to_new_block(Exit::Jump(JumpLocation::Block(end_id)), else_id);
 
                 // evaluate false branch, jump to end
-                self.switch_to_new_block(else_id);
                 self.enter_scope();
                 let else_yield = self.build_expr(else_body, unvoid);
-                self.push_jump_block(end_id);
                 self.exit_scope();
-
-                self.switch_to_new_block(end_id);
+                self.switch_to_new_block(Exit::Jump(JumpLocation::Block(end_id)), end_id);
 
                 match (then_yield, else_yield) {
                     (Some(a), Some(b)) => self.push_store(StoreKind::Phi([a, b].into())).some(),
@@ -190,26 +188,26 @@ impl IrBuilder {
                 let cond_id = self.reserve_block_id();
                 let body_id = self.reserve_block_id();
                 let end_id = self.reserve_block_id();
-                self.push_jump_block(cond_id);
+                self.switch_to_new_block(Exit::Jump(JumpLocation::Block(cond_id)), cond_id);
 
                 // condition evaluation, jump to either inner body or end of expression
-                self.switch_to_new_block(cond_id);
                 self.enter_scope(); // with code like `while x is Some(y): ...`, `y` should be accessible from the body
                 let cond_reg = self.build_expr_unvoid(cond);
-                self.push_inst(Inst::CondJump(
-                    Condition::NonZero(cond_reg),
-                    JumpLocation::Block(body_id),
-                    JumpLocation::Block(end_id),
-                ));
+                self.switch_to_new_block(
+                    Exit::CondJump(
+                        Condition::NonZero(cond_reg),
+                        JumpLocation::Block(body_id),
+                        JumpLocation::Block(end_id),
+                    ),
+                    body_id,
+                );
 
                 // body evaluation, jump back to condition
-                self.switch_to_new_block(body_id);
                 self.build_expr_void(body);
-                self.push_jump_block(cond_id);
                 self.exit_scope();
+                self.switch_to_new_block(Exit::Jump(JumpLocation::Block(cond_id)), end_id);
 
                 // continue evaluation after while loop
-                self.switch_to_new_block(end_id);
                 None
             }
         };
@@ -249,10 +247,6 @@ impl IrBuilder {
         reg
     }
 
-    fn push_jump_block(&mut self, id: usize) {
-        self.push_inst(Inst::Jump(JumpLocation::Block(id)));
-    }
-
     fn push_inst(&mut self, inst: Inst) {
         self.current_block.push(inst);
     }
@@ -267,9 +261,9 @@ impl IrBuilder {
         reg
     }
 
-    pub fn switch_to_new_block(&mut self, id: usize) {
+    pub fn switch_to_new_block(&mut self, exit: Exit, id: usize) {
         let insts = std::mem::take(&mut self.current_block);
-        let block = Block::new(insts);
+        let block = Block::new(insts, exit);
         self.blocks.insert(self.current_block_id, block);
         self.current_block_id = id;
     }
