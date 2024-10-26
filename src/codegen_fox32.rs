@@ -89,7 +89,7 @@ pub fn gen_function(f: &Function) -> String {
         local_locs,
         stack_size,
     } = reg_alloc(f);
-    let phi_map: Map<Register, (usize, Register)> = {
+    let phi_map: Map<Register, (BlockId, Register)> = {
         let mut map = Map::new();
         let iter = f
             .blocks
@@ -119,8 +119,8 @@ pub fn gen_function(f: &Function) -> String {
     };
     write_label!(code, "{function_name}_entry");
     write_inst!(code, "sub rsp, {}", stack_size);
-    let mut indices: Set<usize> = f.blocks.keys().copied().collect();
-    let mut i = 0;
+    let mut indices: Set<BlockId> = f.blocks.keys().copied().collect();
+    let mut i = BlockId::ENTRY;
     loop {
         assert!(indices.remove(&i));
         let block = f.blocks.get(&i).unwrap();
@@ -134,7 +134,7 @@ pub fn gen_function(f: &Function) -> String {
                 write_inst!(*code, "mov {dst_reg}, {r_reg}");
             }
         };
-        write_label!(code, "{function_name}_{i}");
+        write_label!(code, "{function_name}_{}", i.0);
         for inst in &block.insts {
             use StoreKind as Sk;
             match inst {
@@ -187,7 +187,7 @@ pub fn gen_function(f: &Function) -> String {
                     if indices.contains(&jump_index) {
                         Some(jump_index)
                     } else {
-                        write_inst!(code, "jmp {function_name}_{jump_index}");
+                        write_inst!(code, "jmp {function_name}_{}", jump_index.0);
                         None
                     }
                 }
@@ -208,7 +208,7 @@ pub fn gen_function(f: &Function) -> String {
                         if indices.contains(&jump_index) {
                             Some(jump_index)
                         } else {
-                            write_inst!(code, "ifnz jmp {function_name}_{jump_index}");
+                            write_inst!(code, "ifnz jmp {function_name}_{}", jump_index.0);
                             None
                         }
                     }
@@ -222,7 +222,7 @@ pub fn gen_function(f: &Function) -> String {
                         if next_true.is_none() && indices.contains(&jump_index) {
                             Some(jump_index)
                         } else {
-                            write_inst!(code, "ifz jmp {function_name}_{jump_index}");
+                            write_inst!(code, "ifz jmp {function_name}_{}", jump_index.0);
                             None
                         }
                     }

@@ -2,7 +2,7 @@ use crate::compiler_types::{Map, Set};
 use crate::ir::*;
 
 pub fn remove_redundant_reads(f: &mut Function) {
-    let mut stack_reads: Map<Register, Vec<(usize, usize)>> = f
+    let mut stack_reads: Map<Register, Vec<(BlockId, usize)>> = f
         .blocks
         .values()
         .flat_map(|b| &b.insts)
@@ -26,13 +26,13 @@ pub fn remove_redundant_reads(f: &mut Function) {
     for (src, locs) in stack_reads {
         for (original_block_id, i) in locs {
             let mut closed = Set::new();
-            let mut open = vec![usize::MAX];
+            let mut open = vec![BlockId::DUMMY];
             let mut registers = Set::new();
             while let Some(block_id) = open.pop() {
                 if !closed.insert(block_id) {
                     continue;
                 }
-                let insts = if block_id == usize::MAX {
+                let insts = if block_id == BlockId::DUMMY {
                     &f.blocks.get(&original_block_id).unwrap().insts[..i]
                 } else if block_id == original_block_id {
                     &f.blocks.get(&original_block_id).unwrap().insts[i + 1..]
@@ -51,7 +51,7 @@ pub fn remove_redundant_reads(f: &mut Function) {
                     break;
                 }
                 if reached_beginning {
-                    let block_id = if block_id == usize::MAX {
+                    let block_id = if block_id == BlockId::DUMMY {
                         original_block_id
                     } else {
                         block_id
@@ -68,7 +68,7 @@ pub fn remove_redundant_reads(f: &mut Function) {
 }
 
 pub fn remove_redundant_writes(f: &mut Function) {
-    let mut stack_writes: Map<Register, Vec<(usize, usize)>> = f
+    let mut stack_writes: Map<Register, Vec<(BlockId, usize)>> = f
         .blocks
         .values()
         .flat_map(|b| &b.insts)
@@ -94,13 +94,13 @@ pub fn remove_redundant_writes(f: &mut Function) {
     for (src, locs) in stack_writes {
         for (original_block_id, i) in locs {
             let mut closed = Set::new();
-            let mut open = vec![usize::MAX];
+            let mut open = vec![BlockId::DUMMY];
             let mut is_used = false;
             'check: while let Some(block_id) = open.pop() {
                 if !closed.insert(block_id) {
                     continue;
                 }
-                let insts = if block_id == usize::MAX {
+                let insts = if block_id == BlockId::DUMMY {
                     &f.blocks.get(&original_block_id).unwrap().insts[i + 1..]
                 } else if block_id == original_block_id {
                     &f.blocks.get(&original_block_id).unwrap().insts[..i]
@@ -122,7 +122,7 @@ pub fn remove_redundant_writes(f: &mut Function) {
                     }
                 }
                 if reached_end {
-                    let block_id = if block_id == usize::MAX {
+                    let block_id = if block_id == BlockId::DUMMY {
                         original_block_id
                     } else {
                         block_id
@@ -164,11 +164,11 @@ pub fn dead_code_elimination(f: &mut Function) {
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct DominatorTree {
-    children: Map<usize, Self>,
+    children: Map<BlockId, Self>,
 }
 
 impl DominatorTree {
-    pub fn new(blocks: &Map<usize, Block>) -> Self {
+    pub fn new(blocks: &Map<BlockId, Block>) -> Self {
         let mut this = Self {
             children: blocks
                 .keys()
@@ -185,11 +185,11 @@ impl DominatorTree {
         this.make_immediate(blocks);
         this
     }
-    fn make_immediate(&mut self, blocks: &Map<usize, Block>) {
-        fn traverse_except(blocks: &Map<usize, Block>, except: usize) -> Set<usize> {
+    fn make_immediate(&mut self, blocks: &Map<BlockId, Block>) {
+        fn traverse_except(blocks: &Map<BlockId, Block>, except: BlockId) -> Set<BlockId> {
             let mut unreachable: Set<_> =
                 blocks.keys().copied().filter(|&id| id != except).collect();
-            let mut open = vec![0];
+            let mut open = vec![BlockId::ENTRY];
             while let Some(id) = open.pop() {
                 if unreachable.remove(&id) {
                     open.extend(blocks.get(&id).unwrap().successors());
@@ -226,9 +226,9 @@ pub fn common_subexpression_elimination(f: &mut Function) {
     use StoreKind as Sk;
     let dom_tree = DominatorTree::new(&f.blocks);
     fn visit(
-        id: usize,
+        id: BlockId,
         children: &DominatorTree,
-        blocks: &mut Map<usize, Block>,
+        blocks: &mut Map<BlockId, Block>,
         ancestor_subs: &mut Vec<Map<Sk, Register>>,
     ) {
         let block = blocks.get_mut(&id).unwrap();
@@ -255,8 +255,8 @@ pub fn common_subexpression_elimination(f: &mut Function) {
         ancestor_subs.pop().unwrap();
     }
     visit(
-        0,
-        dom_tree.children.get(&0).unwrap(),
+        BlockId::ENTRY,
+        dom_tree.children.get(&BlockId::ENTRY).unwrap(),
         &mut f.blocks,
         &mut vec![],
     );

@@ -45,9 +45,9 @@ const fn to_ir_ty(ty: &ast::Type) -> Ty {
 #[derive(Clone, Debug)]
 struct IrBuilder {
     current_block: Vec<Inst>,
-    current_block_id: usize,
+    current_block_id: BlockId,
     next_block_id: usize,
-    blocks: Map<usize, Block>,
+    blocks: Map<BlockId, Block>,
     tys: Map<Register, Ty>,
     scopes: Vec<Map<String, Register>>,
     next_reg_id: u128,
@@ -57,8 +57,8 @@ impl IrBuilder {
     fn new() -> Self {
         Self {
             current_block: vec![],
-            current_block_id: 0,
-            next_block_id: 1,
+            current_block_id: BlockId::ENTRY,
+            next_block_id: BlockId::ENTRY.0 + 1,
             blocks: Map::new(),
             tys: Map::new(),
             scopes: vec![Map::new()],
@@ -82,7 +82,7 @@ impl IrBuilder {
             assert_eq!(reg, None);
             vec![]
         };
-        self.switch_to_new_block(Exit::Jump(JumpLocation::Return(return_regs)), 420);
+        self.switch_to_new_block(Exit::Jump(JumpLocation::Return(return_regs)), BlockId::DUMMY);
         assert_eq!(self.scopes.len(), 1);
         let f = Function::new(self.blocks, self.tys);
         f.type_check();
@@ -261,15 +261,15 @@ impl IrBuilder {
         reg
     }
 
-    pub fn switch_to_new_block(&mut self, exit: Exit, id: usize) {
+    pub fn switch_to_new_block(&mut self, exit: Exit, id: BlockId) {
         let insts = std::mem::take(&mut self.current_block);
         let block = Block::new(insts, exit);
         self.blocks.insert(self.current_block_id, block);
         self.current_block_id = id;
     }
 
-    fn reserve_block_id(&mut self) -> usize {
-        let id = self.next_block_id;
+    fn reserve_block_id(&mut self) -> BlockId {
+        let id = BlockId(self.next_block_id);
         self.next_block_id = self
             .next_block_id
             .checked_add(1)

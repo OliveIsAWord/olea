@@ -2,13 +2,13 @@ use crate::compiler_types::{Map, Set};
 
 #[derive(Clone, Debug)]
 pub struct Function {
-    pub blocks: Map<usize, Block>,
-    pub predecessors: Map<usize, Set<usize>>,
+    pub blocks: Map<BlockId, Block>,
+    pub predecessors: Map<BlockId, Set<BlockId>>,
     pub tys: Map<Register, Ty>,
 }
 
 impl Function {
-    pub fn new(blocks: Map<usize, Block>, tys: Map<Register, Ty>) -> Self {
+    pub fn new(blocks: Map<BlockId, Block>, tys: Map<Register, Ty>) -> Self {
         let mut this = Function {
             blocks,
             tys,
@@ -27,15 +27,13 @@ impl Function {
             exit.type_check(tys);
         }
     }
-    pub fn iter(&self) -> impl Iterator<Item = (usize, &Block)> {
-        let blocks = self
+    /// Returns an iterator over the blocks and their IDs of the function. The first item is always the entry block.
+    pub fn iter(&self) -> impl Iterator<Item = (BlockId, &Block)> {
+        // NOTE: This relies on block 0 being first because of BTreeSet and the sort order of blocks
+        self
             .blocks
             .iter()
-            .filter_map(|(&i, block)| if i == 0 { None } else { Some((i, block)) });
-        Some(0)
-            .into_iter()
-            .map(|i| (i, self.blocks.get(&i).unwrap()))
-            .chain(blocks)
+            .map(|(&id, block)| (id, block))
     }
     pub fn gen_predecessors(&mut self) {
         let mut p: Map<_, _> = self.blocks.keys().map(|&id| (id, Set::new())).collect();
@@ -73,7 +71,7 @@ impl Block {
         this.gen_def_use();
         this
     }
-    pub fn successors(&self) -> impl Iterator<Item = usize> {
+    pub fn successors(&self) -> impl Iterator<Item = BlockId> {
         self.exit.successors()
     }
     pub fn gen_def_use(&mut self) {
@@ -221,7 +219,7 @@ impl Exit {
             }
         }
     }
-    pub fn successors(&self) -> impl Iterator<Item = usize> {
+    pub fn successors(&self) -> impl Iterator<Item = BlockId> {
         let mut ids = vec![];
         let mut add = |loc: &JumpLocation| match loc {
             JumpLocation::Return(_) => {}
@@ -248,7 +246,7 @@ pub enum Condition {
 
 #[derive(Clone, Debug)]
 pub enum JumpLocation {
-    Block(usize),
+    Block(BlockId),
     Return(Vec<Register>),
     // Register(Register),
 }
@@ -269,16 +267,34 @@ impl JumpLocation {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Register(pub u128);
 
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct BlockId(pub usize);
+
+impl BlockId {
+    pub const ENTRY: Self = Self(0);
+    pub const DUMMY: Self = Self(usize::MAX);
+
+    pub fn is_entry(self) -> bool {
+        self.0 == 0
+    }
+}
+
 impl std::fmt::Display for Register {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "r{}", self.0)
     }
 }
 
+impl std::fmt::Display for BlockId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "block_{}", self.0)
+    }
+}
+
 impl std::fmt::Display for JumpLocation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            Self::Block(i) => write!(f, "block_{i}"),
+            Self::Block(b) => write!(f, "{b}"),
             Self::Return(regs) => write!(f, "Return({regs:?})"),
         }
     }
@@ -305,11 +321,11 @@ impl std::fmt::Display for Exit {
 
 impl std::fmt::Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        for (i, block) in self.iter() {
-            if i != 0 {
+        for (id, block) in self.iter() {
+            if !id.is_entry() {
                 writeln!(f)?;
             }
-            write!(f, "block_{i}:")?;
+            write!(f, "{id}:")?;
             for inst in &block.insts {
                 write!(f, "\n    ")?;
                 match inst {
