@@ -312,7 +312,7 @@ impl BlockId {
 
 impl std::fmt::Display for Register {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "r{}", self.0)
+        write!(f, "%{}", self.0)
     }
 }
 
@@ -367,7 +367,7 @@ impl std::fmt::Display for Function {
                             Sk::StackAlloc(ty) => write!(f, "StackAlloc({ty:?})"),
                             Sk::Int(i, ty) => write!(f, "{i}_u{ty}"),
                             Sk::Copy(r) => write!(f, "{r}"),
-                            Sk::Read(r) => write!(f, "*{r}"),
+                            Sk::Read(r) => write!(f, "{r}*"),
                             Sk::BinOp(op, lhs, rhs) => write!(
                                 f,
                                 "{lhs} {} {rhs}",
@@ -388,7 +388,7 @@ impl std::fmt::Display for Function {
                             }
                         }
                     }
-                    Inst::Write(dst, src) => write!(f, "*{dst} = {src}"),
+                    Inst::Write(dst, src) => write!(f, "{dst}* = {src}"),
                     Inst::Nop => write!(f, "Nop"),
                 }?;
             }
