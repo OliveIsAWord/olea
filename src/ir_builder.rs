@@ -82,7 +82,10 @@ impl IrBuilder {
             assert_eq!(reg, None);
             vec![]
         };
-        self.switch_to_new_block(Exit::Jump(JumpLocation::Return(return_regs)), BlockId::DUMMY);
+        self.switch_to_new_block(
+            Exit::Jump(JumpLocation::Return(return_regs)),
+            BlockId::DUMMY,
+        );
         assert_eq!(self.scopes.len(), 1);
         let f = Function::new(self.blocks, self.tys);
         f.type_check();
@@ -169,17 +172,22 @@ impl IrBuilder {
 
                 // evaluate true branch, jump to end
                 let then_yield = self.build_expr(then_body, unvoid);
+                let then_id = self.current_block_id;
                 self.exit_scope();
                 self.switch_to_new_block(Exit::Jump(JumpLocation::Block(end_id)), else_id);
 
                 // evaluate false branch, jump to end
                 self.enter_scope();
                 let else_yield = self.build_expr(else_body, unvoid);
+                let else_id = self.current_block_id;
                 self.exit_scope();
                 self.switch_to_new_block(Exit::Jump(JumpLocation::Block(end_id)), end_id);
 
                 match (then_yield, else_yield) {
-                    (Some(a), Some(b)) => self.push_store(StoreKind::Phi([a, b].into())).some(),
+                    (Some(a), Some(b)) => {
+                        let choices = [(then_id, a), (else_id, b)].into_iter().collect();
+                        self.push_store(StoreKind::Phi(choices)).some()
+                    }
                     _ => None,
                 }
             }

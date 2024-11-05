@@ -1,6 +1,7 @@
 use crate::compiler_types::{Map, Set};
 use crate::ir::*;
 
+// TODO: make this actually work
 pub fn remove_redundant_reads(f: &mut Function) {
     let mut stack_reads: Map<Register, Vec<(BlockId, usize)>> = f
         .blocks
@@ -60,7 +61,7 @@ pub fn remove_redundant_reads(f: &mut Function) {
                 }
             }
             match &mut f.blocks.get_mut(&original_block_id).unwrap().insts[i] {
-                Inst::Store(_, x) => *x = StoreKind::Phi(registers),
+                Inst::Store(_, _x) => (), //StoreKind::Phi(registers),
                 _ => unreachable!(),
             }
         }
@@ -237,7 +238,7 @@ pub fn common_subexpression_elimination(f: &mut Function) {
             let Inst::Store(r, sk) = inst else { continue };
             match sk {
                 Sk::Int(..) | Sk::Phi(_) | Sk::BinOp(..) => {}
-                | Sk::Read(_) // impure, can erase a write
+                | Sk::Read(_) // impure, performing CSE can erroneously erase a write
                 | Sk::StackAlloc(_) // unique allocation, can't be copied
                 | Sk:: Copy(_) // pointless to copy a copy
                 => continue,

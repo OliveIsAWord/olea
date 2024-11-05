@@ -30,10 +30,7 @@ impl Function {
     /// Returns an iterator over the blocks and their IDs of the function. The first item is always the entry block.
     pub fn iter(&self) -> impl Iterator<Item = (BlockId, &Block)> {
         // NOTE: This relies on block 0 being first because of BTreeSet and the sort order of blocks
-        self
-            .blocks
-            .iter()
-            .map(|(&id, block)| (id, block))
+        self.blocks.iter().map(|(&id, block)| (id, block))
     }
     pub fn gen_predecessors(&mut self) {
         let mut p: Map<_, _> = self.blocks.keys().map(|&id| (id, Set::new())).collect();
@@ -105,11 +102,9 @@ impl Block {
                             f(r, false);
                         }
                         Sk::Phi(regs) => {
-                            let mut new_regs: Vec<_> = regs.iter().copied().collect();
-                            for r in &mut new_regs {
+                            for r in regs.values_mut() {
                                 f(r, false)
                             }
-                            *regs = new_regs.into_iter().collect();
                         }
                         Sk::Int(..) | Sk::StackAlloc(_) => {}
                     }
@@ -159,7 +154,7 @@ impl Inst {
 pub enum StoreKind {
     Int(u128, u64),
     Copy(Register),
-    Phi(Set<Register>),
+    Phi(Map<BlockId, Register>),
     BinOp(BinOp, Register, Register),
     StackAlloc(Ty),
     Read(Register),
@@ -177,7 +172,7 @@ impl StoreKind {
         };
         match self {
             &Self::Int(_, width) => Ty::Int(width),
-            Self::Phi(regs) => all(&regs.iter().copied().collect::<Vec<_>>()), // TODO silly and bad
+            Self::Phi(regs) => all(&regs.values().copied().collect::<Vec<_>>()), // TODO silly and bad
             &Self::BinOp(_, lhs, rhs) => all(&[lhs, rhs]),
             Self::StackAlloc(ty) => Ty::Pointer(Box::new(ty.clone())),
             Self::Copy(r) => tys.get(r).unwrap().clone(),
@@ -347,11 +342,11 @@ impl std::fmt::Display for Function {
                             ),
                             Sk::Phi(regs) => {
                                 write!(f, "Phi(")?;
-                                for (i, reg) in regs.iter().enumerate() {
+                                for (i, (id, reg)) in regs.iter().enumerate() {
                                     if i != 0 {
                                         write!(f, ", ")?;
                                     }
-                                    write!(f, "{reg}")?;
+                                    write!(f, "{id}: {reg}")?;
                                 }
                                 write!(f, ")")
                             }

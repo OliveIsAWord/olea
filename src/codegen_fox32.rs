@@ -89,25 +89,6 @@ pub fn gen_function(f: &Function) -> String {
         local_locs,
         stack_size,
     } = reg_alloc(f);
-    let phi_map: Map<Register, (BlockId, Register)> = {
-        let mut map = Map::new();
-        let iter = f
-            .blocks
-            .iter()
-            .flat_map(|(&id, b)| b.insts.iter().map(move |inst| (id, inst)));
-        for (id, inst) in iter {
-            match inst {
-                Inst::Store(dst, StoreKind::Phi(regs)) => {
-                    for &reg in regs {
-                        map.insert(reg, (id, *dst));
-                    }
-                }
-                _ => {}
-            }
-        }
-        map
-    };
-    println!("{phi_map:?}");
     let function_name = "foo";
     let write_exit = |code: &mut String, returns: &[Register], prefix: &str| {
         write_inst!(*code, "{prefix}add rsp, {stack_size}");
@@ -124,24 +105,12 @@ pub fn gen_function(f: &Function) -> String {
     loop {
         assert!(indices.remove(&i));
         let block = f.blocks.get(&i).unwrap();
-        let mut registers_to_merge = vec![];
         // TODO: this function and its usage is almost certainly wrong and/or bad
-        let merge_phis = |code: &mut String, registers_to_merge: &[Register]| {
-            for r in registers_to_merge.iter().rev() {
-                let r_reg = regs.get(r).unwrap().foo();
-                let (_, dst) = phi_map.get(r).unwrap();
-                let dst_reg = regs.get(dst).unwrap().foo();
-                write_inst!(*code, "mov {dst_reg}, {r_reg}");
-            }
-        };
         write_label!(code, "{function_name}_{}", i.0);
+        use StoreKind as Sk;
         for inst in &block.insts {
-            use StoreKind as Sk;
             match inst {
                 Inst::Store(r, sk) => {
-                    if phi_map.contains_key(r) {
-                        registers_to_merge.push(*r);
-                    }
                     let reg = regs.get(r).unwrap();
                     match sk {
                         Sk::StackAlloc(_) => {
@@ -166,8 +135,8 @@ pub fn gen_function(f: &Function) -> String {
                                 BinOp::Add => "add",
                                 BinOp::Sub => "sub",
                             };
-                            write_inst!(code, "mov {}, {}", reg.foo(), lhs_reg.bar());
-                            write_inst!(code, "{} {}, {}", op_mnemonic, reg.foo(), rhs_reg.bar());
+                            write_inst!(code, "mov {}, {}", reg.foo(), lhs_reg.foo());
+                            write_inst!(code, "{} {}, {}", op_mnemonic, reg.foo(), rhs_reg.foo());
                         }
                         Sk::Phi(_) => (),
                     }
@@ -180,10 +149,22 @@ pub fn gen_function(f: &Function) -> String {
                 Inst::Nop => write_inst!(code, "nop"),
             }
         }
-        merge_phis(&mut code, &registers_to_merge);
+        let merge_phis = |code: &mut String, jump_index, prefix| {
+            let jump_block = f.blocks.get(&jump_index).unwrap();
+            for inst in &jump_block.insts {
+                let Inst::Store(dst, Sk::Phi(srcs)) = inst else {
+                    continue;
+                };
+                let src = srcs.get(&i).unwrap();
+                let dst_reg = regs.get(dst).unwrap().foo();
+                let src_reg = regs.get(src).unwrap().foo();
+                write_inst!(*code, "{prefix}mov {dst_reg}, {src_reg}");
+            }
+        };
         let next_i = match &block.exit {
             Exit::Jump(loc) => match loc {
                 &JumpLocation::Block(jump_index) => {
+                    merge_phis(&mut code, jump_index, "");
                     if indices.contains(&jump_index) {
                         Some(jump_index)
                     } else {
@@ -205,6 +186,7 @@ pub fn gen_function(f: &Function) -> String {
                 }
                 let next_true = match branch_true {
                     &JumpLocation::Block(jump_index) => {
+                        merge_phis(&mut code, jump_index, "ifnz ");
                         if indices.contains(&jump_index) {
                             Some(jump_index)
                         } else {
@@ -219,6 +201,7 @@ pub fn gen_function(f: &Function) -> String {
                 };
                 let next_false = match branch_false {
                     &JumpLocation::Block(jump_index) => {
+                        merge_phis(&mut code, jump_index, "ifz ");
                         if next_true.is_none() && indices.contains(&jump_index) {
                             Some(jump_index)
                         } else {
