@@ -1,9 +1,13 @@
 use crate::compiler_types::{Map, Set};
 
+/// A body of code accepts and yields some registers.
 #[derive(Clone, Debug)]
 pub struct Function {
+    /// The basic blocks of code comprising this function.
     pub blocks: Map<BlockId, Block>,
+    /// The blocks that can directly jump to a given block.
     pub predecessors: Map<BlockId, Set<BlockId>>,
+    /// The data type of values stored in each register.
     pub tys: Map<Register, Ty>,
 }
 
@@ -43,17 +47,25 @@ impl Function {
     }
 }
 
+/// The type of any value operated on.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Ty {
+    /// An integer of a given width in bits.
     Int(u64),
+    /// A pointer into memory storing a value of a given type.
     Pointer(Box<Self>),
 }
 
+/// A basic block, as in a block of code with one entrance and one exit where each instruction is executed in sequence exactly once before another block executes or the function returns.
 #[derive(Clone, Debug)]
 pub struct Block {
+    /// A sequence of instructions that are executed in order.
     pub insts: Vec<Inst>,
+    /// The direction of control flow after all instructions of this block have been executed.
     pub exit: Exit,
+    /// The set of all registers defined (and then assigned) by this block.
     pub defined_regs: Set<Register>,
+    /// The set of all registers directly used by this block.
     pub used_regs: Set<Register>,
 }
 
@@ -129,10 +141,14 @@ impl Block {
     }
 }
 
+/// An operation within a block.
 #[derive(Clone, Debug)]
 pub enum Inst {
+    /// Define a register and assign it a value.
     Store(Register, StoreKind),
+    /// Write to a pointer with a value.
     Write(Register, Register),
+    /// Do nothing.
     Nop,
 }
 
@@ -150,13 +166,20 @@ impl Inst {
     }
 }
 
+/// A method of calculating a value to store in a register.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum StoreKind {
+    /// An integer constant of a given width.
     Int(u128, u64),
+    /// A copy of another register's value.
     Copy(Register),
+    /// A choice of values based on the immediately preceding block.
     Phi(Map<BlockId, Register>),
+    /// An operation on the value of two registers.
     BinOp(BinOp, Register, Register),
+    /// A pointer to a unique allocation for a value of a given type.
     StackAlloc(Ty),
+    /// A read access through a pointer to memory.
     Read(Register),
 }
 
@@ -184,15 +207,21 @@ impl StoreKind {
     }
 }
 
+/// A logic or arithmetic operation taking two values and yielding one.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum BinOp {
+    /// Addition.
     Add,
+    /// Subtraction.
     Sub,
 }
 
+/// The direction of control flow after all instructions of a block have been executed.
 #[derive(Clone, Debug)]
 pub enum Exit {
+    /// Direct control flow to a single, static location.
     Jump(JumpLocation),
+    /// Direct control flow to one of two locations based on some runtime condition.
     CondJump(Condition, JumpLocation, JumpLocation),
 }
 
@@ -233,17 +262,22 @@ impl Exit {
     }
 }
 
+/// A runtime condition to determine which of two control flow paths to take.
 #[derive(Clone, Debug)]
 pub enum Condition {
-    // Always,
+    /// Take the first branch if the register contains a non-zero value, meaning:
+    /// - An integer not equal to zero.
+    /// - A pointer whose address is not equal to zero.
     NonZero(Register),
 }
 
+/// The behavior of a branch of execution.
 #[derive(Clone, Debug)]
 pub enum JumpLocation {
+    /// Execution continues to another block.
     Block(BlockId),
+    /// Execution terminates, yielding a list of values.
     Return(Vec<Register>),
-    // Register(Register),
 }
 
 impl JumpLocation {
@@ -259,9 +293,11 @@ impl JumpLocation {
     }
 }
 
+/// A named location which stores a value.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Register(pub u128);
 
+/// An identifier for a block unique within the function.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BlockId(pub usize);
 
