@@ -1,28 +1,40 @@
 use crate::compiler_types::{Map, Set};
 
+/// A body of code accepts and yields some registers.
 #[derive(Clone, Debug)]
 pub struct Function {
+    /// The basic blocks of code comprising this function.
     pub blocks: Map<BlockId, Block>,
-    pub predecessors: Map<BlockId, Set<BlockId>>,
+    /// The data type of values stored in each register.
     pub tys: Map<Register, Ty>,
+    /// A counter for optimization passes that may need to allocate new registers. There are no registers of this ID or greater.
+    next_reg_id: u128,
 }
 
 impl Function {
-    pub fn new(blocks: Map<BlockId, Block>, tys: Map<Register, Ty>) -> Self {
+    pub fn new(blocks: Map<BlockId, Block>, tys: Map<Register, Ty>, next_reg_id: u128) -> Self {
         let mut this = Function {
             blocks,
             tys,
-            predecessors: Map::new(),
+            next_reg_id,
         };
         this.gen_predecessors();
         this
     }
     pub fn type_check(&self) {
         let tys = &self.tys;
-        self.blocks
-            .values()
-            .flat_map(|b| &b.insts)
-            .for_each(|i| i.type_check(tys));
+        for block in self.blocks.values() {
+            for (dst, srcs) in &block.phis {
+                let dst_ty = tys.get(&dst).unwrap();
+                for src in srcs {
+                    let src_ty = tys.get(&src).unwrap();
+                    assert_eq!(dst_ty, src_ty);
+                }
+            }
+            for inst in &block.insts {
+                inst.type_check(tys);
+            }
+        }
         for Block { exit, .. } in self.blocks.values() {
             exit.type_check(tys);
         }
@@ -30,39 +42,61 @@ impl Function {
     /// Returns an iterator over the blocks and their IDs of the function. The first item is always the entry block.
     pub fn iter(&self) -> impl Iterator<Item = (BlockId, &Block)> {
         // NOTE: This relies on block 0 being first because of BTreeSet and the sort order of blocks
-        self
-            .blocks
-            .iter()
-            .map(|(&id, block)| (id, block))
+        self.blocks.iter().map(|(&id, block)| (id, block))
     }
     pub fn gen_predecessors(&mut self) {
+        // the direct predecessors of each block
         let mut p: Map<_, _> = self.blocks.keys().map(|&id| (id, Set::new())).collect();
         for (&id, block) in &self.blocks {
             for succ_id in block.successors() {
                 p.get_mut(&succ_id).unwrap().insert(id);
             }
         }
-        self.predecessors = p;
+        for (id, mut preds) in p {
+            let block_preds = &mut self.blocks.get_mut(&id).unwrap().predecessors;
+            if block_preds.is_empty() {
+                *block_preds = preds.into_iter().collect();
+            } else {
+                let set_preds: Set<_> = block_preds.iter().copied().collect();
+                assert_eq!(set_preds, preds, "{block_preds:?}");
+            }
+        }
     }
 }
 
+/// The type of any value operated on.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Ty {
+    /// An integer of a given width in bits.
     Int(u64),
+    /// A pointer into memory storing a value of a given type.
     Pointer(Box<Self>),
 }
 
+pub type Phis = Map<Register, Vec<Register>>;
+
+/// A basic block, as in a block of code with one entrance and one exit where each instruction is executed in sequence exactly once before another block executes or the function returns.
 #[derive(Clone, Debug)]
 pub struct Block {
+    /// A list of all the blocks that can directly jump to this block.
+    pub predecessors: Vec<BlockId>,
+    /// A set of defined registers and their choice of existing registers from each predecessor block in order.
+    pub phis: Phis,
+    /// A sequence of instructions that are executed in order.
     pub insts: Vec<Inst>,
+    /// The direction of control flow after all instructions of this block have been executed.
     pub exit: Exit,
+    /// The set of all registers defined (and then assigned) by this block.
     pub defined_regs: Set<Register>,
+    /// The set of all registers directly used by this block.
     pub used_regs: Set<Register>,
 }
 
 impl Block {
-    pub fn new(insts: Vec<Inst>, exit: Exit) -> Self {
+    pub fn new(predecessors: Vec<BlockId>, phis: Phis, insts: Vec<Inst>, exit: Exit) -> Self {
         let mut this = Block {
+            predecessors,
+            phis,
             insts,
             exit,
             defined_regs: Set::new(),
@@ -88,6 +122,18 @@ impl Block {
         self.used_regs = used;
     }
     pub fn visit_regs<F: FnMut(&mut Register, bool)>(&mut self, mut f: F) {
+        // FIXME: This phi visiting code is very bad!
+        let phis = std::mem::take(&mut self.phis);
+        self.phis = phis
+            .into_iter()
+            .map(|(mut defined, mut used)| {
+                f(&mut defined, true);
+                for u in &mut used {
+                    f(u, false);
+                }
+                (defined, used)
+            })
+            .collect();
         for inst in &mut self.insts {
             use StoreKind as Sk;
             match inst {
@@ -103,13 +149,6 @@ impl Block {
                         }
                         Sk::Copy(r) => {
                             f(r, false);
-                        }
-                        Sk::Phi(regs) => {
-                            let mut new_regs: Vec<_> = regs.iter().copied().collect();
-                            for r in &mut new_regs {
-                                f(r, false)
-                            }
-                            *regs = new_regs.into_iter().collect();
                         }
                         Sk::Int(..) | Sk::StackAlloc(_) => {}
                     }
@@ -134,10 +173,14 @@ impl Block {
     }
 }
 
+/// An operation within a block.
 #[derive(Clone, Debug)]
 pub enum Inst {
+    /// Define a register and assign it a value.
     Store(Register, StoreKind),
+    /// Write to a pointer with a value.
     Write(Register, Register),
+    /// Do nothing.
     Nop,
 }
 
@@ -155,13 +198,18 @@ impl Inst {
     }
 }
 
+/// A method of calculating a value to store in a register.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum StoreKind {
+    /// An integer constant of a given width.
     Int(u128, u64),
+    /// A copy of another register's value.
     Copy(Register),
-    Phi(Set<Register>),
+    /// An operation on the value of two registers.
     BinOp(BinOp, Register, Register),
+    /// A pointer to a unique allocation for a value of a given type.
     StackAlloc(Ty),
+    /// A read access through a pointer to memory.
     Read(Register),
 }
 
@@ -177,7 +225,6 @@ impl StoreKind {
         };
         match self {
             &Self::Int(_, width) => Ty::Int(width),
-            Self::Phi(regs) => all(&regs.iter().copied().collect::<Vec<_>>()), // TODO silly and bad
             &Self::BinOp(_, lhs, rhs) => all(&[lhs, rhs]),
             Self::StackAlloc(ty) => Ty::Pointer(Box::new(ty.clone())),
             Self::Copy(r) => tys.get(r).unwrap().clone(),
@@ -189,15 +236,21 @@ impl StoreKind {
     }
 }
 
+/// A logic or arithmetic operation taking two values and yielding one.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum BinOp {
+    /// Addition.
     Add,
+    /// Subtraction.
     Sub,
 }
 
+/// The direction of control flow after all instructions of a block have been executed.
 #[derive(Clone, Debug)]
 pub enum Exit {
+    /// Direct control flow to a single, static location.
     Jump(JumpLocation),
+    /// Direct control flow to one of two locations based on some runtime condition.
     CondJump(Condition, JumpLocation, JumpLocation),
 }
 
@@ -238,17 +291,24 @@ impl Exit {
     }
 }
 
+/// A runtime condition to determine which of two control flow paths to take.
 #[derive(Clone, Debug)]
 pub enum Condition {
-    // Always,
+    /// Take the first branch if the register contains a non-zero value, meaning:
+    ///
+    /// - An integer not equal to zero.
+    ///
+    /// - A pointer with an address not equal to zero.
     NonZero(Register),
 }
 
+/// The behavior of a branch of execution.
 #[derive(Clone, Debug)]
 pub enum JumpLocation {
+    /// Execution continues to another block.
     Block(BlockId),
+    /// Execution terminates, yielding a list of values.
     Return(Vec<Register>),
-    // Register(Register),
 }
 
 impl JumpLocation {
@@ -264,9 +324,11 @@ impl JumpLocation {
     }
 }
 
+/// A named location which stores a value.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Register(pub u128);
 
+/// An identifier for a block unique within the function.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BlockId(pub usize);
 
@@ -326,6 +388,16 @@ impl std::fmt::Display for Function {
                 writeln!(f)?;
             }
             write!(f, "{id}:")?;
+            for (defined, choices) in &block.phis {
+                write!(f, "\n    {defined} = Phi(")?;
+                for (i, reg) in choices.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{reg}")?;
+                }
+                write!(f, ")")?;
+            }
             for inst in &block.insts {
                 write!(f, "\n    ")?;
                 match inst {
@@ -345,16 +417,6 @@ impl std::fmt::Display for Function {
                                     BinOp::Sub => "-",
                                 }
                             ),
-                            Sk::Phi(regs) => {
-                                write!(f, "Phi(")?;
-                                for (i, reg) in regs.iter().enumerate() {
-                                    if i != 0 {
-                                        write!(f, ", ")?;
-                                    }
-                                    write!(f, "{reg}")?;
-                                }
-                                write!(f, ")")
-                            }
                         }
                     }
                     Inst::Write(dst, src) => write!(f, "*{dst} = {src}"),

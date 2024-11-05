@@ -47,6 +47,8 @@ struct IrBuilder {
     current_block: Vec<Inst>,
     current_block_id: BlockId,
     next_block_id: usize,
+    predecessors: Vec<BlockId>,
+    phis: Phis,
     blocks: Map<BlockId, Block>,
     tys: Map<Register, Ty>,
     scopes: Vec<Map<String, Register>>,
@@ -59,6 +61,8 @@ impl IrBuilder {
             current_block: vec![],
             current_block_id: BlockId::ENTRY,
             next_block_id: BlockId::ENTRY.0 + 1,
+            predecessors: vec![],
+            phis: Map::new(),
             blocks: Map::new(),
             tys: Map::new(),
             scopes: vec![Map::new()],
@@ -82,9 +86,12 @@ impl IrBuilder {
             assert_eq!(reg, None);
             vec![]
         };
-        self.switch_to_new_block(Exit::Jump(JumpLocation::Return(return_regs)), BlockId::DUMMY);
+        self.switch_to_new_block(
+            Exit::Jump(JumpLocation::Return(return_regs)),
+            BlockId::DUMMY,
+        );
         assert_eq!(self.scopes.len(), 1);
-        let f = Function::new(self.blocks, self.tys);
+        let f = Function::new(self.blocks, self.tys, self.next_reg_id);
         f.type_check();
         f
     }
@@ -176,12 +183,16 @@ impl IrBuilder {
                 self.enter_scope();
                 let else_yield = self.build_expr(else_body, unvoid);
                 self.exit_scope();
-                self.switch_to_new_block(Exit::Jump(JumpLocation::Block(end_id)), end_id);
-
-                match (then_yield, else_yield) {
-                    (Some(a), Some(b)) => self.push_store(StoreKind::Phi([a, b].into())).some(),
-                    _ => None,
-                }
+                let (predecessors, phis) = match (then_yield, else_yield) {
+                    (Some(a), Some(b)) => (vec![then_id, else_id], vec![a, b]),
+                    _ => (vec![], vec![]),
+                };
+                self.switch_to_new_block_with_phis(
+                    Exit::Jump(JumpLocation::Block(end_id)),
+                    predecessors,
+                    &phis,
+                    end_id,
+                )
             }
             E::While(cond, body) => {
                 // jump to condition evaluation
@@ -262,10 +273,36 @@ impl IrBuilder {
     }
 
     pub fn switch_to_new_block(&mut self, exit: Exit, id: BlockId) {
+        self.switch_to_new_block_with_phis(exit, vec![], &[], id);
+    }
+
+    pub fn switch_to_new_block_with_phis(
+        &mut self,
+        exit: Exit,
+        predecessors: Vec<BlockId>,
+        phi_choices: &[Register],
+        id: BlockId,
+    ) -> Option<Register> {
+        let mut phis = Map::new();
+        let value = if phi_choices.is_empty() {
+            None
+        } else {
+            let defined_phi = self.new_reg(self.tys[&phi_choices[0]].clone());
+            phis.insert(defined_phi, phi_choices.into_iter().copied().collect());
+            Some(defined_phi)
+        };
         let insts = std::mem::take(&mut self.current_block);
-        let block = Block::new(insts, exit);
+        let block = Block::new(
+            std::mem::take(&mut self.predecessors),
+            std::mem::take(&mut self.phis),
+            insts,
+            exit,
+        );
+        self.predecessors = predecessors;
+        self.phis = phis;
         self.blocks.insert(self.current_block_id, block);
         self.current_block_id = id;
+        value
     }
 
     fn reserve_block_id(&mut self) -> BlockId {
