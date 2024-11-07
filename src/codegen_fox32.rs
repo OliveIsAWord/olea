@@ -99,6 +99,12 @@ pub fn gen_function(f: &Function) -> String {
         write_inst!(*code, "{prefix}ret");
     };
     write_label!(code, "{function_name}_entry");
+    write_inst!(code, "pop rfp");
+    for arg in f.parameters.iter().rev() {
+        let arg_reg = regs.get(arg).unwrap();
+        write_inst!(code, "pop {}", arg_reg.foo());
+    }
+    write_inst!(code, "push rfp");
     write_inst!(code, "sub rsp, {}", stack_size);
     let mut indices: Set<BlockId> = f.blocks.keys().copied().collect();
     let mut i = BlockId::ENTRY;

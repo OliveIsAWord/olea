@@ -3,6 +3,8 @@ use crate::compiler_types::{Map, Set};
 /// A body of code accepts and yields some registers.
 #[derive(Clone, Debug)]
 pub struct Function {
+    /// A list of registers containing the input values in order at the start of the function's execution.
+    pub parameters: Vec<Register>,
     /// The basic blocks of code comprising this function.
     pub blocks: Map<BlockId, Block>,
     /// The blocks that can directly jump to a given block.
@@ -12,8 +14,13 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn new(blocks: Map<BlockId, Block>, tys: Map<Register, Ty>) -> Self {
+    pub fn new(
+        parameters: Vec<Register>,
+        blocks: Map<BlockId, Block>,
+        tys: Map<Register, Ty>,
+    ) -> Self {
         let mut this = Function {
+            parameters,
             blocks,
             tys,
             predecessors: Map::new(),

@@ -44,6 +44,7 @@ const fn to_ir_ty(ty: &ast::Type) -> Ty {
 
 #[derive(Clone, Debug)]
 struct IrBuilder {
+    parameters: Vec<Register>,
     current_block: Vec<Inst>,
     current_block_id: BlockId,
     next_block_id: usize,
@@ -56,6 +57,7 @@ struct IrBuilder {
 impl IrBuilder {
     fn new() -> Self {
         Self {
+            parameters: vec![],
             current_block: vec![],
             current_block_id: BlockId::ENTRY,
             next_block_id: BlockId::ENTRY.0 + 1,
@@ -70,11 +72,19 @@ impl IrBuilder {
         mut self,
         ast::Function {
             name: _,
-            parameters: _,
+            parameters,
             returns,
             body,
         }: &ast::Function,
     ) -> Function {
+        for (p_name, p_ty) in parameters {
+            let ir_ty = to_ir_ty(p_ty);
+            let reg = self.new_reg(ir_ty.clone());
+            self.parameters.push(reg);
+            // Currently, we assume all variables are stack allocated, so we copy the argument to a stack allocation.
+            let var_reg = self.new_var(p_name.clone(), ir_ty);
+            self.push_write(var_reg, reg);
+        }
         let reg = self.build_block(body, returns.is_some());
         let return_regs = if returns.is_some() {
             vec![reg.unwrap()]
@@ -87,7 +97,7 @@ impl IrBuilder {
             BlockId::DUMMY,
         );
         assert_eq!(self.scopes.len(), 1);
-        let f = Function::new(self.blocks, self.tys);
+        let f = Function::new(self.parameters, self.blocks, self.tys);
         f.type_check();
         f
     }
@@ -242,7 +252,7 @@ impl IrBuilder {
             .iter()
             .rev()
             .find_map(|scope| scope.get(name).copied())
-            .expect("variable {name:?} not found")
+            .unwrap_or_else(|| panic!("variable {name:?} not found"))
     }
 
     fn push_write(&mut self, dst: Register, src: Register) {

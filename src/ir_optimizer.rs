@@ -2,14 +2,12 @@ use crate::compiler_types::{Map, Set};
 use crate::ir::*;
 
 #[allow(clippy::type_complexity)] // I think I dislike this lint.
+#[rustfmt::skip] // rustfmt wants to split up longer lines.
 pub const PASSES: &[(&str, fn(&mut Function))] = &[
     ("remove redundant reads", remove_redundant_reads),
     ("remove redundant writes", remove_redundant_writes),
     ("dead code elimination", dead_code_elimination),
-    (
-        "common subexpression elimination",
-        common_subexpression_elimination,
-    ),
+    ("common subexpression elimination", common_subexpression_elimination),
 ];
 
 // TODO: make this actually work
