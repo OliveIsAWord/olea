@@ -117,7 +117,7 @@ pub fn gen_function(f: &Function) -> String {
                             write_inst!(code, "mov {}, rsp", reg.foo());
                             write_inst!(code, "add {}, {}", reg.foo(), local_locs.get(r).unwrap());
                         }
-                        Sk::Int(int, _) => {
+                        Sk::Int(int) => {
                             write_inst!(code, "mov {}, {int}", reg.foo());
                         }
                         Sk::Copy(src) => {

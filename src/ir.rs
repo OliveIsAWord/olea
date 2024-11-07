@@ -50,8 +50,8 @@ impl Function {
 /// The type of any value operated on.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Ty {
-    /// An integer of a given width in bits.
-    Int(u64),
+    /// An integer.
+    Int,
     /// A pointer into memory storing a value of a given type.
     Pointer(Box<Self>),
 }
@@ -169,8 +169,8 @@ impl Inst {
 /// A method of calculating a value to store in a register.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum StoreKind {
-    /// An integer constant of a given width.
-    Int(u128, u64),
+    /// An integer constant.
+    Int(u128),
     /// A copy of another register's value.
     Copy(Register),
     /// A choice of values based on the immediately preceding block.
@@ -194,7 +194,7 @@ impl StoreKind {
             ty.clone()
         };
         match self {
-            &Self::Int(_, width) => Ty::Int(width),
+            &Self::Int(_) => Ty::Int,
             Self::Phi(regs) => all(&regs.values().copied().collect::<Vec<_>>()), // TODO silly and bad
             &Self::BinOp(_, lhs, rhs) => all(&[lhs, rhs]),
             Self::StackAlloc(ty) => Ty::Pointer(Box::new(ty.clone())),
@@ -236,7 +236,7 @@ impl Exit {
             Self::CondJump(condition, _branch1, _branch2) => {
                 match condition {
                     Condition::NonZero(r) => match ty_of(r) {
-                        Ty::Int(_) | Ty::Pointer(_) => (),
+                        Ty::Int | Ty::Pointer(_) => (),
                     },
                 }
                 // TODO: any sort of JumpLocation checking?
@@ -365,7 +365,7 @@ impl std::fmt::Display for Function {
                         write!(f, "{r} = ")?;
                         match sk {
                             Sk::StackAlloc(ty) => write!(f, "StackAlloc({ty:?})"),
-                            Sk::Int(i, ty) => write!(f, "{i}_u{ty}"),
+                            Sk::Int(i) => write!(f, "{i}"),
                             Sk::Copy(r) => write!(f, "{r}"),
                             Sk::Read(r) => write!(f, "{r}*"),
                             Sk::BinOp(op, lhs, rhs) => write!(

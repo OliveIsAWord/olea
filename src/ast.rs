@@ -27,7 +27,7 @@ pub struct Function {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Type {
-    Int(u64),
+    Int,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

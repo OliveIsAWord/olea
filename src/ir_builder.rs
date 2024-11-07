@@ -38,7 +38,7 @@ fn unvoid_assert<T: std::fmt::Debug>(unvoid: bool, item: Option<T>) -> Option<T>
 const fn to_ir_ty(ty: &ast::Type) -> Ty {
     use ast::Type as T;
     match ty {
-        &T::Int(width) => Ty::Int(width),
+        &T::Int => Ty::Int,
     }
 }
 
@@ -129,7 +129,7 @@ impl IrBuilder {
         use ast::Expr as E;
         use StoreKind as Sk;
         let reg = match expr {
-            &E::Int(i) => self.push_store(Sk::Int(i.into(), 32)).some_if(unvoid),
+            &E::Int(i) => self.push_store(Sk::Int(i.into())).some_if(unvoid),
             E::BinOp(op, lhs, rhs) => {
                 use ast::BinOp as A;
                 use BinOp as B;
