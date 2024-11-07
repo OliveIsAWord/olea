@@ -10,15 +10,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let st: ast::Program = serde_lexpr::from_str(&src)?;
     println!("{st:?}\n");
     let mut ir = ir_builder::build(&st);
-    println!("{ir}\n");
-    ir_optimizer::remove_redundant_reads(&mut ir);
-    println!("removed redundant reads!\n{ir}\n");
-    ir_optimizer::remove_redundant_writes(&mut ir);
-    println!("removed redundant writes!\n{ir}\n");
-    ir_optimizer::dead_code_elimination(&mut ir);
-    println!("dead code elimination!\n{ir}\n");
-    ir_optimizer::common_subexpression_elimination(&mut ir);
-    println!("common subexpression elimination!\n{ir}\n");
+    let mut output = format!("{ir}");
+    println!("{output}\n");
+    for (name, pass) in ir_optimizer::PASSES {
+        pass(&mut ir);
+        let new_output = format!("{ir}");
+        // Yes, this is silly, but it works. What we should actually do is have each pass return whether it was able to optimize anything.
+        if output == new_output {
+            println!("{name}: no change");
+        } else {
+            output = new_output;
+            println!("!! {name}:\n{output}\n");
+        }
+    }
     let code = codegen_fox32::gen_function(&ir);
     println!("; Generated source code:\n{code}");
     Ok(())

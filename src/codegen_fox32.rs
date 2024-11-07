@@ -103,11 +103,11 @@ pub fn gen_function(f: &Function) -> String {
     let mut indices: Set<BlockId> = f.blocks.keys().copied().collect();
     let mut i = BlockId::ENTRY;
     loop {
+        use StoreKind as Sk;
         assert!(indices.remove(&i));
         let block = f.blocks.get(&i).unwrap();
         // TODO: this function and its usage is almost certainly wrong and/or bad
         write_label!(code, "{function_name}_{}", i.0);
-        use StoreKind as Sk;
         for inst in &block.insts {
             match inst {
                 Inst::Store(r, sk) => {

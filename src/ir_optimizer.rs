@@ -1,6 +1,17 @@
 use crate::compiler_types::{Map, Set};
 use crate::ir::*;
 
+#[allow(clippy::type_complexity)] // I think I dislike this lint.
+pub const PASSES: &[(&str, fn(&mut Function))] = &[
+    ("remove redundant reads", remove_redundant_reads),
+    ("remove redundant writes", remove_redundant_writes),
+    ("dead code elimination", dead_code_elimination),
+    (
+        "common subexpression elimination",
+        common_subexpression_elimination,
+    ),
+];
+
 // TODO: make this actually work
 pub fn remove_redundant_reads(f: &mut Function) {
     let mut stack_reads: Map<Register, Vec<(BlockId, usize)>> = f
@@ -18,7 +29,9 @@ pub fn remove_redundant_reads(f: &mut Function) {
             let &Inst::Store(_, StoreKind::Read(src)) = inst else {
                 continue;
             };
-            stack_reads.get_mut(&src).map(|vec| vec.push((block_id, i)));
+            if let Some(vec) = stack_reads.get_mut(&src) {
+                vec.push((block_id, i));
+            }
         }
     }
     for locs in stack_reads.values_mut() {
@@ -42,9 +55,9 @@ pub fn remove_redundant_reads(f: &mut Function) {
                 };
                 let mut reached_beginning = block_id != original_block_id;
                 for inst in insts.iter().rev() {
-                    let r = match inst {
-                        &Inst::Store(val, StoreKind::Read(prev_stack)) if prev_stack == src => val,
-                        &Inst::Write(prev_stack, val) if prev_stack == src => val,
+                    let r = match *inst {
+                        Inst::Store(val, StoreKind::Read(prev_stack)) if prev_stack == src => val,
+                        Inst::Write(prev_stack, val) if prev_stack == src => val,
                         _ => continue,
                     };
                     registers.insert(r);
@@ -84,9 +97,9 @@ pub fn remove_redundant_writes(f: &mut Function) {
             let &Inst::Write(alloc, _) = inst else {
                 continue;
             };
-            stack_writes
-                .get_mut(&alloc)
-                .map(|vec| vec.push((block_id, i)));
+            if let Some(vec) = stack_writes.get_mut(&alloc) {
+                vec.push((block_id, i));
+            }
         }
     }
     for locs in stack_writes.values_mut() {
@@ -110,12 +123,12 @@ pub fn remove_redundant_writes(f: &mut Function) {
                 };
                 let mut reached_end = block_id != original_block_id;
                 for inst in insts {
-                    match inst {
-                        &Inst::Write(stack, _) if stack == src => {
+                    match *inst {
+                        Inst::Write(stack, _) if stack == src => {
                             reached_end = false;
                             break;
                         }
-                        &Inst::Store(_, StoreKind::Read(stack)) if stack == src => {
+                        Inst::Store(_, StoreKind::Read(stack)) if stack == src => {
                             is_used = true;
                             break 'check;
                         }
@@ -225,7 +238,6 @@ impl DominatorTree {
 
 pub fn common_subexpression_elimination(f: &mut Function) {
     use StoreKind as Sk;
-    let dom_tree = DominatorTree::new(&f.blocks);
     fn visit(
         id: BlockId,
         children: &DominatorTree,
@@ -255,6 +267,7 @@ pub fn common_subexpression_elimination(f: &mut Function) {
         }
         ancestor_subs.pop().unwrap();
     }
+    let dom_tree = DominatorTree::new(&f.blocks);
     visit(
         BlockId::ENTRY,
         dom_tree.children.get(&BlockId::ENTRY).unwrap(),

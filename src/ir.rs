@@ -107,15 +107,12 @@ impl Block {
                             f(r1, false);
                             f(r2, false);
                         }
-                        Sk::Read(r) => {
-                            f(r, false);
-                        }
-                        Sk::Copy(r) => {
+                        Sk::Read(r) | Sk::Copy(r) => {
                             f(r, false);
                         }
                         Sk::Phi(regs) => {
                             for r in regs.values_mut() {
-                                f(r, false)
+                                f(r, false);
                             }
                         }
                         Sk::Int(..) | Sk::StackAlloc(_) => {}
@@ -159,7 +156,7 @@ impl Inst {
             Self::Store(r, sk) => assert_eq!(ty_of(r), &sk.ty(tys)),
             Self::Write(dst, src) => match ty_of(dst) {
                 Ty::Pointer(inner) => assert_eq!(inner.as_ref(), ty_of(src)),
-                e => panic!("typeck error: attempted to Write to {dst:?} of type {e:?}"),
+                e @ Ty::Int => panic!("typeck error: attempted to Write to {dst:?} of type {e:?}"),
             },
             Self::Nop => {}
         }
@@ -201,7 +198,7 @@ impl StoreKind {
             Self::Copy(r) => tys.get(r).unwrap().clone(),
             Self::Read(r) => match tys.get(r).unwrap() {
                 Ty::Pointer(inner) => inner.as_ref().clone(),
-                e => panic!("typeck error: attempted to Read from {r:?} of type {e:?}"),
+                e @ Ty::Int => panic!("typeck error: attempted to Read from {r:?} of type {e:?}"),
             },
         }
     }
@@ -286,7 +283,7 @@ impl JumpLocation {
             Self::Block(_) => {}
             Self::Return(regs) => {
                 for r in regs {
-                    f(r)
+                    f(r);
                 }
             }
         }
