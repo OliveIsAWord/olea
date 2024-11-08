@@ -296,10 +296,19 @@ impl IrBuilder {
     }
 }
 
-pub fn build(program: &ast::Program) -> Function {
-    let [ast::Decl::Function(f)] = &program.decls[..] else {
-        todo!("actually compiling program {program:?}");
+pub fn build(program: &ast::Program) -> Program {
+    let mut ir = Program {
+        functions: Map::new(),
     };
-    let builder = IrBuilder::new();
-    builder.build_function(f)
+    for decl in &program.decls {
+        use ast::Decl as D;
+        match decl {
+            D::Function(fn_decl) => {
+                let builder = IrBuilder::new();
+                let function = builder.build_function(fn_decl);
+                ir.functions.insert(fn_decl.name.clone(), function);
+            }
+        }
+    }
+    ir
 }

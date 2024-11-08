@@ -1,5 +1,12 @@
 use crate::compiler_types::{Map, Set};
 
+/// A full or partial program.
+#[derive(Clone, Debug)]
+pub struct Program {
+    /// The functions composing this program.
+    pub functions: Map<String, Function>,
+}
+
 /// A body of code accepts and yields some registers.
 #[derive(Clone, Debug)]
 pub struct Function {
@@ -51,6 +58,55 @@ impl Function {
             }
         }
         self.predecessors = p;
+    }
+    fn display_with_name(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        name: &str,
+    ) -> Result<(), std::fmt::Error> {
+        for (id, block) in self.iter() {
+            if !id.is_entry() {
+                writeln!(f)?;
+            }
+            write!(f, "{name}_{}:", id.0)?;
+            for inst in &block.insts {
+                write!(f, "\n    ")?;
+                match inst {
+                    Inst::Store(r, sk) => {
+                        use StoreKind as Sk;
+                        write!(f, "{r} = ")?;
+                        match sk {
+                            Sk::StackAlloc(ty) => write!(f, "StackAlloc({ty:?})"),
+                            Sk::Int(i) => write!(f, "{i}"),
+                            Sk::Copy(r) => write!(f, "{r}"),
+                            Sk::Read(r) => write!(f, "{r}*"),
+                            Sk::BinOp(op, lhs, rhs) => write!(
+                                f,
+                                "{lhs} {} {rhs}",
+                                match op {
+                                    BinOp::Add => "+",
+                                    BinOp::Sub => "-",
+                                }
+                            ),
+                            Sk::Phi(regs) => {
+                                write!(f, "Phi(")?;
+                                for (i, (id, reg)) in regs.iter().enumerate() {
+                                    if i != 0 {
+                                        write!(f, ", ")?;
+                                    }
+                                    write!(f, "{id}: {reg}")?;
+                                }
+                                write!(f, ")")
+                            }
+                        }
+                    }
+                    Inst::Write(dst, src) => write!(f, "{dst}* = {src}"),
+                    Inst::Nop => write!(f, "Nop"),
+                }?;
+            }
+            write!(f, "\n    {}", block.exit)?;
+        }
+        Ok(())
     }
 }
 
@@ -356,47 +412,15 @@ impl std::fmt::Display for Exit {
 
 impl std::fmt::Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        for (id, block) in self.iter() {
-            if !id.is_entry() {
-                writeln!(f)?;
-            }
-            write!(f, "{id}:")?;
-            for inst in &block.insts {
-                write!(f, "\n    ")?;
-                match inst {
-                    Inst::Store(r, sk) => {
-                        use StoreKind as Sk;
-                        write!(f, "{r} = ")?;
-                        match sk {
-                            Sk::StackAlloc(ty) => write!(f, "StackAlloc({ty:?})"),
-                            Sk::Int(i) => write!(f, "{i}"),
-                            Sk::Copy(r) => write!(f, "{r}"),
-                            Sk::Read(r) => write!(f, "{r}*"),
-                            Sk::BinOp(op, lhs, rhs) => write!(
-                                f,
-                                "{lhs} {} {rhs}",
-                                match op {
-                                    BinOp::Add => "+",
-                                    BinOp::Sub => "-",
-                                }
-                            ),
-                            Sk::Phi(regs) => {
-                                write!(f, "Phi(")?;
-                                for (i, (id, reg)) in regs.iter().enumerate() {
-                                    if i != 0 {
-                                        write!(f, ", ")?;
-                                    }
-                                    write!(f, "{id}: {reg}")?;
-                                }
-                                write!(f, ")")
-                            }
-                        }
-                    }
-                    Inst::Write(dst, src) => write!(f, "{dst}* = {src}"),
-                    Inst::Nop => write!(f, "Nop"),
-                }?;
-            }
-            write!(f, "\n    {}", block.exit)?;
+        self.display_with_name(f, "block")
+    }
+}
+
+impl std::fmt::Display for Program {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        for (name, function) in self.functions.iter() {
+            function.display_with_name(f, name)?;
+            write!(f, "\n\n")?;
         }
         Ok(())
     }

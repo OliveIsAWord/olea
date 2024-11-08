@@ -82,14 +82,38 @@ macro_rules! write_inst {
     }}
 }
 
-pub fn gen_function(f: &Function) -> String {
+macro_rules! write_comment {
+    ($dst:expr, $($arg:tt)*) => {{
+        use ::std::fmt::Write;
+        let w: &mut String = &mut $dst;
+        w.push_str("; ");
+        write!(w, $($arg)*).unwrap();
+        w.push('\n');
+    }}
+}
+
+pub fn gen_program(ir: &Program) -> String {
+    let mut code = String::new();
+    write_comment!(code, "Generated source code:");
+    // TODO: this shouldn't be a hardcoded value
+    if ir.functions.contains_key("main") {
+        write_inst!(code, "call main");
+    }
+    for (name, f) in ir.functions.iter() {
+        let fn_output = gen_function(f, name);
+        code.push_str(&fn_output);
+        code.push('\n');
+    }
+    code
+}
+
+pub fn gen_function(f: &Function, function_name: &str) -> String {
     let mut code = String::new();
     let RegAllocInfo {
         regs,
         local_locs,
         stack_size,
     } = reg_alloc(f);
-    let function_name = "foo";
     let write_exit = |code: &mut String, returns: &[Register], prefix: &str| {
         write_inst!(*code, "{prefix}add rsp, {stack_size}");
         for r in returns {

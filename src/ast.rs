@@ -7,7 +7,7 @@ pub struct Program {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Decl {
-    Constant(Constant),
+    // Constant(Constant),
     Function(Function),
 }
 

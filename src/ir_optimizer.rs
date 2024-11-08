@@ -10,6 +10,23 @@ pub const PASSES: &[(&str, fn(&mut Function))] = &[
     ("common subexpression elimination", common_subexpression_elimination),
 ];
 
+pub fn optimize(ir: &mut Program) {
+    let mut output = format!("{ir}");
+    for (name, pass) in PASSES {
+        for f in ir.functions.values_mut() {
+            pass(f);
+        }
+        let new_output = format!("{ir}");
+        // Yes, this is silly, but it works. What we should actually do is have each pass return whether it was able to optimize anything.
+        if output == new_output {
+            println!("{name}: no change");
+        } else {
+            output = new_output;
+            println!("!! {name}:\n{output}\n");
+        }
+    }
+}
+
 // TODO: make this actually work
 pub fn remove_redundant_reads(f: &mut Function) {
     let mut stack_reads: Map<Register, Vec<(BlockId, usize)>> = f

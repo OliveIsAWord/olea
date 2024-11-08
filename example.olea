@@ -1,15 +1,8 @@
 ((decls
-  (Function (name . "fooy") (parameters
-    ("start" Int)
-    ("increment" Int)
-  ) (returns Int) (body
-    (Let "x" Int (Var . "start"))
-    (Let "y" Int (Int . 0))
-    (Expr While (Var . "x") (Block
-      (Let "z" Int (If (BinOp Sub (Var . "x") (Int . 4)) (Var . "x") (Var . "increment")))
-      (Expr Assign "y" (BinOp Add (Var . "y") (Var . "z")))
-      (Expr Assign "x" (BinOp Sub (Var . "x") (Int . 1)))
-    ))
-    (Expr Var . "y")
+  (Function (name . "one") (parameters) (returns Int) (body
+    (Expr Int . 24)
+  ))
+  (Function (name . "two") (parameters) (returns Int) (body
+    (Expr Int . 42)
   ))
 ))
