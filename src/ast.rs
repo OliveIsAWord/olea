@@ -45,6 +45,7 @@ pub enum Expr {
     While(Box<Expr>, Box<Expr>),
     Assign(String, Box<Expr>),
     Block(Block),
+    Call(String, Vec<Expr>),
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

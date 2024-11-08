@@ -3,6 +3,9 @@
     (Expr Int . 24)
   ))
   (Function (name . "two") (parameters) (returns Int) (body
-    (Expr Int . 42)
+    (Expr BinOp Add
+      (Call "one" ((Int . 69) (Int . 70)))
+      (Int . 1)
+    )
   ))
 ))

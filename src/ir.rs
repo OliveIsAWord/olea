@@ -101,6 +101,27 @@ impl Function {
                         }
                     }
                     Inst::Write(dst, src) => write!(f, "{dst}* = {src}"),
+                    Inst::Call {
+                        name,
+                        returns,
+                        args,
+                    } => {
+                        write!(f, "[")?;
+                        for (i, r) in returns.iter().enumerate() {
+                            if i != 0 {
+                                write!(f, ", ")?;
+                            }
+                            write!(f, "{r}")?;
+                        }
+                        write!(f, "] = {name}(")?;
+                        for (i, r) in args.iter().enumerate() {
+                            if i != 0 {
+                                write!(f, ", ")?;
+                            }
+                            write!(f, "{r}")?;
+                        }
+                        write!(f, ")")
+                    }
                     Inst::Nop => write!(f, "Nop"),
                 }?;
             }
@@ -185,6 +206,18 @@ impl Block {
                     f(r1, false);
                     f(r2, false);
                 }
+                Inst::Call {
+                    name: _,
+                    returns,
+                    args,
+                } => {
+                    for r in returns {
+                        f(r, true);
+                    }
+                    for r in args {
+                        f(r, false);
+                    }
+                }
                 Inst::Nop => {}
             }
         }
@@ -208,6 +241,12 @@ pub enum Inst {
     Store(Register, StoreKind),
     /// Write to a pointer with a value.
     Write(Register, Register),
+    /// Execute a function, passing the values in a list of registers as arguments and storing return values in a list of registers.
+    Call {
+        name: String,
+        returns: Vec<Register>,
+        args: Vec<Register>,
+    },
     /// Do nothing.
     Nop,
 }
@@ -221,6 +260,7 @@ impl Inst {
                 Ty::Pointer(inner) => assert_eq!(inner.as_ref(), ty_of(src)),
                 e @ Ty::Int => panic!("typeck error: attempted to Write to {dst:?} of type {e:?}"),
             },
+            Self::Call { .. } => {} // TODO
             Self::Nop => {}
         }
     }

@@ -43,7 +43,7 @@ const fn to_ir_ty(ty: &ast::Type) -> Ty {
 }
 
 #[derive(Clone, Debug)]
-struct IrBuilder {
+struct IrBuilder<'a> {
     parameters: Vec<Register>,
     current_block: Vec<Inst>,
     current_block_id: BlockId,
@@ -52,10 +52,11 @@ struct IrBuilder {
     tys: Map<Register, Ty>,
     scopes: Vec<Map<String, Register>>,
     next_reg_id: u128,
+    function_return_types: &'a Map<String, Option<Ty>>,
 }
 
-impl IrBuilder {
-    fn new() -> Self {
+impl<'a> IrBuilder<'a> {
+    fn new(function_return_types: &'a Map<String, Option<Ty>>) -> Self {
         Self {
             parameters: vec![],
             current_block: vec![],
@@ -65,6 +66,7 @@ impl IrBuilder {
             tys: Map::new(),
             scopes: vec![Map::new()],
             next_reg_id: 0,
+            function_return_types,
         }
     }
 
@@ -228,6 +230,21 @@ impl IrBuilder {
                 // continue evaluation after while loop
                 None
             }
+            E::Call(name, args) => {
+                let arg_regs = args.iter().map(|arg| self.build_expr_unvoid(arg)).collect();
+                let result_reg = self
+                    .function_return_types
+                    .get(name)
+                    .unwrap()
+                    .clone()
+                    .map(|ty| self.new_reg(ty));
+                self.push_inst(Inst::Call {
+                    name: name.clone(),
+                    returns: result_reg.into_iter().collect(),
+                    args: arg_regs,
+                });
+                result_reg
+            }
         };
         // println!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");
         unvoid_assert(unvoid, reg)
@@ -297,14 +314,23 @@ impl IrBuilder {
 }
 
 pub fn build(program: &ast::Program) -> Program {
+    use ast::Decl as D;
     let mut ir = Program {
         functions: Map::new(),
     };
+    let function_return_types = program
+        .decls
+        .iter()
+        .map(|decl| match decl {
+            D::Function(ast::Function { name, returns, .. }) => {
+                (name.clone(), returns.as_ref().map(to_ir_ty))
+            }
+        })
+        .collect();
     for decl in &program.decls {
-        use ast::Decl as D;
         match decl {
             D::Function(fn_decl) => {
-                let builder = IrBuilder::new();
+                let builder = IrBuilder::new(&function_return_types);
                 let function = builder.build_function(fn_decl);
                 ir.functions.insert(fn_decl.name.clone(), function);
             }

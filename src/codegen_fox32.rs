@@ -46,10 +46,7 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
         })
         .collect();
     let mut regs = Map::new();
-    // sort the registers because it looks nice
-    let mut ir_regs: Vec<_> = f.tys.keys().copied().collect();
-    ir_regs.sort();
-    for (i, &reg) in ir_regs.iter().enumerate() {
+    for (i, &reg) in f.tys.keys().enumerate() {
         if i >= NUM_REGISTERS {
             todo!("stack allocation");
         }
@@ -175,6 +172,49 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                     let dst_reg = regs.get(dst).unwrap();
                     let src_reg = regs.get(src).unwrap();
                     write_inst!(code, "mov [{}], {}", dst_reg.bar(), src_reg.foo());
+                }
+                Inst::Call {
+                    name,
+                    returns,
+                    args,
+                } => {
+                    write_comment!(code, "begin function call");
+                    write_comment!(code, "save register state");
+                    for &r in regs.values().rev() {
+                        if regs
+                            .iter()
+                            .any(|(&ir_reg, &loc)| returns.contains(&ir_reg) && r == loc)
+                        {
+                            continue;
+                        }
+                        match r {
+                            StoreLoc::Register(_) => write_inst!(code, "push {}", r.foo()),
+                        }
+                    }
+                    write_comment!(code, "pass arguments");
+                    for r in args.iter().rev() {
+                        let reg = regs.get(r).unwrap();
+                        write_inst!(code, "push {}", reg.foo());
+                    }
+                    write_inst!(code, "call {name}");
+                    write_comment!(code, "get return values");
+                    for r in returns {
+                        let reg = regs.get(r).unwrap();
+                        write_inst!(code, "pop {}", reg.foo());
+                    }
+                    write_comment!(code, "restore register state");
+                    for &r in regs.values().rev() {
+                        if regs
+                            .iter()
+                            .any(|(&ir_reg, &loc)| returns.contains(&ir_reg) && r == loc)
+                        {
+                            continue;
+                        }
+                        match r {
+                            StoreLoc::Register(_) => write_inst!(code, "pop {}", r.foo()),
+                        }
+                    }
+                    write_comment!(code, "end function call");
                 }
                 Inst::Nop => write_inst!(code, "nop"),
             }

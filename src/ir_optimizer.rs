@@ -184,6 +184,7 @@ pub fn dead_code_elimination(f: &mut Function) {
             block.insts.retain(|inst| match inst {
                 Inst::Store(r, _) => used.contains(r),
                 Inst::Write(_, _) => true,
+                Inst::Call { .. } => true,
                 Inst::Nop => false,
             });
             changed |= block.insts.len() != old_len;
