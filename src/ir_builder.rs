@@ -1,5 +1,5 @@
 use crate::ast;
-use crate::compiler_types::Map;
+use crate::compiler_types::{Map, Str};
 #[allow(clippy::wildcard_imports)]
 // We can make these imports explicit when it's less likely to create churn.
 use crate::ir::*;
@@ -50,13 +50,13 @@ struct IrBuilder<'a> {
     next_block_id: usize,
     blocks: Map<BlockId, Block>,
     tys: Map<Register, Ty>,
-    scopes: Vec<Map<String, Register>>,
+    scopes: Vec<Map<Str, Register>>,
     next_reg_id: u128,
-    function_return_types: &'a Map<String, Option<Ty>>,
+    function_return_types: &'a Map<Str, Option<Ty>>,
 }
 
 impl<'a> IrBuilder<'a> {
-    fn new(function_return_types: &'a Map<String, Option<Ty>>) -> Self {
+    fn new(function_return_types: &'a Map<Str, Option<Ty>>) -> Self {
         Self {
             parameters: vec![],
             current_block: vec![],
@@ -258,7 +258,7 @@ impl<'a> IrBuilder<'a> {
         self.scopes.pop();
     }
 
-    fn new_var(&mut self, name: String, ty: Ty) -> Register {
+    fn new_var(&mut self, name: Str, ty: Ty) -> Register {
         let reg = self.push_store(StoreKind::StackAlloc(ty));
         self.scopes.last_mut().unwrap().insert(name, reg);
         reg

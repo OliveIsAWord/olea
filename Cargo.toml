@@ -5,5 +5,5 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-serde = { version = "1.0.209", features = ["derive"] }
+serde = { version = "1.0.209", features = ["derive", "rc"] }
 serde-lexpr = "0.1.3"

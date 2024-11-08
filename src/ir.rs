@@ -1,10 +1,10 @@
-use crate::compiler_types::{Map, Set};
+use crate::compiler_types::{Map, Set, Str};
 
 /// A full or partial program.
 #[derive(Clone, Debug)]
 pub struct Program {
     /// The functions composing this program.
-    pub functions: Map<String, Function>,
+    pub functions: Map<Str, Function>,
 }
 
 /// A body of code accepts and yields some registers.
@@ -243,7 +243,7 @@ pub enum Inst {
     Write(Register, Register),
     /// Execute a function, passing the values in a list of registers as arguments and storing return values in a list of registers.
     Call {
-        name: String,
+        name: Str,
         returns: Vec<Register>,
         args: Vec<Register>,
     },

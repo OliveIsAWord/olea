@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::compiler_types::Str;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Program {
@@ -13,14 +14,14 @@ pub enum Decl {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Constant {
-    pub name: String,
+    pub name: Str,
     pub value: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Function {
-    pub name: String,
-    pub parameters: Vec<(String, Type)>,
+    pub name: Str,
+    pub parameters: Vec<(Str, Type)>,
     pub returns: Option<Type>,
     pub body: Block,
 }
@@ -32,20 +33,20 @@ pub enum Type {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Stmt {
-    Let(String, Type, Expr),
+    Let(Str, Type, Expr),
     Expr(Expr),
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Expr {
     Int(u64),
-    Var(String),
+    Var(Str),
     BinOp(BinOp, Box<Expr>, Box<Expr>),
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     While(Box<Expr>, Box<Expr>),
-    Assign(String, Box<Expr>),
+    Assign(Str, Box<Expr>),
     Block(Block),
-    Call(String, Vec<Expr>),
+    Call(Str, Vec<Expr>),
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
