@@ -1,11 +1,6 @@
-((decls
-  (Function (name . "one") (parameters) (returns Int) (body
-    (Expr Int . 24)
-  ))
-  (Function (name . "two") (parameters) (returns Int) (body
-    (Expr BinOp Add
-      (Call "one" ((Int . 69) (Int . 70)))
-      (Int . 1)
-    )
-  ))
-))
+fn one(x int^^, y int) -> int:
+    x^^ + y
+
+fn two() -> int:
+   let x: int^^ = x
+   one(x, y) + z
