@@ -1,6 +1,18 @@
 fn one(x int^^, y int) -> int:
-    x^^ + y
+    let z: int =  (x^ - y1 - 101)^
+    (block:
+        z
+    )
 
 fn two() -> int:
    let x: int^^ = x
-   one(x, y) + z
+   (while x:
+       (x + y)^ = one(x, y) + z
+       meow
+   )
+   (if x:
+       y
+   else:
+       z
+   )
+   x

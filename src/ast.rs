@@ -48,7 +48,7 @@ pub struct Function {
     /// The type of value the function returns, if any.
     pub returns: Option<Ty>,
     /// The body of code that is executed when the function is called.
-    pub body: Block,
+    pub body: Expr,
 }
 
 /// See [TyKind].
@@ -85,6 +85,8 @@ pub enum ExprKind {
     Int(u64),
     /// A calculation taking the values of two expressions to yield another.
     BinOp(BinOp, Box<Expr>, Box<Expr>),
+    /// An expression wrapped in parentheses.
+    Paren(Box<Expr>),
     /// An "if" block composed of a condition and two branch bodies. The boolean condition is evaluated. If true, the first branch is evaluated. Otherise, the second branch is evaluated.
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     /// A "while" loop. The condition and body expressions are evaluated repeatedly until the condition yields false.

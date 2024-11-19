@@ -6,8 +6,13 @@ pub enum Token {
     Indent,
     Dedent,
     Name,
+    Int,
     Fn,
     Let,
+    If,
+    Else,
+    While,
+    Block,
     ParenOpen,
     ParenClose,
     Colon,
@@ -15,15 +20,24 @@ pub enum Token {
     Dot,
     Equals,
     Plus,
+    Minus,
     Asterisk,
     Hat,
     ThinArrow,
 }
 type T = Token;
 
-const KEYWORDS: &[(&str, Token)] = &[("fn", T::Fn), ("let", T::Let)];
+const KEYWORDS: &[(&str, Token)] = &[
+    ("fn", T::Fn),
+    ("let", T::Let),
+    ("if", T::If),
+    ("else", T::Else),
+    ("while", T::While),
+    ("block", T::Block),
+];
 
 const PUNCTUATION: &[(&str, Token)] = &[
+    ("->", T::ThinArrow),
     ("(", T::ParenOpen),
     (")", T::ParenClose),
     (":", T::Colon),
@@ -31,9 +45,9 @@ const PUNCTUATION: &[(&str, Token)] = &[
     (".", T::Dot),
     ("=", T::Equals),
     ("+", T::Plus),
+    ("-", T::Minus),
     ("*", T::Asterisk),
     ("^", T::Hat),
-    ("->", T::ThinArrow),
 ];
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -192,6 +206,10 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                 }
                 token
             }
+            c if c.is_ascii_digit() => {
+                src.skip_while(|c| c.is_ascii_digit() || c == '_');
+                T::Int
+            }
             '\n' => {
                 was_newline = true;
                 T::Newline
@@ -215,12 +233,20 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
             src.skip_while(|c| c == ' ');
         }
     }
+    let end_span = Span {
+        start: src.index,
+        len: 0,
+    };
+    // this code feels hacky and is probably incorrect!
+    if tokens
+        .kinds
+        .last()
+        .is_some_and(|&t| t != T::Newline && t != T::Dedent)
+    {
+        tokens.push(T::Newline, end_span);
+    }
     for _ in indents {
-        let span = Span {
-            start: src.index,
-            len: 0,
-        };
-        tokens.push(T::Dedent, span);
+        tokens.push(T::Dedent, end_span);
     }
     tokens
 }
