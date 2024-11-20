@@ -1,11 +1,14 @@
 #![allow(dead_code)]
 
+mod arborist;
 pub mod ast;
+mod chumsky_types;
 mod lexer;
-mod parser;
+mod ttree_visualize;
+// mod parser;
 //mod codegen_fox32;
 mod compiler_types;
-// mod ir;
+mod ir;
 // mod ir_builder;
 // mod ir_optimizer;
 
@@ -23,10 +26,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             token,
             span: lexer::Span { start, len },
         } = tokens.get(i).unwrap();
-        // println!("{:?} {:?}", token, &src[start..start + len]);
-        bleh.push((token, start..start + len));
+        // println!("{:?} {:?}", &src[start..start + len], token);
+        bleh.push(ast::Spanned {
+            kind: token,
+            span: start..start + len,
+        });
     }
-    let ast = match parser::parse(&bleh, &src).into_result() {
+    let ttree = match arborist::arborize(&bleh).into_result() {
         Ok(x) => x,
         Err(es) => {
             for e in &es {
@@ -49,6 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         }
     };
-    println!("{ast:?}");
+    // println!("{ttree:#?}");
+    ttree_visualize::visualize(&ttree, &src);
     Ok(())
 }

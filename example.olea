@@ -1,18 +1,8 @@
-fn one(x int^^, y int) -> int:
-    let z: int =  (x^ - y1 - 101)^
-    (block:
+fn one(x int) -> int:
+    y
+    if foo:
         z
-    )
-
-fn two() -> int:
-   let x: int^^ = x
-   (while x:
-       (x + y)^ = one(x, y) + z
-       meow
-   )
-   (if x:
-       y
-   else:
-       z
-   )
-   x
+    else:
+        w
+else:
+    mraow

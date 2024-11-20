@@ -1,21 +1,26 @@
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(u8)]
-pub enum Token {
-    Error,
+pub enum ControlToken {
     Newline,
     Indent,
     Dedent,
+    Else,
+    ParenOpen,
+    ParenClose,
+    Colon,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[repr(u8)]
+pub enum PlainToken {
+    Error,
     Name,
     Int,
     Fn,
     Let,
     If,
-    Else,
     While,
     Block,
-    ParenOpen,
-    ParenClose,
-    Colon,
     Comma,
     Dot,
     Equals,
@@ -25,29 +30,55 @@ pub enum Token {
     Hat,
     ThinArrow,
 }
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[repr(u8)]
+pub enum Token {
+    Control(ControlToken),
+    Plain(PlainToken),
+}
+
 type T = Token;
+type C = ControlToken;
+type P = PlainToken;
+use Token::Control as Co;
+use Token::Plain as Pl;
+
+impl Into<Token> for ControlToken {
+    fn into(self) -> Token {
+        Co(self)
+    }
+}
+
+impl Into<Token> for PlainToken {
+    fn into(self) -> Token {
+        Pl(self)
+    }
+}
+
+const ERR: Token = Pl(P::Error);
 
 const KEYWORDS: &[(&str, Token)] = &[
-    ("fn", T::Fn),
-    ("let", T::Let),
-    ("if", T::If),
-    ("else", T::Else),
-    ("while", T::While),
-    ("block", T::Block),
+    ("fn", Pl(P::Fn)),
+    ("let", Pl(P::Let)),
+    ("if", Pl(P::If)),
+    ("else", Co(C::Else)),
+    ("while", Pl(P::While)),
+    ("block", Pl(P::Block)),
 ];
 
 const PUNCTUATION: &[(&str, Token)] = &[
-    ("->", T::ThinArrow),
-    ("(", T::ParenOpen),
-    (")", T::ParenClose),
-    (":", T::Colon),
-    (",", T::Comma),
-    (".", T::Dot),
-    ("=", T::Equals),
-    ("+", T::Plus),
-    ("-", T::Minus),
-    ("*", T::Asterisk),
-    ("^", T::Hat),
+    ("->", Pl(P::ThinArrow)),
+    ("(", Co(C::ParenOpen)),
+    (")", Co(C::ParenClose)),
+    (":", Co(C::Colon)),
+    (",", Pl(P::Comma)),
+    (".", Pl(P::Dot)),
+    ("=", Pl(P::Equals)),
+    ("+", Pl(P::Plus)),
+    ("-", Pl(P::Minus)),
+    ("*", Pl(P::Asterisk)),
+    ("^", Pl(P::Hat)),
 ];
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -76,7 +107,7 @@ impl Tokens {
         Self::default()
     }
     pub fn push(&mut self, token: Token, span: Span) {
-        self.has_error |= matches!(token, T::Error);
+        self.has_error |= matches!(token, ERR);
         self.kinds.push(token);
         self.spans.push(span);
     }
@@ -161,7 +192,7 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                             indents.push(indent);
                             if has_dedented {
                                 tokens.push(
-                                    T::Error,
+                                    ERR,
                                     Span {
                                         start: start + indent,
                                         len: 0,
@@ -169,7 +200,7 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                                 );
                             } else {
                                 tokens.push(
-                                    T::Indent,
+                                    Co(C::Indent),
                                     Span {
                                         start: start + last_indent,
                                         len: indent - last_indent,
@@ -185,7 +216,7 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                                 start: src.index,
                                 len: 0,
                             };
-                            tokens.push(T::Dedent, span);
+                            tokens.push(Co(C::Dedent), span);
                         }
                     }
                 }
@@ -197,7 +228,7 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
             c if c.is_ascii_alphabetic() => {
                 src.skip_while(|c| c.is_ascii_alphabetic() || c.is_ascii_digit() || c == '_');
                 let name = &src.src[start..src.index];
-                let mut token = T::Name;
+                let mut token = Pl(P::Name);
                 for &(string, t) in KEYWORDS {
                     if name == string {
                         token = t;
@@ -208,11 +239,11 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
             }
             c if c.is_ascii_digit() => {
                 src.skip_while(|c| c.is_ascii_digit() || c == '_');
-                T::Int
+                Pl(P::Int)
             }
             '\n' => {
                 was_newline = true;
-                T::Newline
+                Co(C::Newline)
             }
             _ => 'blk: {
                 for &(string, token) in PUNCTUATION {
@@ -221,7 +252,7 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                         break 'blk token;
                     }
                 }
-                T::Error
+                Pl(P::Error)
             }
         };
         let span = Span {
@@ -241,12 +272,12 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
     if tokens
         .kinds
         .last()
-        .is_some_and(|&t| t != T::Newline && t != T::Dedent)
+        .is_some_and(|&t| t != Co(C::Newline) && t != Co(C::Dedent))
     {
-        tokens.push(T::Newline, end_span);
+        tokens.push(Co(C::Newline), end_span);
     }
     for _ in indents {
-        tokens.push(T::Dedent, end_span);
+        tokens.push(Co(C::Dedent), end_span);
     }
     tokens
 }
