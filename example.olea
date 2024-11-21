@@ -3,12 +3,17 @@ fn one(
       y int
 ) -> int:
     y
-       awa
+       awa:
+       ewe
     if (foo):
         z
     else:
         w
+    cool
+    let x = (if x: y else: z) + 3
+    beans
 else:
     mraow
+
 
 const MEOW = 42

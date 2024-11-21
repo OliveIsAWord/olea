@@ -81,7 +81,7 @@ const PUNCTUATION: &[(&str, Token)] = &[
     ("^", Pl(P::Hat)),
 ];
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Span {
     pub start: usize,
     pub len: usize,
@@ -99,12 +99,16 @@ pub struct Spanned {
 pub struct Tokens {
     pub kinds: Vec<Token>,
     pub spans: Vec<Span>,
+    pub eoi_span: Span,
     pub has_error: bool,
 }
 
 impl Tokens {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(eoi_span: Span) -> Self {
+        Self {
+            eoi_span,
+            ..Self::default()
+        }
     }
     pub fn push(&mut self, token: Token, span: Span) {
         self.has_error |= matches!(token, ERR);
@@ -164,7 +168,11 @@ impl<'a> View<'a> {
 
 pub fn tokenize(src_bytes: &str) -> Tokens {
     let mut src = View::new(src_bytes);
-    let mut tokens = Tokens::new();
+    let eoi_span = Span {
+        start: src.index,
+        len: 0,
+    };
+    let mut tokens = Tokens::new(eoi_span);
     let mut indents: Vec<usize> = vec![];
     let mut was_newline = true;
     loop {
@@ -264,20 +272,16 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
             src.skip_while(|c| c == ' ');
         }
     }
-    let end_span = Span {
-        start: src.index,
-        len: 0,
-    };
     // this code feels hacky and is probably incorrect!
     if tokens
         .kinds
         .last()
         .is_some_and(|&t| t != Co(C::Newline) && t != Co(C::Dedent))
     {
-        tokens.push(Co(C::Newline), end_span);
+        tokens.push(Co(C::Newline), eoi_span);
     }
     for _ in indents {
-        tokens.push(Co(C::Dedent), end_span);
+        tokens.push(Co(C::Dedent), eoi_span);
     }
     tokens
 }
