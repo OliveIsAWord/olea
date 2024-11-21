@@ -1,8 +1,5 @@
 use crate::ast::{Span, Spanned};
-use crate::chumsky_types::{Error, Extra, SpanHelper};
-use crate::lexer::{ControlToken, PlainToken, Token};
-use chumsky::input::{Input, Stream, ValueInput};
-use chumsky::prelude::*;
+use crate::lexer::{self, ControlToken, PlainToken, Token, Tokens};
 
 type T = Token;
 type C = ControlToken;
@@ -18,73 +15,157 @@ pub enum TokenTree {
     ElseBlock(Block),
 }
 
-// Invariant: Item takes the form `(Plain | Paren)+ (IndentedBlock)? ElseBlock*`. Note that the Items for syntactically valid Olea programs take the form `(Plain | Paren)+ (IndentedBlock ElseBlock?)?`.
+use TokenTree as Tt;
+
+// Invariant: Item takes the form `(Plain | Paren)+ (IndentedBlock ElseBlock?)?`.
 pub type Item = Vec<Spanned<TokenTree>>;
+// Invariant: Nonempty.
 pub type Block = Vec<Item>;
 
-macro_rules! parses {
-    ($Output:ty) => {
-        // `I` and `'src` are implicitly captured from the callsite. Is this bad??
-        impl Parser<'src, I, $Output, Extra<'src>> + Clone
+struct Arborizer<'a> {
+    tokens: &'a Tokens,
+    i: usize,
+}
+
+impl Arborizer<'_> {
+    fn peek(&self) -> Option<(Token, Span)> {
+        self.tokens
+            .get(self.i)
+            .map(|lexer::Spanned { token, span }| (token, span.start..span.start + span.len))
+    }
+    fn next(&mut self) -> Option<(Token, Span)> {
+        let token = self.peek()?;
+        self.i += 1;
+        Some(token)
+    }
+    fn consume_if(&mut self, expected: ControlToken) -> bool {
+        let Some((token, _)) = self.peek() else {
+            return false;
+        };
+        if token == Co(expected) {
+            self.next().unwrap();
+            true
+        } else {
+            false
+        }
+    }
+    fn expect(&mut self, expected: ControlToken) {
+        if !self.consume_if(expected) {
+            panic!("expected {expected:?}");
+        }
+    }
+    fn item(&mut self) -> Option<Spanned<Item>> {
+        let mut item = vec![];
+        let mut indented = false;
+        // morally a `while ... else` loop
+        let parse_indented: bool = loop {
+            let Some((token, span)) = self.next() else {
+                if item.is_empty() {
+                    return None;
+                }
+                panic!("unexpected eof");
+            };
+            // println!("{token:?} {span:?}");
+            match token {
+                Pl(t) => item.push(Spanned {
+                    kind: Tt::Plain(t),
+                    span,
+                }),
+                Co(C::Newline) => {
+                    if !indented && self.consume_if(C::Indent) {
+                        indented = true;
+                    } else {
+                        break false;
+                    }
+                }
+                Co(C::ParenOpen) => {
+                    // TODO: handle closing paren appearing before newline and dedent
+                    let Spanned { kind, span } = self.inner_block(false);
+                    self.expect(C::ParenClose);
+                    item.push(Spanned {
+                        kind: Tt::Paren(kind),
+                        span,
+                    });
+                }
+                Co(C::Colon) => {
+                    assert!(!item.is_empty(), "bad colon");
+                    break true;
+                }
+                Co(C::Indent) => panic!("unexpected indent"),
+                Co(C::Else) => panic!("else error"),
+                Co(C::ParenClose) | Co(C::Dedent) => {
+                    self.i -= 1;
+                    break false;
+                }
+            }
+        };
+        if parse_indented {
+            let Spanned { kind, span } = self.inner_block(indented);
+            item.push(Spanned {
+                kind: Tt::IndentedBlock(kind),
+                span,
+            });
+            if self.consume_if(C::Else) {
+                // TODO: correctly parse ["else", newline, indent, ":"]
+                let Spanned { kind, span } = if self.consume_if(C::Colon) {
+                    self.inner_block(false)
+                } else {
+                    let Spanned { kind, span } = self.item().expect("empty else block");
+                    Spanned {
+                        kind: vec![kind],
+                        span,
+                    }
+                };
+                item.push(Spanned {
+                    kind: Tt::ElseBlock(kind),
+                    span,
+                });
+            }
+        } else if indented {
+            self.expect(C::Dedent);
+        }
+        if item.is_empty() {
+            None
+        } else {
+            let span_start = item[0].span.start;
+            let span_end = item.last().unwrap().span.end;
+            Some(Spanned {
+                kind: item,
+                span: span_start..span_end,
+            })
+        }
+    }
+    fn inner_block(&mut self, skip_indent: bool) -> Spanned<Block> {
+        if self.consume_if(C::Newline) {
+            if !skip_indent {
+                self.expect(C::Indent);
+            }
+            let block = self.block();
+            self.expect(C::Dedent);
+            block
+        } else {
+            let Spanned { kind, span } = self.item().expect("empty block");
+            Spanned {
+                kind: vec![kind],
+                span,
+            }
+        }
+    }
+    fn block(&mut self) -> Spanned<Block> {
+        let mut block = vec![];
+        while let Some(item) = self.item() {
+            block.push(item);
+        }
+        assert!(!block.is_empty());
+        let span = block[0].span.start..block.last().unwrap().span.end;
+        Spanned {
+            kind: block.into_iter().map(|x| x.kind).collect(),
+            span,
+        }
     }
 }
 
-fn block<'src, I>() -> parses!(Block)
-where
-    I: Input<'src, Token = Token, Span = Span> + ValueInput<'src>,
-{
-    recursive(|block| {
-        let c = |t| just(Co(t));
-        let plain = select! { Pl(t) => t }.map(TokenTree::Plain);
-        let paren = block
-            .clone()
-            .delimited_by(c(C::ParenOpen), c(C::ParenClose))
-            .map(TokenTree::Paren);
-        let item_init = plain
-            .or(paren)
-            .spanned()
-            .repeated()
-            .at_least(1)
-            .collect::<Item>();
-        // let item_init = item_init.clone().then(just(C::Newline).ignore_then(item_init.));
-        let indented_block = c(C::Colon)
-            .ignore_then(
-                c(C::Newline).ignore_then(block.clone().delimited_by(c(C::Indent), c(C::Dedent))),
-            )
-            .map(TokenTree::IndentedBlock)
-            .spanned();
-        let else_block = c(C::Else)
-            .ignore_then(
-                c(C::Colon)
-                    .ignore_then(c(C::Newline))
-                    .ignore_then(block.clone().delimited_by(c(C::Indent), c(C::Dedent))),
-            )
-            .map(TokenTree::ElseBlock)
-            .spanned();
-        let item = item_init
-            .then(indented_block.or_not())
-            .then(else_block.repeated().collect::<Item>())
-            .map(|((mut meow, indented), else_blocks): ((Item, _), _)| {
-                if let Some(indented) = indented {
-                    meow.push(indented);
-                }
-                meow.extend(else_blocks);
-                meow
-            })
-            .then_ignore(c(C::Newline).or_not());
-        item.repeated().collect::<Block>()
-    })
-}
-
-pub fn arborize(tokens: &[Spanned<Token>]) -> ParseResult<Block, Error> {
-    let eoi_span: Span = tokens
-        .last()
-        .map_or(0..0, |Spanned { span, .. }| span.end..span.end);
-    let input = Stream::from_iter(
-        tokens
-            .iter()
-            .map(|Spanned { kind, span }| (*kind, span.clone())),
-    )
-    .spanned(eoi_span);
-    block().parse(input)
+pub fn arborize(tokens: &Tokens) -> Result<Block, ()> {
+    let mut arborizer = Arborizer { tokens, i: 0 };
+    Ok(arborizer.block().kind)
 }

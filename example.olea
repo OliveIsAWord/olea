@@ -1,8 +1,14 @@
-fn one(x int) -> int:
+fn one(
+      x int
+      y int
+) -> int:
     y
-    if foo:
+       awa
+    if (foo):
         z
     else:
         w
 else:
     mraow
+
+const MEOW = 42
