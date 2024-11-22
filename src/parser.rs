@@ -188,6 +188,7 @@ impl<'src> Parser<'src> {
     ) -> Result<Vec<O>> {
         Self::parse_block(item_parser, block, self.source, start_span, end_span)
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn ty(&mut self) -> Parsed<Ty> {
         let Some(name) = self.name() else {
             return Ok(None);

@@ -30,7 +30,8 @@ fn main() -> ExitCode {
     if args.len() != 2 {
         error(&format!(
             "{} <file>",
-            args.get(0).map_or(env!("CARGO_CRATE_NAME"), String::as_ref)
+            args.first()
+                .map_or(env!("CARGO_CRATE_NAME"), String::as_ref)
         ));
         return ExitCode::FAILURE;
     };
@@ -80,10 +81,7 @@ fn main() -> ExitCode {
     let ast = match parser::parse(&ttree, &src) {
         Ok(x) => x,
         Err(ast::Spanned { kind, span }) => {
-            use parser::ErrorKind as E;
-            let title = match kind {
-                E::Custom(msg) => msg,
-            };
+            let parser::ErrorKind::Custom(title) = kind;
             error_snippet(
                 Level::Error.title(title).snippet(
                     Snippet::source(&src)

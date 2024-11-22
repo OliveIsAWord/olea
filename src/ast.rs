@@ -28,7 +28,7 @@ pub struct Program {
     pub decls: Vec<Decl>,
 }
 
-/// See [DeclKind].
+/// See [`DeclKind`].
 pub type Decl = Spanned<DeclKind>;
 
 /// A declaration.
@@ -51,7 +51,7 @@ pub struct Function {
     pub body: Block,
 }
 
-/// See [TyKind].
+/// See [`TyKind`].
 pub type Ty = Spanned<TyKind>;
 
 /// A data type.
@@ -63,7 +63,7 @@ pub enum TyKind {
     Pointer(Box<Ty>),
 }
 
-/// See [StmtKind].
+/// See [`StmtKind`].
 pub type Stmt = Spanned<StmtKind>;
 
 /// A statement, a piece of code executed within a block.
@@ -72,7 +72,7 @@ pub type Stmt = Spanned<StmtKind>;
 pub enum StmtKind {
     /// A local variable declaration. This introduces a name which is bound to a value and can be accessed by all following statements in the block.
     Let(Name, Ty, Expr),
-    /// An expression whose yielded value, if any, is ignored (unless it is the final statement of a block). See [ExprKind].
+    /// An expression whose yielded value, if any, is ignored (unless it is the final statement of a block). See [`ExprKind`].
     Expr(Expr),
 }
 
@@ -100,11 +100,11 @@ pub enum ExprKind {
     Block(Block),
     /// A function call, composed of a function and a list of arguments to pass to it.
     Call(Box<Expr>, Vec<Expr>),
-    /// See [PlaceKind].
+    /// See [`PlaceKind`].
     Place(PlaceKind),
 }
 
-/// See [PlaceKind].
+/// See [`PlaceKind`].
 pub type Place = Spanned<PlaceKind>;
 
 /// A "place expression", a category of expressions which are associated with a pointer to memory in which its value is stored. This distinction is relevant in so-called "place expression contexts", such as the left side of an assignment.
@@ -117,7 +117,7 @@ pub enum PlaceKind {
     Deref(Box<Expr>, Span),
 }
 
-/// See [UnaryOpKind].
+/// See [`UnaryOpKind`].
 pub type UnaryOp = Spanned<UnaryOpKind>;
 
 /// A kind of unary operation.
@@ -127,7 +127,7 @@ pub enum UnaryOpKind {
     Neg,
 }
 
-/// See [BinOpKind].
+/// See [`BinOpKind`].
 pub type BinOp = Spanned<BinOpKind>;
 
 /// A kind of binary operation.

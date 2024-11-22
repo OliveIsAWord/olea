@@ -63,13 +63,13 @@ impl Arborizer<'_> {
         }
     }
     fn expect(&mut self, expected: ControlToken) -> Result<()> {
-        if !self.consume_if(expected) {
+        if self.consume_if(expected) {
+            Ok(())
+        } else {
             Err(Spanned {
                 kind: ErrorKind::Expected(expected),
                 span: self.get_span(),
             })
-        } else {
-            Ok(())
         }
     }
     fn get_span(&self) -> Span {
@@ -139,7 +139,7 @@ impl Arborizer<'_> {
                 Co(C::Colon) => break true,
 
                 Co(t @ C::Indent) => self.unexpected(t)?,
-                Co(C::Else) | Co(C::ParenClose) | Co(C::Dedent) | Co(C::Comma) => {
+                Co(C::Else | C::ParenClose | C::Dedent | C::Comma) => {
                     self.i -= 1;
                     break false;
                 }

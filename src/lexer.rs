@@ -33,7 +33,6 @@ pub enum PlainToken {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-#[repr(u8)]
 pub enum Token {
     Control(ControlToken),
     Plain(PlainToken),
@@ -45,15 +44,15 @@ type P = PlainToken;
 use Token::Control as Co;
 use Token::Plain as Pl;
 
-impl Into<Token> for ControlToken {
-    fn into(self) -> Token {
-        Co(self)
+impl From<ControlToken> for Token {
+    fn from(value: ControlToken) -> Token {
+        Co(value)
     }
 }
 
-impl Into<Token> for PlainToken {
-    fn into(self) -> Token {
-        Pl(self)
+impl From<PlainToken> for Token {
+    fn from(value: PlainToken) -> Token {
+        Pl(value)
     }
 }
 
