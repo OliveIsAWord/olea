@@ -13,7 +13,7 @@ pub type Span = core::ops::Range<usize>;
 pub type Name = Spanned<Str>;
 
 /// A wrapper type for associating an item with a source span. This type is aliased by an item type `Foo` wrapping around a `FooKind`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Spanned<T> {
     /// The inner value.
     pub kind: T,
@@ -48,7 +48,7 @@ pub struct Function {
     /// The type of value the function returns, if any.
     pub returns: Option<Ty>,
     /// The body of code that is executed when the function is called.
-    pub body: Expr,
+    pub body: Block,
 }
 
 /// See [TyKind].
@@ -67,6 +67,7 @@ pub enum TyKind {
 pub type Stmt = Spanned<StmtKind>;
 
 /// A statement, a piece of code executed within a block.
+// TODO: Allow decls in stmts.
 #[derive(Clone, Debug)]
 pub enum StmtKind {
     /// A local variable declaration. This introduces a name which is bound to a value and can be accessed by all following statements in the block.
@@ -88,9 +89,9 @@ pub enum ExprKind {
     /// An expression wrapped in parentheses.
     Paren(Box<Expr>),
     /// An "if" block composed of a condition and two branch bodies. The boolean condition is evaluated. If true, the first branch is evaluated. Otherise, the second branch is evaluated.
-    If(Box<Expr>, Box<Expr>, Box<Expr>),
+    If(Box<Expr>, Block, Option<Block>),
     /// A "while" loop. The condition and body expressions are evaluated repeatedly until the condition yields false.
-    While(Box<Expr>, Box<Expr>),
+    While(Box<Expr>, Block),
     /// Store a value in a memory location.
     Assign(Place, Box<Expr>),
     /// See [Block].
@@ -105,6 +106,7 @@ pub enum ExprKind {
 pub type Place = Spanned<PlaceKind>;
 
 /// A "place expression", a category of expressions which are associated with a pointer to memory in which its value is stored. This distinction is relevant in so-called "place expression contexts", such as the left side of an assignment.
+// TODO: Accept parens at the top level of place expressions, like Rust?
 #[derive(Clone, Debug)]
 pub enum PlaceKind {
     /// A variable.
@@ -117,7 +119,7 @@ pub enum PlaceKind {
 pub type BinOp = Spanned<BinOpKind>;
 
 /// The kind of binary operation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum BinOpKind {
     /// Two's complement addition.
     Add,

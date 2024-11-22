@@ -1,277 +1,287 @@
+use crate::arborist::{self as a, PlainToken as P, TokenTree as Tt};
 use crate::ast::*;
-use crate::lexer::Token;
-use chumsky::pratt::{infix, left, postfix};
-use chumsky::prelude::*;
-type T = Token;
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 
-type Error<'a> = Rich<'a, Token, Span>;
-type R<'a, T> = ParseResult<T, Error<'a>>;
-type Extra<'src> = extra::Full<Error<'src>, &'src str, ()>;
+type Error = Spanned<ErrorKind>;
+type Result<T> = std::result::Result<T, Error>;
+type Parsed<T> = Result<Option<T>>;
 
-trait SpanHelper<'src, I, O> {
-    fn spanned(self) -> impl Parser<'src, I, Spanned<O>, Extra<'src>> + Clone
-    where
-        Self: Parser<'src, I, O, Extra<'src>> + Sized + Clone,
-        I: Input<'src, Token = Token, Span = Span>,
-    {
-        self.map_with(move |kind, e| Spanned {
-            kind,
-            span: e.span(),
-        })
+#[derive(Clone, Debug)]
+pub enum ErrorKind {
+    Custom(&'static str),
+}
+
+#[derive(Clone, Copy, Debug, FromPrimitive, Eq, Ord, PartialEq, PartialOrd)]
+#[repr(u8)]
+enum Level {
+    Min = 0,
+    Or = 1,
+    And = 2,
+    Equal = 3,
+    Add = 4,
+    Mul = 5,
+    Prefix = 6,
+    Postfix = 7,
+    Max = 8,
+}
+
+impl Level {
+    pub fn higher(self) -> Self {
+        Self::from_u8(self as u8 + 1).expect("can't go higher than Level::Max")
     }
 }
 
-impl<'src, T, I, O> SpanHelper<'src, I, O> for T
-where
-    T: Parser<'src, I, O, Extra<'src>> + Clone,
-    I: Input<'src, Token = Token, Span = Span>,
-{
+struct Parser<'src> {
+    tokens: &'src [Spanned<Tt>],
+    i: usize,
+    source: &'src str,
 }
 
-fn name<'src, I>() -> impl Parser<'src, I, Name, Extra<'src>> + Clone
-where
-    I: Input<'src, Token = Token, Span = Span>,
-{
-    just(T::Name)
-        .map_with(|_, e| {
-            let span: Span = e.span();
-            #[allow(clippy::explicit_auto_deref)]
-            // Mom, I found a false positive in clippy 0.1.78!
-            let source: &str = *e.state();
-            Name {
-                kind: source[span.clone()].into(),
-                span,
-            }
-        })
-        .labelled("name")
-}
-
-fn int<'src, I>() -> impl Parser<'src, I, u64, Extra<'src>> + Clone
-where
-    I: Input<'src, Token = Token, Span = Span>,
-{
-    just(T::Int)
-        .try_map_with(|_, e| {
-            let span: Span = e.span();
-            #[allow(clippy::explicit_auto_deref)]
-            let source: &str = *e.state();
-            source[span.clone()]
-                .parse()
-                .map_err(|_| Rich::custom(span, "int too big"))
-        })
-        .labelled("name")
-}
-
-fn ty<'src, I>() -> impl Parser<'src, I, Ty, Extra<'src>> + Clone
-where
-    I: Input<'src, Token = Token, Span = Span>,
-{
-    name()
-        .try_map(|name, span| {
-            if name.kind.as_ref() == "int" {
-                Ok(TyKind::Int)
-            } else {
-                Err(Rich::custom(span, "unknown type"))
-            }
-        })
-        .spanned()
-        .pratt((postfix(
-            5,
-            just(T::Hat).to_span(),
-            |a: Ty, op_span: Span| {
-                let span = a.span.start..op_span.end;
-                Ty {
-                    kind: TyKind::Pointer(Box::new(a)),
-                    span,
-                }
-            },
-        ),))
-        .labelled("type")
-}
-
-fn expr<'src, I>() -> impl Parser<'src, I, Expr, Extra<'src>> + Clone
-where
-    I: Input<'src, Token = Token, Span = Span>,
-{
-    // glorified currying for pratt parsing
-    macro_rules! binary {
-        ($op:expr) => {{
-            |a: Expr, op_span, b: Expr| {
-                let span = a.span.start..b.span.end;
-                Expr {
-                    kind: ExprKind::BinOp(
-                        BinOp {
-                            kind: $op,
-                            span: op_span,
-                        },
-                        Box::new(a),
-                        Box::new(b),
-                    ),
-                    span,
-                }
-            }
-        }};
+impl<'src> Parser<'src> {
+    fn peek(&self) -> Option<Spanned<&'src Tt>> {
+        self.tokens
+            .get(self.i)
+            .map(|Spanned { kind, span }| Spanned {
+                kind,
+                span: span.clone(),
+            })
     }
-    use BinOpKind::*;
-    recursive(|expr| {
-        let atom = choice((
-            name().map(|x| ExprKind::Place(PlaceKind::Var(x))),
-            int().map(ExprKind::Int),
-            expr.clone()
-                .delimited_by(just(T::ParenOpen), just(T::ParenClose))
-                .map(|e| ExprKind::Paren(Box::new(e))),
-            just(T::If)
-                .ignore_then(expr.clone())
-                .then(block(expr.clone()))
-                .then(just(T::Else).ignore_then(block(expr.clone())))
-                .map(|((condition, then_block), else_block)| {
-                    ExprKind::If(
-                        Box::new(condition),
-                        Box::new(then_block),
-                        Box::new(else_block),
-                    )
-                }),
-            just(T::While)
-                .ignore_then(expr.clone())
-                .then(block(expr.clone()))
-                .map(|(condition, body)| ExprKind::While(Box::new(condition), Box::new(body))),
-            just(T::Block)
-                .ignore_then(block(expr.clone()))
-                // Throw away the inner span so we can include `block` in the span
-                .map(|x| x.kind),
-        ))
-        .spanned();
-        let function_call = expr
-            .clone()
-            .separated_by(just(T::Comma))
-            .allow_trailing()
+    fn next(&mut self) -> Option<Spanned<&'src Tt>> {
+        let tt = self.peek()?;
+        self.i += 1;
+        Some(tt)
+    }
+    fn just(&mut self, token: P) -> Option<Span> {
+        let Spanned { kind, span } = self.peek()?;
+        if *kind == Tt::Plain(token) {
+            self.next().unwrap();
+            Some(span.clone())
+        } else {
+            None
+        }
+    }
+    fn get_previous_span(&self) -> Span {
+        self.tokens[self.i - 1].span.clone()
+    }
+    fn get_span_checked(&self) -> Option<Span> {
+        self.peek().map(|t| t.span)
+    }
+    fn get_span(&self) -> Span {
+        let len = self.source.len();
+        let eoi_span = len..len;
+        self.get_span_checked().unwrap_or(eoi_span)
+    }
+    fn err(&self, message: &'static str) -> Error {
+        Error {
+            span: self.get_span(),
+            kind: ErrorKind::Custom(message),
+        }
+    }
+    fn name(&mut self) -> Option<Name> {
+        self.just(P::Name).map(|span| Name {
+            kind: self.source[span.clone()].into(),
+            span,
+        })
+    }
+    fn spanned<O>(&mut self, f: impl FnOnce(&mut Self) -> Result<O>) -> Result<Spanned<O>> {
+        let span_start = self.get_span().start;
+        f(self).map(|kind| {
+            let span_end = self.get_previous_span().end;
+            let span = span_start..span_end;
+            Spanned { kind, span }
+        })
+    }
+    fn spanned2<O>(&mut self, f: impl FnOnce(&mut Self) -> Parsed<O>) -> Parsed<Spanned<O>> {
+        self.spanned(f)
+            .map(|Spanned { kind, span }| kind.map(|kind| Spanned { kind, span }))
+    }
+    fn block<O>(
+        &self,
+        mut item_parser: impl FnMut(&mut Self) -> Result<O>,
+        block: &'src a::Block,
+    ) -> Result<Vec<O>> {
+        block
+            .iter()
+            .map(|tokens| {
+                let mut this = Self {
+                    tokens,
+                    i: 0,
+                    source: self.source,
+                };
+                let o = item_parser(&mut this)?;
+                match this.get_span_checked() {
+                    Some(span) => Err(Spanned {
+                        kind: ErrorKind::Custom("expected end of item"),
+                        span,
+                    }),
+                    None => Ok(o),
+                }
+            })
             .collect()
-            .delimited_by(just(T::ParenOpen), just(T::ParenClose))
-            .spanned();
-        let op = |k| just(k).to_span();
-        atom.pratt((
-            postfix(5, function_call, |e: Expr, Spanned { kind: args, span }| {
-                let span = e.span.start..span.end;
-                Expr {
-                    kind: ExprKind::Call(Box::new(e), args),
-                    span,
+    }
+    fn ty(&mut self) -> Result<Ty> {
+        self.name()
+            .and_then(|name| {
+                if name.kind.as_ref() == "int" {
+                    Some(Spanned {
+                        kind: TyKind::Int,
+                        span: name.span,
+                    })
+                } else {
+                    None
                 }
-            }),
-            postfix(5, op(T::Hat), |a: Expr, op_span: Span| {
-                let span = a.span.start..op_span.end;
-                Expr {
-                    kind: ExprKind::Place(PlaceKind::Deref(Box::new(a), op_span)),
-                    span,
-                }
-            }),
-            infix(left(4), op(T::Asterisk), binary!(Mul)),
-            infix(left(3), op(T::Plus), binary!(Add)),
-            infix(left(3), op(T::Minus), binary!(Sub)),
-        ))
-        .then(just(T::Equals).ignore_then(expr.clone()).or_not())
-        .try_map(|(a, b), span| match b {
-            None => Ok(a),
-            Some(value) => match a.kind {
-                ExprKind::Place(place) => Ok(Expr {
-                    kind: ExprKind::Assign(
-                        Place {
-                            span: a.span,
-                            kind: place,
-                        },
-                        Box::new(value),
-                    ),
-                    span,
-                }),
-                // FIXME: This error message annoyingly does not show up, seemingly. Chumsky bug?
-                _ => Err(Rich::custom(
-                    a.span,
-                    "can't assign to this kind of expression",
-                )),
-            },
-        })
+            })
+            .ok_or_else(|| self.err("expected type"))
+    }
+    fn param(&mut self) -> Result<(Name, Ty)> {
+        let Some(name) = self.name() else {
+            return Err(self.err("expected function parameter"));
+        };
+        let ty = self.ty()?;
+        Ok((name, ty))
+    }
+    fn expr(&mut self, level: Level) -> Result<Expr> {
+        let span_start = self.get_span().start;
+        let atom = if let Some(Spanned {
+            kind: Tt::Paren(block),
+            ..
+        }) = self.peek()
+        {
+            self.next().unwrap();
+            let mut exprs: Vec<_> = self.block(|this| this.expr(Level::Min), block)?;
+            if exprs.len() != 1 {
+                self.i -= 1;
+                return Err(self.err("tuples are not yet implemented"));
+            };
+            let expr = exprs.pop().unwrap();
+            ExprKind::Paren(Box::new(expr))
+        } else if let Some(name) = self.name() {
+            ExprKind::Place(PlaceKind::Var(name))
+        } else if self.just(P::If).is_some() {
+            let condition = self.expr(Level::Min)?;
+            let then_block = self.colon_block()?;
+            let else_block = self.else_block()?;
+            ExprKind::If(Box::new(condition), then_block, else_block)
+        } else {
+            return Err(self.err("unexpected token while parsing expression"));
+        };
+        let mut e = Expr {
+            kind: atom,
+            span: span_start..self.get_previous_span().end,
+        };
+        loop {
+            const OPS: &[(P, Level, BinOpKind)] = &[
+                (P::Plus, Level::Add, BinOpKind::Add),
+                (P::Asterisk, Level::Mul, BinOpKind::Mul),
+            ];
+            let Some(Spanned {
+                kind: Tt::Plain(kind),
+                span,
+            }) = self.peek()
+            else {
+                break;
+            };
+            let Some(&(_, op_level, op_kind)) = OPS.iter().find(|(op, _, _)| kind == op) else {
+                break;
+            };
+            if op_level < level {
+                break;
+            }
+            self.next().unwrap();
+            let rhs = self.expr(op_level.higher())?;
+            let op = BinOp {
+                kind: op_kind,
+                span,
+            };
+            let span = e.span.start..rhs.span.end;
+            e = Expr {
+                kind: ExprKind::BinOp(op, Box::new(e), Box::new(rhs)),
+                span,
+            };
+        }
+        Ok(e)
+    }
+    fn stmt(&mut self) -> Result<Stmt> {
+        self.spanned(Self::stmt_kind)
+    }
+    fn stmt_kind(&mut self) -> Result<StmtKind> {
+        if self.just(P::Let).is_some() {
+            Err(self.err("todo: let statements"))
+        } else {
+            self.expr(Level::Min).map(StmtKind::Expr)
+        }
+    }
+    fn colon_block(&mut self) -> Result<Block> {
+        let Some(Spanned {
+            kind: Tt::IndentedBlock(stmts),
+            ..
+        }) = self.peek()
+        else {
+            return Err(self.err("expected beginning of block"));
+        };
+        self.next().unwrap();
+        self.block(Self::stmt, stmts).map(Block)
+    }
+    fn else_block(&mut self) -> Parsed<Block> {
+        let Some(Spanned {
+            kind: Tt::ElseBlock(stmts),
+            ..
+        }) = self.peek()
+        else {
+            return Ok(None);
+        };
+        self.next().unwrap();
+        self.block(Self::stmt, stmts).map(|x| Some(Block(x)))
+    }
+    fn decl(&mut self) -> Parsed<Decl> {
+        self.spanned2(Self::decl_kind)
+    }
+    fn decl_kind(&mut self) -> Parsed<DeclKind> {
+        let Some(Spanned { kind, .. }) = self.next() else {
+            return Ok(None);
+        };
+        let decl = match kind {
+            Tt::Plain(P::Fn) => {
+                let name = self
+                    .name()
+                    .ok_or_else(|| self.err("expected function name"))?;
+                // use .peek() so we get the correct span for the error
+                let Some(Spanned {
+                    kind: Tt::Paren(params),
+                    ..
+                }) = self.peek()
+                else {
+                    return Err(self.err("expected paren list of function parameters"));
+                };
+                self.next().unwrap();
+                let parameters = self.block(Self::param, params)?;
+                let returns = self.just(P::ThinArrow).map(|_| self.ty()).transpose()?;
+                let body = self.colon_block()?;
+                DeclKind::Function(Function {
+                    name,
+                    parameters,
+                    returns,
+                    body,
+                })
+            }
+            _ => {
+                self.i -= 1; // Hacky, I know.
+                return Ok(None);
+            }
+        };
+        Ok(Some(decl))
+    }
+}
+
+pub fn parse(block: &a::Block, source: &str) -> Result<Program> {
+    let item = &block[0];
+    let mut parser = Parser {
+        tokens: item,
+        i: 0,
+        source,
+    };
+    parser.decl().map(|decl| Program {
+        decls: decl.into_iter().collect(),
     })
-    .labelled("expression")
-}
-
-fn stmt<'src, I>(
-    expr: impl Parser<'src, I, Expr, Extra<'src>> + Clone,
-) -> impl Parser<'src, I, Stmt, Extra<'src>> + Clone
-where
-    I: Input<'src, Token = Token, Span = Span>,
-{
-    let let_stmt = just(T::Let)
-        .ignore_then(name())
-        .then(just(T::Colon).ignore_then(ty()))
-        .then(just(T::Equals).ignore_then(expr.clone()))
-        .map(|((var, ty), body)| StmtKind::Let(var, ty, body));
-    choice((let_stmt, expr.map(StmtKind::Expr)))
-        .spanned()
-        .then_ignore(just(T::Newline))
-        .labelled("statement")
-}
-
-fn block<'src, I>(
-    expr: impl Parser<'src, I, Expr, Extra<'src>> + Clone,
-) -> impl Parser<'src, I, Expr, Extra<'src>> + Clone
-where
-    I: Input<'src, Token = Token, Span = Span>,
-{
-    just(T::Colon)
-        .ignore_then(just(T::Newline))
-        .ignore_then(
-            stmt(expr)
-                .repeated()
-                .collect()
-                .delimited_by(just(T::Indent), just(T::Dedent).labelled("end of block")),
-        )
-        .map(|e| ExprKind::Block(Block(e)))
-        .spanned()
-}
-
-fn function<'src, I>() -> impl Parser<'src, I, Function, Extra<'src>> + Clone
-where
-    I: Input<'src, Token = Token, Span = Span>,
-{
-    just(T::Fn)
-        .ignore_then(name())
-        .then(
-            name()
-                .then(ty())
-                .separated_by(just(T::Comma))
-                .allow_trailing()
-                .collect()
-                .delimited_by(just(T::ParenOpen), just(T::ParenClose)),
-        )
-        .then(just(T::ThinArrow).ignore_then(ty()).or_not())
-        .then(block(expr()))
-        .map(|(((name, parameters), returns), body)| Function {
-            name,
-            parameters,
-            returns,
-            body,
-        })
-        .labelled("function")
-}
-
-fn decl<'src, I>() -> impl Parser<'src, I, Decl, Extra<'src>> + Clone
-where
-    I: Input<'src, Token = Token, Span = Span>,
-{
-    function().map(DeclKind::Function).spanned()
-}
-
-fn program<'src, I>() -> impl Parser<'src, I, Program, Extra<'src>> + Clone
-where
-    I: Input<'src, Token = Token, Span = Span>,
-{
-    decl().repeated().collect().map(|decls| Program { decls })
-}
-
-pub fn parse<'src>(tokens: &'src [(Token, Span)], source: &'src str) -> R<'src, Program> {
-    let eoi_span = tokens
-        .last()
-        .map_or(0..0, |(_, range)| range.end..range.end);
-    let input = tokens.spanned(eoi_span);
-    let mut state = source;
-    program().parse_with_state(input, &mut state)
 }

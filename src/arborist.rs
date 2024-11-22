@@ -1,5 +1,6 @@
 use crate::ast::{Span, Spanned};
-use crate::lexer::{self, ControlToken, PlainToken, Token, Tokens};
+pub use crate::lexer::PlainToken;
+use crate::lexer::{self, ControlToken, Token, Tokens};
 
 type T = Token;
 type C = ControlToken;
@@ -7,7 +8,7 @@ type P = PlainToken;
 use Token::Control as Co;
 use Token::Plain as Pl;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TokenTree {
     Plain(PlainToken),
     Paren(Block),
@@ -63,12 +64,13 @@ impl Arborizer<'_> {
     }
     fn expect(&mut self, expected: ControlToken) -> Result<()> {
         if !self.consume_if(expected) {
-        
-        Err(Spanned {
-            kind: ErrorKind::Expected(expected),
-            span: self.get_span(),
-        })
-        } else {Ok(())}
+            Err(Spanned {
+                kind: ErrorKind::Expected(expected),
+                span: self.get_span(),
+            })
+        } else {
+            Ok(())
+        }
     }
     fn get_span(&self) -> Span {
         if let Some((_, span)) = self.peek() {
@@ -93,6 +95,7 @@ impl Arborizer<'_> {
             span: self.get_previous_span(),
         })
     }
+    // TODO: remove Spanned from the return type of this method?
     fn item(&mut self) -> Result<Option<Spanned<Item>>> {
         let mut item = vec![];
         let mut indented = false;
@@ -125,11 +128,13 @@ impl Arborizer<'_> {
                 }
                 Co(C::ParenOpen) => {
                     // TODO: handle closing paren appearing before newline and dedent
-                    let Spanned { kind, span: block_span } = self.inner_block(false)?;
+                    let span_start = span.start;
+                    let inner = self.inner_block(false)?;
                     self.expect(C::ParenClose)?;
+                    let span_end = self.get_previous_span().end;
                     item.push(Spanned {
-                        kind: Tt::Paren(kind),
-                        span: block_span,
+                        kind: Tt::Paren(inner),
+                        span: span_start..span_end,
                     });
                 }
                 Co(C::Colon) => {
@@ -147,25 +152,26 @@ impl Arborizer<'_> {
             }
         };
         if parse_indented {
-            let Spanned { kind, span } = self.inner_block(indented)?;
+            let span_start = self.get_span().start;
+            let inner = self.inner_block(indented)?;
+            let span_end = self.get_previous_span().end;
             item.push(Spanned {
-                kind: Tt::IndentedBlock(kind),
-                span,
+                kind: Tt::IndentedBlock(inner),
+                span: span_start..span_end,
             });
             if self.consume_if(C::Else) {
+                let span_start = self.get_previous_span().start;
                 // TODO: correctly parse ["else", newline, indent, ":"]
-                let Spanned { kind, span } = if self.consume_if(C::Colon) {
+                let inner = if self.consume_if(C::Colon) {
                     self.inner_block(false)?
                 } else {
-                    let Spanned { kind, span } = self.item()?.expect("empty else block");
-                    Spanned {
-                        kind: vec![kind],
-                        span,
-                    }
+                    let single = self.item()?.expect("empty else block").kind;
+                    vec![single]
                 };
+                let span_end = self.get_previous_span().end;
                 item.push(Spanned {
-                    kind: Tt::ElseBlock(kind),
-                    span,
+                    kind: Tt::ElseBlock(inner),
+                    span: span_start..span_end,
                 });
             }
         }
@@ -181,7 +187,7 @@ impl Arborizer<'_> {
         };
         Ok(item)
     }
-    fn inner_block(&mut self, skip_indent: bool) -> Result<Spanned<Block>> {
+    fn inner_block(&mut self, skip_indent: bool) -> Result<Block> {
         let block = if self.consume_if(C::Newline) {
             if !skip_indent {
                 self.expect(C::Indent)?;
@@ -190,15 +196,14 @@ impl Arborizer<'_> {
             self.expect(C::Dedent)?;
             block
         } else {
-            let Spanned { kind, span } = self.item()?.expect("empty block");
-            Spanned {
-                kind: vec![kind],
-                span,
+            match self.item()? {
+                Some(Spanned { kind, .. }) => vec![kind],
+                None => vec![],
             }
         };
         Ok(block)
     }
-    fn block(&mut self) -> Result<Spanned<Block>> {
+    fn block(&mut self) -> Result<Block> {
         let mut block = vec![];
         while let Some(item) = self.item()? {
             block.push(item);
@@ -207,11 +212,7 @@ impl Arborizer<'_> {
             self.err("cannot have an empty block")?;
         }
         // assert!(!block.is_empty());
-        let span = block[0].span.start..block.last().unwrap().span.end;
-        Ok(Spanned {
-            kind: block.into_iter().map(|x| x.kind).collect(),
-            span,
-        })
+        Ok(block.into_iter().map(|x| x.kind).collect())
     }
     fn eof(&mut self) -> Result<()> {
         match self.next() {
@@ -226,6 +227,6 @@ impl Arborizer<'_> {
 
 pub fn arborize(tokens: &Tokens) -> Result<Block> {
     let mut arborizer = Arborizer { tokens, i: 0 };
-    let block = arborizer.block()?.kind;
+    let block = arborizer.block()?;
     arborizer.eof().map(|()| block)
 }

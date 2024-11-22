@@ -2,10 +2,9 @@
 
 mod arborist;
 pub mod ast;
-mod chumsky_types;
 mod lexer;
+mod parser;
 mod ttree_visualize;
-// mod parser;
 //mod codegen_fox32;
 mod compiler_types;
 mod ir;
@@ -44,6 +43,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    println!("# Source code:\n{src}");
     let tokens = lexer::tokenize(&src);
     // dbg!(tokens.has_error);
     /*
@@ -75,7 +75,26 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // println!("{ttree:#?}");
+    println!("# Token tree:");
     ttree_visualize::visualize(&ttree, &src);
+    let ast = match parser::parse(&ttree, &src) {
+        Ok(x) => x,
+        Err(ast::Spanned { kind, span }) => {
+            use parser::ErrorKind as E;
+            let title = match kind {
+                E::Custom(msg) => msg,
+            };
+            error_snippet(
+                Level::Error.title(title).snippet(
+                    Snippet::source(&src)
+                        .origin(file_path)
+                        .fold(true)
+                        .annotation(Level::Error.span(span)),
+                ),
+            );
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("#Syntax tree:\n{ast:?}");
     ExitCode::SUCCESS
 }

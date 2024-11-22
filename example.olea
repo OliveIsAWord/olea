@@ -1,19 +1,4 @@
-fn one(
-      x int
-      y int
-) -> int:
-    y
-       awa:
-       ewe
-    if (foo):
-        z
-    else:
-        w
-    cool
-    let x = (if x: y else: z) + 3
-    beans
-else:
-    mraow
-
-
-const MEOW = 42
+fn foo():
+    if x: xx
+    else if y: yy
+    else: zz
