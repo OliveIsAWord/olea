@@ -8,6 +8,7 @@ pub enum ControlToken {
     ParenOpen,
     ParenClose,
     Colon,
+    Comma,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -20,15 +21,15 @@ pub enum PlainToken {
     Let,
     If,
     While,
-    Block,
-    Comma,
-    Dot,
+    // Block,
+    // Dot,
     Equals,
     Plus,
     Minus,
     Asterisk,
     Hat,
-    ThinArrow,
+    Pipe,
+    // ThinArrow,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -64,16 +65,17 @@ const KEYWORDS: &[(&str, Token)] = &[
     ("if", Pl(P::If)),
     ("else", Co(C::Else)),
     ("while", Pl(P::While)),
-    ("block", Pl(P::Block)),
+    // ("block", Pl(P::Block)),
 ];
 
 const PUNCTUATION: &[(&str, Token)] = &[
-    ("->", Pl(P::ThinArrow)),
+    ("|>", Pl(P::Pipe)),
+    // ("->", Pl(P::ThinArrow)),
     ("(", Co(C::ParenOpen)),
     (")", Co(C::ParenClose)),
     (":", Co(C::Colon)),
-    (",", Pl(P::Comma)),
-    (".", Pl(P::Dot)),
+    (",", Co(C::Comma)),
+    // (".", Pl(P::Dot)),
     ("=", Pl(P::Equals)),
     ("+", Pl(P::Plus)),
     ("-", Pl(P::Minus)),

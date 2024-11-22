@@ -1,4 +1,6 @@
-fn foo():
-    if x: xx
-    else if y: yy
-    else: zz
+fn foo(x int, y int):
+    meow + (:
+        awa
+        ewe
+    ) + x
+    while true: foo

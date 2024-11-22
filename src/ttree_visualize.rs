@@ -16,7 +16,7 @@ fn visualize0(block: &Block, src: &str, level: usize) {
         for Spanned { kind, span } in item {
             match kind {
                 Tt::Plain(_) => print!("{:?} ", &src[span.clone()]),
-                Tt::Paren(b) => {
+                Tt::Paren(b, _) => {
                     println!("(");
                     visualize0(b, src, level + 1);
                     indent();

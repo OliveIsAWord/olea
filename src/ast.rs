@@ -84,6 +84,8 @@ pub type Expr = Spanned<ExprKind>;
 pub enum ExprKind {
     /// An integer constant.
     Int(u64),
+    /// A calculation taking the value of one expression to yield another.
+    UnaryOp(UnaryOp, Box<Expr>),
     /// A calculation taking the values of two expressions to yield another.
     BinOp(BinOp, Box<Expr>, Box<Expr>),
     /// An expression wrapped in parentheses.
@@ -115,10 +117,20 @@ pub enum PlaceKind {
     Deref(Box<Expr>, Span),
 }
 
+/// See [UnaryOpKind].
+pub type UnaryOp = Spanned<UnaryOpKind>;
+
+/// A kind of unary operation.
+#[derive(Clone, Copy, Debug)]
+pub enum UnaryOpKind {
+    /// Two's complement negation.
+    Neg,
+}
+
 /// See [BinOpKind].
 pub type BinOp = Spanned<BinOpKind>;
 
-/// The kind of binary operation.
+/// A kind of binary operation.
 #[derive(Clone, Copy, Debug)]
 pub enum BinOpKind {
     /// Two's complement addition.
