@@ -1,0 +1,2048 @@
+   Compiling olea v0.1.0 (/home/olive/Github/Olea)
+error[E0116]: cannot define inherent `impl` for a type outside of the crate where the type is defined
+  --> src/ir_builder.rs:47:1
+   |
+47 | impl<T> Result<T> {}
+   | ^^^^^^^^^^^^^^^^^ impl for type defined outside of crate.
+   |
+   = note: define and implement a trait or new type instead
+
+error[E0599]: no method named `successors` found for enum `ir::Exit` in the current scope
+   --> src/ir.rs:189:19
+    |
+189 |         self.exit.successors()
+    |                   ^^^^^^^^^^ method not found in `ir::Exit`
+...
+355 | pub enum Exit {
+    | ------------- method `successors` not found for this enum
+
+error[E0599]: no method named `get` found for reference `&Tokens` in the current scope
+  --> src/arborist.rs:46:14
+   |
+45 | /         self.tokens
+46 | |             .get(self.i)
+   | |             -^^^ method not found in `&Tokens`
+   | |_____________|
+   | 
+   |
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following trait defines an item `get`, perhaps you need to implement it:
+           candidate #1: `SliceIndex`
+
+error[E0599]: no method named `peek` found for mutable reference `&mut Arborizer<'_>` in the current scope
+  --> src/arborist.rs:50:26
+   |
+50 |         let token = self.peek()?;
+   |                          ^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `peek` found for mutable reference `&mut Arborizer<'_>` in the current scope
+  --> src/arborist.rs:55:37
+   |
+55 |         let Some((token, _)) = self.peek() else {
+   |                                     ^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: the method `next` exists for mutable reference `&mut Arborizer<'_>`, but its trait bounds were not satisfied
+  --> src/arborist.rs:59:18
+   |
+38 | struct Arborizer<'a> {
+   | -------------------- doesn't satisfy `Arborizer<'_>: Iterator`
+...
+59 |             self.next().unwrap();
+   |                  ^^^^ method cannot be called on `&mut Arborizer<'_>` due to unsatisfied trait bounds
+   |
+   = note: the following trait bounds were not satisfied:
+           `Arborizer<'_>: Iterator`
+           which is required by `&mut Arborizer<'_>: Iterator`
+note: the trait `Iterator` must be implemented
+  --> /build/rustc-1.78.0-src/library/core/src/iter/traits/iterator.rs:44:1
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following trait defines an item `next`, perhaps you need to implement it:
+           candidate #1: `Iterator`
+
+error[E0599]: no method named `consume_if` found for mutable reference `&mut Arborizer<'_>` in the current scope
+  --> src/arborist.rs:66:17
+   |
+66 |         if self.consume_if(expected) {
+   |                 ^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `get_span` found for mutable reference `&mut Arborizer<'_>` in the current scope
+  --> src/arborist.rs:71:28
+   |
+71 |                 span: self.get_span(),
+   |                            ^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `peek` found for reference `&Arborizer<'_>` in the current scope
+  --> src/arborist.rs:76:39
+   |
+76 |         if let Some((_, span)) = self.peek() {
+   |                                       ^^^^ method not found in `&Arborizer<'_>`
+
+error[E0599]: no method named `get` found for reference `&Tokens` in the current scope
+  --> src/arborist.rs:83:32
+   |
+83 |         let span = self.tokens.get(self.i - 1).unwrap().span;
+   |                                ^^^ method not found in `&Tokens`
+   |
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following trait defines an item `get`, perhaps you need to implement it:
+           candidate #1: `SliceIndex`
+
+error[E0599]: no method named `get_previous_span` found for reference `&Arborizer<'_>` in the current scope
+  --> src/arborist.rs:89:24
+   |
+89 |             span: self.get_previous_span(),
+   |                        ^^^^^^^^^^^^^^^^^ method not found in `&Arborizer<'_>`
+
+error[E0599]: no method named `get_previous_span` found for reference `&Arborizer<'_>` in the current scope
+  --> src/arborist.rs:95:24
+   |
+95 |             span: self.get_previous_span(),
+   |                        ^^^^^^^^^^^^^^^^^ method not found in `&Arborizer<'_>`
+
+error[E0599]: the method `next` exists for mutable reference `&mut Arborizer<'_>`, but its trait bounds were not satisfied
+   --> src/arborist.rs:104:44
+    |
+38  | struct Arborizer<'a> {
+    | -------------------- doesn't satisfy `Arborizer<'_>: Iterator`
+...
+104 |             let Some((token, span)) = self.next() else {
+    |                                            ^^^^ method cannot be called on `&mut Arborizer<'_>` due to unsatisfied trait bounds
+    |
+    = note: the following trait bounds were not satisfied:
+            `Arborizer<'_>: Iterator`
+            which is required by `&mut Arborizer<'_>: Iterator`
+note: the trait `Iterator` must be implemented
+   --> /build/rustc-1.78.0-src/library/core/src/iter/traits/iterator.rs:44:1
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `next`, perhaps you need to implement it:
+            candidate #1: `Iterator`
+
+error[E0599]: no method named `consume_if` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:116:43
+    |
+116 |                     let got_indent = self.consume_if(C::Indent);
+    |                                           ^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `consume_if` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:121:37
+    |
+121 | ...                   if self.consume_if(C::Dedent) {
+    |                               ^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `err` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:125:46
+    |
+125 |                         (true, true) => self.err("cannot indent in an already indented item")?,
+    |                                              ^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `inner_block` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:131:47
+    |
+131 |                     let (inner, multi) = self.inner_block(false, Some(C::Comma))?;
+    |                                               ^^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `expect` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:132:26
+    |
+132 |                     self.expect(C::ParenClose)?;
+    |                          ^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `get_previous_span` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:133:41
+    |
+133 |                     let span_end = self.get_previous_span().end;
+    |                                         ^^^^^^^^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `unexpected` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:141:43
+    |
+141 |                 Co(t @ C::Indent) => self.unexpected(t)?,
+    |                                           ^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `get_span` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:149:35
+    |
+149 |             let span_start = self.get_span().start;
+    |                                   ^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `inner_block` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:150:35
+    |
+150 |             let (inner, _) = self.inner_block(indented, None)?;
+    |                                   ^^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `get_previous_span` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:151:33
+    |
+151 |             let span_end = self.get_previous_span().end;
+    |                                 ^^^^^^^^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `consume_if` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:156:21
+    |
+156 |             if self.consume_if(C::Else) {
+    |                     ^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `get_previous_span` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:157:39
+    |
+157 |                 let span_start = self.get_previous_span().start;
+    |                                       ^^^^^^^^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `consume_if` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:159:37
+    |
+159 |                 let inner = if self.consume_if(C::Colon) {
+    |                                     ^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `inner_block` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:160:26
+    |
+160 |                     self.inner_block(indented, None)?.0
+    |                          ^^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `item` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:162:39
+    |
+162 |                     let single = self.item()?.expect("empty else block").kind;
+    |                                       ^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no function or associated item named `into_vec` found for slice `[_]` in the current scope
+   --> src/arborist.rs:163:21
+    |
+163 |                     vec![single]
+    |                     ^^^^^^^^^^^^ function or associated item not found in `[_]`
+    |
+help: there is an associated function `to_vec` with a similar name
+   --> /build/rustc-1.78.0-src/library/alloc/src/slice.rs:116:9
+    = note: this error originates in the macro `vec` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: no method named `get_previous_span` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:165:37
+    |
+165 |                 let span_end = self.get_previous_span().end;
+    |                                     ^^^^^^^^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `last` found for struct `Vec<ast::Spanned<TokenTree>>` in the current scope
+   --> src/arborist.rs:176:33
+    |
+176 |             let span_end = item.last().unwrap().span.end;
+    |                                 ^^^^ `Vec<ast::Spanned<TokenTree>>` is not an iterator
+    |
+help: call `.into_iter()` first
+    |
+176 |             let span_end = item.into_iter().last().unwrap().span.end;
+    |                                 ++++++++++++
+
+error[E0599]: no method named `consume_if` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:185:29
+    |
+185 |         let block = if self.consume_if(C::Newline) {
+    |                             ^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `expect` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:187:22
+    |
+187 |                 self.expect(C::Indent)?;
+    |                      ^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `block` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:189:30
+    |
+189 |             let block = self.block()?;
+    |                              ^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `expect` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:190:18
+    |
+190 |             self.expect(C::Dedent)?;
+    |                  ^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `item` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:196:57
+    |
+196 |             while let Some(Spanned { kind, .. }) = self.item()? {
+    |                                                         ^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `consume_if` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:199:29
+    |
+199 |                     if self.consume_if(s) {
+    |                             ^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `consume_if` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:201:38
+    |
+201 |                         let _ = self.consume_if(C::Newline);
+    |                                      ^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `item` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:212:37
+    |
+212 |         while let Some(item) = self.item()? {
+    |                                     ^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `err` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:216:18
+    |
+216 |             self.err("cannot have an empty block")?;
+    |                  ^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: the method `next` exists for mutable reference `&mut Arborizer<'_>`, but its trait bounds were not satisfied
+   --> src/arborist.rs:222:20
+    |
+38  | struct Arborizer<'a> {
+    | -------------------- doesn't satisfy `Arborizer<'_>: Iterator`
+...
+222 |         match self.next() {
+    |                    ^^^^ method cannot be called on `&mut Arborizer<'_>` due to unsatisfied trait bounds
+    |
+    = note: the following trait bounds were not satisfied:
+            `Arborizer<'_>: Iterator`
+            which is required by `&mut Arborizer<'_>: Iterator`
+note: the trait `Iterator` must be implemented
+   --> /build/rustc-1.78.0-src/library/core/src/iter/traits/iterator.rs:44:1
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `next`, perhaps you need to implement it:
+            candidate #1: `Iterator`
+
+error[E0599]: no method named `unexpected` found for mutable reference `&mut Arborizer<'_>` in the current scope
+   --> src/arborist.rs:226:31
+    |
+226 |                 Co(c) => self.unexpected(c),
+    |                               ^^^^^^^^^^ method not found in `&mut Arborizer<'_>`
+
+error[E0599]: no method named `block` found for struct `Arborizer` in the current scope
+   --> src/arborist.rs:234:27
+    |
+38  | struct Arborizer<'a> {
+    | -------------------- method `block` not found for this struct
+...
+234 |     let block = arborizer.block()?;
+    |                           ^^^^^ method not found in `Arborizer<'_>`
+
+error[E0599]: no method named `eof` found for struct `Arborizer` in the current scope
+   --> src/arborist.rs:235:15
+    |
+38  | struct Arborizer<'a> {
+    | -------------------- method `eof` not found for this struct
+...
+235 |     arborizer.eof().map(|()| block)
+    |               ^^^ method not found in `Arborizer<'_>`
+
+error[E0599]: no method named `get` found for struct `Vec<Token>` in the current scope
+   --> src/lexer.rs:120:33
+    |
+120 |         let token = *self.kinds.get(i)?;
+    |                                 ^^^
+    |
+help: there is a method `ge` with a similar name
+    |
+120 |         let token = *self.kinds.ge(i)?;
+    |                                 ~~
+
+error[E0599]: no method named `is_empty` found for reference `&Tokens` in the current scope
+   --> src/lexer.rs:125:17
+    |
+125 |         if self.is_empty() {
+    |                 ^^^^^^^^ method not found in `&Tokens`
+    |
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `is_empty`, perhaps you need to implement it:
+            candidate #1: `ExactSizeIterator`
+help: some of the expressions' fields have a method of the same name
+    |
+125 |         if self.kinds.is_empty() {
+    |                 ++++++
+125 |         if self.spans.is_empty() {
+    |                 ++++++
+
+error[E0599]: no method named `get` found for reference `&Tokens` in the current scope
+   --> src/lexer.rs:128:23
+    |
+128 |             Some(self.get(self.len() - 1).unwrap())
+    |                       ^^^ method not found in `&Tokens`
+    |
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `get`, perhaps you need to implement it:
+            candidate #1: `SliceIndex`
+
+error[E0599]: no method named `len` found for reference `&Tokens` in the current scope
+   --> src/lexer.rs:128:32
+    |
+128 |             Some(self.get(self.len() - 1).unwrap())
+    |                                ^^^ method not found in `&Tokens`
+    |
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `len`, perhaps you need to implement it:
+            candidate #1: `ExactSizeIterator`
+help: some of the expressions' fields have a method of the same name
+    |
+128 |             Some(self.get(self.kinds.len() - 1).unwrap())
+    |                                ++++++
+128 |             Some(self.get(self.spans.len() - 1).unwrap())
+    |                                ++++++
+
+error[E0599]: no method named `len` found for reference `&Tokens` in the current scope
+   --> src/lexer.rs:135:14
+    |
+135 |         self.len() == 0
+    |              ^^^ method not found in `&Tokens`
+    |
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `len`, perhaps you need to implement it:
+            candidate #1: `ExactSizeIterator`
+help: some of the expressions' fields have a method of the same name
+    |
+135 |         self.kinds.len() == 0
+    |              ++++++
+135 |         self.spans.len() == 0
+    |              ++++++
+
+error[E0599]: no method named `len` found for reference `&'a str` in the current scope
+   --> src/lexer.rs:150:39
+    |
+150 |         self.src[self.index..self.src.len()].chars().next()
+    |                                       ^^^
+    |
+help: there is a method `le` with a similar name, but with different arguments
+   --> /build/rustc-1.78.0-src/library/core/src/cmp.rs:1188:5
+
+error[E0599]: no method named `chars` found for type `str` in the current scope
+   --> src/lexer.rs:150:46
+    |
+150 |         self.src[self.index..self.src.len()].chars().next()
+    |                                              ^^^^^ method not found in `str`
+
+error[E0599]: no method named `peek` found for mutable reference `&mut View<'a>` in the current scope
+   --> src/lexer.rs:154:22
+    |
+154 |         let c = self.peek()?;
+    |                      ^^^^ method not found in `&mut View<'a>`
+
+error[E0599]: no method named `peek` found for mutable reference `&mut View<'a>` in the current scope
+   --> src/lexer.rs:160:22
+    |
+160 |         let c = self.peek().filter(|&c| predicate(c))?;
+    |                      ^^^^ method not found in `&mut View<'a>`
+
+error[E0599]: no method named `consume` found for mutable reference `&mut View<'a>` in the current scope
+   --> src/lexer.rs:161:14
+    |
+161 |         self.consume().unwrap();
+    |              ^^^^^^^ method not found in `&mut View<'a>`
+    |
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `consume`, perhaps you need to implement it:
+            candidate #1: `BufRead`
+
+error[E0599]: no method named `consume_if` found for mutable reference `&mut View<'a>` in the current scope
+   --> src/lexer.rs:166:20
+    |
+166 |         while self.consume_if(predicate).is_some() {}
+    |                    ^^^^^^^^^^ method not found in `&mut View<'a>`
+
+error[E0599]: no function or associated item named `new` found for struct `View` in the current scope
+   --> src/lexer.rs:171:25
+    |
+139 | struct View<'a> {
+    | --------------- function or associated item `new` not found for this struct
+...
+171 |     let mut src = View::new(src_bytes);
+    |                         ^^^ function or associated item not found in `View<'_>`
+
+error[E0599]: no function or associated item named `new` found for struct `Tokens` in the current scope
+   --> src/lexer.rs:176:30
+    |
+100 | pub struct Tokens {
+    | ----------------- function or associated item `new` not found for this struct
+...
+176 |     let mut tokens = Tokens::new(eoi_span);
+    |                              ^^^ function or associated item not found in `Tokens`
+
+error[E0599]: no method named `last` found for struct `Vec<usize>` in the current scope
+   --> src/lexer.rs:196:47
+    |
+196 |                     let last_indent = indents.last().copied().unwrap_or(0);
+    |                                               ^^^^ `Vec<usize>` is not an iterator
+    |
+help: call `.into_iter()` first
+    |
+196 |                     let last_indent = indents.into_iter().last().copied().unwrap_or(0);
+    |                                               ++++++++++++
+
+error[E0599]: no method named `is_ascii_alphabetic` found for type `char` in the current scope
+   --> src/lexer.rs:237:20
+    |
+237 |             c if c.is_ascii_alphabetic() => {
+    |                    ^^^^^^^^^^^^^^^^^^^ method not found in `char`
+
+error[E0599]: no method named `is_ascii_digit` found for type `char` in the current scope
+   --> src/lexer.rs:249:20
+    |
+249 |             c if c.is_ascii_digit() => {
+    |                    ^^^^^^^^^^^^^^
+    |
+help: there is a method `is_ascii` with a similar name
+    |
+249 |             c if c.is_ascii() => {
+    |                    ~~~~~~~~
+
+error[E0599]: no method named `len` found for reference `&str` in the current scope
+   --> src/lexer.rs:260:45
+    |
+260 |                         src.index += string.len() - 1;
+    |                                             ^^^
+    |
+help: there is a method `le` with a similar name, but with different arguments
+   --> /build/rustc-1.78.0-src/library/core/src/cmp.rs:1188:5
+
+error[E0599]: no method named `get` found for reference `&'src [ast::Spanned<TokenTree>]` in the current scope
+  --> src/parser.rs:53:14
+   |
+52 | /         self.tokens
+53 | |             .get(self.i)
+   | |             -^^^ method not found in `&[Spanned<TokenTree>]`
+   | |_____________|
+   | 
+
+error[E0599]: no method named `peek` found for mutable reference `&mut Parser<'src>` in the current scope
+  --> src/parser.rs:60:23
+   |
+60 |         let tt = self.peek()?;
+   |                       ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `peek` found for mutable reference `&mut Parser<'src>` in the current scope
+  --> src/parser.rs:65:43
+   |
+65 |         let Spanned { kind, span } = self.peek()?;
+   |                                           ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: the method `next` exists for mutable reference `&mut Parser<'src>`, but its trait bounds were not satisfied
+  --> src/parser.rs:67:18
+   |
+42 | struct Parser<'src> {
+   | ------------------- doesn't satisfy `Parser<'src>: Iterator`
+...
+67 |             self.next().unwrap();
+   |                  ^^^^ method cannot be called on `&mut Parser<'src>` due to unsatisfied trait bounds
+   |
+   = note: the following trait bounds were not satisfied:
+           `Parser<'src>: Iterator`
+           which is required by `&mut Parser<'src>: Iterator`
+note: the trait `Iterator` must be implemented
+  --> /build/rustc-1.78.0-src/library/core/src/iter/traits/iterator.rs:44:1
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following trait defines an item `next`, perhaps you need to implement it:
+           candidate #1: `Iterator`
+
+error[E0599]: no method named `peek` found for reference `&Parser<'src>` in the current scope
+  --> src/parser.rs:81:14
+   |
+81 |         self.peek().map(|t| t.span)
+   |              ^^^^ method not found in `&Parser<'src>`
+
+error[E0599]: no method named `get_span_checked` found for reference `&Parser<'src>` in the current scope
+  --> src/parser.rs:84:14
+   |
+84 |         self.get_span_checked()
+   |              ^^^^^^^^^^^^^^^^ method not found in `&Parser<'src>`
+
+error[E0599]: no method named `get_span` found for reference `&Parser<'src>` in the current scope
+  --> src/parser.rs:88:32
+   |
+88 |         err_span(message, self.get_span())
+   |                                ^^^^^^^^ method not found in `&Parser<'src>`
+
+error[E0599]: no method named `get_previous_span` found for reference `&Parser<'src>` in the current scope
+  --> src/parser.rs:91:32
+   |
+91 |         err_span(message, self.get_previous_span())
+   |                                ^^^^^^^^^^^^^^^^^ method not found in `&Parser<'src>`
+
+error[E0599]: no method named `just` found for mutable reference `&mut Parser<'src>` in the current scope
+  --> src/parser.rs:94:14
+   |
+94 |         self.just(P::Name).map(|span| Name {
+   |              ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `just` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:100:31
+    |
+100 |         let Some(span) = self.just(P::Int) else {
+    |                               ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `err_previous` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:107:31
+    |
+107 |             .map_err(|_| self.err_previous("int too big"))
+    |                               ^^^^^^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `get_span` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:110:31
+    |
+110 |         let span_start = self.get_span().start;
+    |                               ^^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `get_previous_span` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:112:33
+    |
+112 |             let span_end = self.get_previous_span().end;
+    |                                 ^^^^^^^^^^^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `spanned` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:118:14
+    |
+118 |         self.spanned(f)
+    |              ^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `get_span_checked` found for struct `Parser` in the current scope
+   --> src/parser.rs:136:20
+    |
+42  | struct Parser<'src> {
+    | ------------------- method `get_span_checked` not found for this struct
+...
+136 |         match this.get_span_checked() {
+    |                    ^^^^^^^^^^^^^^^^ method not found in `Parser<'_>`
+
+error[E0599]: no function or associated item named `parse_item` found for struct `Parser` in the current scope
+   --> src/parser.rs:151:15
+    |
+42  | struct Parser<'src> {
+    | ------------------- function or associated item `parse_item` not found for this struct
+...
+151 |         Self::parse_item(item_parser, item, self.source, start_span, end_span)
+    |               ^^^^^^^^^^ function or associated item not found in `Parser<'src>`
+
+error[E0599]: no method named `iter` found for reference `&'src Vec<Vec<ast::Spanned<TokenTree>>>` in the current scope
+   --> src/parser.rs:161:14
+    |
+160 | /         block
+161 | |             .iter()
+    | |             -^^^^ method not found in `&Vec<Vec<Spanned<TokenTree>>>`
+    | |_____________|
+    | 
+
+error[E0599]: no method named `get_span_checked` found for struct `Parser` in the current scope
+   --> src/parser.rs:171:28
+    |
+42  | struct Parser<'src> {
+    | ------------------- method `get_span_checked` not found for this struct
+...
+171 |                 match this.get_span_checked() {
+    |                            ^^^^^^^^^^^^^^^^ method not found in `Parser<'_>`
+
+error[E0599]: no function or associated item named `parse_block` found for struct `Parser` in the current scope
+   --> src/parser.rs:189:15
+    |
+42  | struct Parser<'src> {
+    | ------------------- function or associated item `parse_block` not found for this struct
+...
+189 |         Self::parse_block(item_parser, block, self.source, start_span, end_span)
+    |               ^^^^^^^^^^^ function or associated item not found in `Parser<'src>`
+
+error[E0599]: no method named `name` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:193:31
+    |
+193 |         let Some(name) = self.name() else {
+    |                               ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `just` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:205:43
+    |
+205 |         while let Some(deref_span) = self.just(P::Hat) {
+    |                                           ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `name` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:215:31
+    |
+215 |         let Some(name) = self.name() else {
+    |                               ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `err` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:216:29
+    |
+216 |             return Err(self.err("expected function parameter"));
+    |                             ^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `ty` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:219:14
+    |
+218 |           let ty = self
+    |  __________________-
+219 | |             .ty()
+    | |             -^^ method not found in `&mut Parser<'src>`
+    | |_____________|
+    | 
+
+error[E0599]: no method named `err` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:221:41
+    |
+221 |             .unwrap_or_else(|| Err(self.err("expected function parameter type")))?;
+    |                                         ^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `expr_at` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:225:14
+    |
+225 |         self.expr_at(Level::Min)
+    |              ^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `get_span` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:234:31
+    |
+234 |         let span_start = self.get_span().start;
+    |                               ^^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `peek` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:238:19
+    |
+238 |         }) = self.peek()
+    |                   ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0614]: type `bool` cannot be dereferenced
+   --> src/parser.rs:240:16
+    |
+240 |             if *multi {
+    |                ^^^^^^
+
+error[E0599]: no method named `err` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:241:33
+    |
+241 |                 return Err(self.err("tuples are not yet implemented"));
+    |                                 ^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: the method `next` exists for mutable reference `&mut Parser<'src>`, but its trait bounds were not satisfied
+   --> src/parser.rs:244:18
+    |
+42  | struct Parser<'src> {
+    | ------------------- doesn't satisfy `Parser<'src>: Iterator`
+...
+244 |             self.next().unwrap();
+    |                  ^^^^ method cannot be called on `&mut Parser<'src>` due to unsatisfied trait bounds
+    |
+    = note: the following trait bounds were not satisfied:
+            `Parser<'src>: Iterator`
+            which is required by `&mut Parser<'src>: Iterator`
+note: the trait `Iterator` must be implemented
+   --> /build/rustc-1.78.0-src/library/core/src/iter/traits/iterator.rs:44:1
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `next`, perhaps you need to implement it:
+            candidate #1: `Iterator`
+
+error[E0599]: no method named `item` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:247:29
+    |
+247 |             let expr = self.item(Self::expr, &block[0], start_span, end_span)?;
+    |                             ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no function or associated item named `expr` found for struct `Parser` in the current scope
+   --> src/parser.rs:247:40
+    |
+42  | struct Parser<'src> {
+    | ------------------- function or associated item `expr` not found for this struct
+...
+247 |             let expr = self.item(Self::expr, &block[0], start_span, end_span)?;
+    |                                        ^^^^ function or associated item not found in `Parser<'src>`
+
+error[E0599]: no method named `peek` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:252:19
+    |
+252 |         }) = self.peek()
+    |                   ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `colon_block` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:254:30
+    |
+254 |             let block = self.colon_block()?;
+    |                              ^^^^^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `name` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:256:41
+    |
+256 |         } else if let Some(name) = self.name() {
+    |                                         ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `int` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:258:40
+    |
+258 |         } else if let Some(int) = self.int()? {
+    |                                        ^^^
+    |
+help: there is a method `into` with a similar name
+    |
+258 |         } else if let Some(int) = self.into()? {
+    |                                        ~~~~
+
+error[E0599]: no method named `just` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:260:24
+    |
+260 |         } else if self.just(P::If).is_some() {
+    |                        ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `expr` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:261:34
+    |
+261 |             let condition = self.expr()?;
+    |                                  ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `colon_block` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:262:35
+    |
+262 |             let then_block = self.colon_block()?;
+    |                                   ^^^^^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `else_block` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:263:35
+    |
+263 |             let else_block = self.else_block()?;
+    |                                   ^^^^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `just` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:265:24
+    |
+265 |         } else if self.just(P::While).is_some() {
+    |                        ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `expr` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:266:34
+    |
+266 |             let condition = self.expr()?;
+    |                                  ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `colon_block` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:267:29
+    |
+267 |             let body = self.colon_block()?;
+    |                             ^^^^^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `peek` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:269:22
+    |
+269 |                 self.peek(),
+    |                      ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `err` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:275:33
+    |
+275 |                 return Err(self.err("else blocks for while loops not yet implemented"));
+    |                                 ^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: the method `next` exists for mutable reference `&mut Parser<'src>`, but its trait bounds were not satisfied
+   --> src/parser.rs:283:27
+    |
+42  | struct Parser<'src> {
+    | ------------------- doesn't satisfy `Parser<'src>: Iterator`
+...
+283 |                 }) = self.next()
+    |                           ^^^^ method cannot be called on `&mut Parser<'src>` due to unsatisfied trait bounds
+    |
+    = note: the following trait bounds were not satisfied:
+            `Parser<'src>: Iterator`
+            which is required by `&mut Parser<'src>: Iterator`
+note: the trait `Iterator` must be implemented
+   --> /build/rustc-1.78.0-src/library/core/src/iter/traits/iterator.rs:44:1
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `next`, perhaps you need to implement it:
+            candidate #1: `Iterator`
+
+error[E0599]: no method named `iter` found for reference `&'static [(PlainToken, ast::UnaryOpKind)]` in the current scope
+   --> src/parser.rs:288:22
+    |
+287 |                   let Some(kind) = UNARY_OPS
+    |  __________________________________-
+288 | |                     .iter()
+    | |                     -^^^^ method not found in `&[(PlainToken, UnaryOpKind)]`
+    | |_____________________|
+    | 
+
+error[E0599]: no method named `then_some` found for type `bool` in the current scope
+   --> src/parser.rs:289:54
+    |
+289 |                     .find_map(|&(t, k)| (t == token).then_some(k))
+    |                                                      ^^^^^^^^^ method not found in `bool`
+
+error[E0599]: no method named `err` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:295:37
+    |
+295 |                     return Err(self.err("this prefix operator's precedence is too low"));
+    |                                     ^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `expr_at` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:297:32
+    |
+297 |                 let rhs = self.expr_at(Level::Prefix)?;
+    |                                ^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `err_previous` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:300:34
+    |
+300 |             b.ok_or_else(|| self.err_previous("unexpected token while parsing expression"))?
+    |                                  ^^^^^^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `get_previous_span` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:304:36
+    |
+304 |             span: span_start..self.get_previous_span().end,
+    |                                    ^^^^^^^^^^^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `just` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:308:44
+    |
+308 |             if let Some(deref_span) = self.just(P::Hat) {
+    |                                            ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `peek` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:315:23
+    |
+315 |             }) = self.peek()
+    |                       ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: the method `next` exists for mutable reference `&mut Parser<'src>`, but its trait bounds were not satisfied
+   --> src/parser.rs:317:22
+    |
+42  | struct Parser<'src> {
+    | ------------------- doesn't satisfy `Parser<'src>: Iterator`
+...
+317 |                 self.next().unwrap();
+    |                      ^^^^ method cannot be called on `&mut Parser<'src>` due to unsatisfied trait bounds
+    |
+    = note: the following trait bounds were not satisfied:
+            `Parser<'src>: Iterator`
+            which is required by `&mut Parser<'src>: Iterator`
+note: the trait `Iterator` must be implemented
+   --> /build/rustc-1.78.0-src/library/core/src/iter/traits/iterator.rs:44:1
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `next`, perhaps you need to implement it:
+            candidate #1: `Iterator`
+
+error[E0599]: no method named `block` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:318:33
+    |
+318 |                 let args = self.block(
+    |                            -----^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no function or associated item named `expr` found for struct `Parser` in the current scope
+   --> src/parser.rs:319:27
+    |
+42  | struct Parser<'src> {
+    | ------------------- function or associated item `expr` not found for this struct
+...
+319 |                     Self::expr,
+    |                           ^^^^ function or associated item not found in `Parser<'src>`
+
+error[E0599]: no method named `just` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:335:45
+    |
+335 |                 while let Some(span) = self.just(P::Pipe) {
+    |                                             ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `peek` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:345:23
+    |
+345 |             }) = self.peek()
+    |                       ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `iter` found for reference `&'static [(PlainToken, parser::Level, ast::BinOpKind)]` in the current scope
+   --> src/parser.rs:349:57
+    |
+349 |             let Some(&(_, op_level, op_kind)) = BIN_OPS.iter().find(|(op, _, _)| kind == op) else {
+    |                                                         ^^^^ method not found in `&[(PlainToken, Level, BinOpKind)]`
+
+error[E0599]: the method `next` exists for mutable reference `&mut Parser<'src>`, but its trait bounds were not satisfied
+   --> src/parser.rs:355:18
+    |
+42  | struct Parser<'src> {
+    | ------------------- doesn't satisfy `Parser<'src>: Iterator`
+...
+355 |             self.next().unwrap();
+    |                  ^^^^ method cannot be called on `&mut Parser<'src>` due to unsatisfied trait bounds
+    |
+    = note: the following trait bounds were not satisfied:
+            `Parser<'src>: Iterator`
+            which is required by `&mut Parser<'src>: Iterator`
+note: the trait `Iterator` must be implemented
+   --> /build/rustc-1.78.0-src/library/core/src/iter/traits/iterator.rs:44:1
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `next`, perhaps you need to implement it:
+            candidate #1: `Iterator`
+
+error[E0599]: no method named `expr_at` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:356:28
+    |
+356 |             let rhs = self.expr_at(op_level.higher())?;
+    |                            ^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `just` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:368:40
+    |
+368 |         if level <= Level::Min && self.just(P::Equals).is_some() {
+    |                                        ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `expr` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:369:28
+    |
+369 |             let rhs = self.expr()?;
+    |                            ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `spanned` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:388:14
+    |
+388 |         self.spanned(Self::stmt_kind)
+    |              ^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no function or associated item named `stmt_kind` found for struct `Parser` in the current scope
+   --> src/parser.rs:388:28
+    |
+42  | struct Parser<'src> {
+    | ------------------- function or associated item `stmt_kind` not found for this struct
+...
+388 |         self.spanned(Self::stmt_kind)
+    |                            ^^^^^^^^^ function or associated item not found in `Parser<'src>`
+
+error[E0599]: no method named `just` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:391:17
+    |
+391 |         if self.just(P::Let).is_some() {
+    |                 ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `name` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:393:18
+    |
+392 |               let name = self
+    |  ________________________-
+393 | |                 .name()
+    | |                 -^^^^ method not found in `&mut Parser<'src>`
+    | |_________________|
+    | 
+
+error[E0599]: no method named `err` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:394:37
+    |
+394 |                 .ok_or_else(|| self.err("expected name for let statement"))?;
+    |                                     ^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `ty` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:396:18
+    |
+395 |               let ty = self
+    |  ______________________-
+396 | |                 .ty()
+    | |                 -^^ method not found in `&mut Parser<'src>`
+    | |_________________|
+    | 
+
+error[E0599]: no method named `err` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:397:52
+    |
+397 |                 .and_then(|o| o.ok_or_else(|| self.err("let binding needs a type annotation")))?;
+    |                                                    ^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `just` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:398:21
+    |
+398 |             if self.just(P::Equals).is_none() {
+    |                     ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `err` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:399:33
+    |
+399 |                 return Err(self.err("expected `=` for let statement"));
+    |                                 ^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `expr` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:401:29
+    |
+401 |             let body = self.expr()?;
+    |                             ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `expr` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:404:18
+    |
+404 |             self.expr().map(StmtKind::Expr)
+    |                  ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `peek` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:411:19
+    |
+411 |         }) = self.peek()
+    |                   ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `err` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:413:29
+    |
+413 |             return Err(self.err("expected beginning of block"));
+    |                             ^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: the method `next` exists for mutable reference `&mut Parser<'src>`, but its trait bounds were not satisfied
+   --> src/parser.rs:415:14
+    |
+42  | struct Parser<'src> {
+    | ------------------- doesn't satisfy `Parser<'src>: Iterator`
+...
+415 |         self.next().unwrap();
+    |              ^^^^ method cannot be called on `&mut Parser<'src>` due to unsatisfied trait bounds
+    |
+    = note: the following trait bounds were not satisfied:
+            `Parser<'src>: Iterator`
+            which is required by `&mut Parser<'src>: Iterator`
+note: the trait `Iterator` must be implemented
+   --> /build/rustc-1.78.0-src/library/core/src/iter/traits/iterator.rs:44:1
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `next`, perhaps you need to implement it:
+            candidate #1: `Iterator`
+
+error[E0599]: no method named `block` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:418:14
+    |
+418 |         self.block(Self::stmt, stmts, start_span, end_span)
+    |              ^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no function or associated item named `stmt` found for struct `Parser` in the current scope
+   --> src/parser.rs:418:26
+    |
+42  | struct Parser<'src> {
+    | ------------------- function or associated item `stmt` not found for this struct
+...
+418 |         self.block(Self::stmt, stmts, start_span, end_span)
+    |                          ^^^^ function or associated item not found in `Parser<'src>`
+
+error[E0599]: no method named `peek` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:425:19
+    |
+425 |         }) = self.peek()
+    |                   ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: the method `next` exists for mutable reference `&mut Parser<'src>`, but its trait bounds were not satisfied
+   --> src/parser.rs:429:14
+    |
+42  | struct Parser<'src> {
+    | ------------------- doesn't satisfy `Parser<'src>: Iterator`
+...
+429 |         self.next().unwrap();
+    |              ^^^^ method cannot be called on `&mut Parser<'src>` due to unsatisfied trait bounds
+    |
+    = note: the following trait bounds were not satisfied:
+            `Parser<'src>: Iterator`
+            which is required by `&mut Parser<'src>: Iterator`
+note: the trait `Iterator` must be implemented
+   --> /build/rustc-1.78.0-src/library/core/src/iter/traits/iterator.rs:44:1
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `next`, perhaps you need to implement it:
+            candidate #1: `Iterator`
+
+error[E0599]: no method named `block` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:432:14
+    |
+432 |         self.block(Self::stmt, stmts, start_span, end_span)
+    |              ^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no function or associated item named `stmt` found for struct `Parser` in the current scope
+   --> src/parser.rs:432:26
+    |
+42  | struct Parser<'src> {
+    | ------------------- function or associated item `stmt` not found for this struct
+...
+432 |         self.block(Self::stmt, stmts, start_span, end_span)
+    |                          ^^^^ function or associated item not found in `Parser<'src>`
+
+error[E0599]: no method named `spanned2` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:436:14
+    |
+436 |         self.spanned2(Self::decl_kind)
+    |              ^^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no function or associated item named `decl_kind` found for struct `Parser` in the current scope
+   --> src/parser.rs:436:29
+    |
+42  | struct Parser<'src> {
+    | ------------------- function or associated item `decl_kind` not found for this struct
+...
+436 |         self.spanned2(Self::decl_kind)
+    |                             ^^^^^^^^^ function or associated item not found in `Parser<'src>`
+
+error[E0599]: the method `next` exists for mutable reference `&mut Parser<'src>`, but its trait bounds were not satisfied
+   --> src/parser.rs:439:47
+    |
+42  | struct Parser<'src> {
+    | ------------------- doesn't satisfy `Parser<'src>: Iterator`
+...
+439 |         let Some(Spanned { kind, .. }) = self.next() else {
+    |                                               ^^^^ method cannot be called on `&mut Parser<'src>` due to unsatisfied trait bounds
+    |
+    = note: the following trait bounds were not satisfied:
+            `Parser<'src>: Iterator`
+            which is required by `&mut Parser<'src>: Iterator`
+note: the trait `Iterator` must be implemented
+   --> /build/rustc-1.78.0-src/library/core/src/iter/traits/iterator.rs:44:1
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `next`, perhaps you need to implement it:
+            candidate #1: `Iterator`
+
+error[E0599]: no method named `name` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:445:22
+    |
+444 |                   let name = self
+    |  ____________________________-
+445 | |                     .name()
+    | |                     -^^^^ method not found in `&mut Parser<'src>`
+    | |_____________________|
+    | 
+
+error[E0599]: no method named `err` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:446:41
+    |
+446 |                     .ok_or_else(|| self.err("expected function name"))?;
+    |                                         ^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `peek` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:451:27
+    |
+451 |                 }) = self.peek()
+    |                           ^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `err` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:453:37
+    |
+453 |                     return Err(self.err("expected paren list of function parameters"));
+    |                                     ^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: the method `next` exists for mutable reference `&mut Parser<'src>`, but its trait bounds were not satisfied
+   --> src/parser.rs:455:22
+    |
+42  | struct Parser<'src> {
+    | ------------------- doesn't satisfy `Parser<'src>: Iterator`
+...
+455 |                 self.next().unwrap();
+    |                      ^^^^ method cannot be called on `&mut Parser<'src>` due to unsatisfied trait bounds
+    |
+    = note: the following trait bounds were not satisfied:
+            `Parser<'src>: Iterator`
+            which is required by `&mut Parser<'src>: Iterator`
+note: the trait `Iterator` must be implemented
+   --> /build/rustc-1.78.0-src/library/core/src/iter/traits/iterator.rs:44:1
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `next`, perhaps you need to implement it:
+            candidate #1: `Iterator`
+
+error[E0599]: no method named `block` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:458:39
+    |
+458 |                 let parameters = self.block(Self::param, params, start_span, end_span)?;
+    |                                       ^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no function or associated item named `param` found for struct `Parser` in the current scope
+   --> src/parser.rs:458:51
+    |
+42  | struct Parser<'src> {
+    | ------------------- function or associated item `param` not found for this struct
+...
+458 |                 let parameters = self.block(Self::param, params, start_span, end_span)?;
+    |                                                   ^^^^^ function or associated item not found in `Parser<'src>`
+
+error[E0599]: no method named `ty` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:459:36
+    |
+459 |                 let returns = self.ty()?;
+    |                                    ^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `colon_block` found for mutable reference `&mut Parser<'src>` in the current scope
+   --> src/parser.rs:460:33
+    |
+460 |                 let body = self.colon_block()?;
+    |                                 ^^^^^^^^^^^ method not found in `&mut Parser<'src>`
+
+error[E0599]: no method named `len` found for reference `&'src str` in the current scope
+   --> src/parser.rs:477:31
+    |
+477 |         let end_span = source.len()..source.len();
+    |                               ^^^
+    |
+help: there is a method `le` with a similar name, but with different arguments
+   --> /build/rustc-1.78.0-src/library/core/src/cmp.rs:1188:5
+
+error[E0599]: no method named `len` found for reference `&'src str` in the current scope
+   --> src/parser.rs:477:45
+    |
+477 |         let end_span = source.len()..source.len();
+    |                                             ^^^
+    |
+help: there is a method `le` with a similar name, but with different arguments
+   --> /build/rustc-1.78.0-src/library/core/src/cmp.rs:1188:5
+
+error[E0599]: no function or associated item named `parse_block` found for struct `Parser` in the current scope
+   --> src/parser.rs:478:15
+    |
+42  | struct Parser<'src> {
+    | ------------------- function or associated item `parse_block` not found for this struct
+...
+478 |         Self::parse_block(
+    |               ^^^^^^^^^^^ function or associated item not found in `Parser<'src>`
+
+error[E0599]: no function or associated item named `parse_program` found for struct `Parser` in the current scope
+   --> src/parser.rs:494:13
+    |
+42  | struct Parser<'src> {
+    | ------------------- function or associated item `parse_program` not found for this struct
+...
+494 |     Parser::parse_program(block, source)
+    |             ^^^^^^^^^^^^^ function or associated item not found in `Parser<'_>`
+
+error[E0599]: no method named `iter` found for reference `&Vec<Vec<ast::Spanned<TokenTree>>>` in the current scope
+  --> src/ttree_visualize.rs:15:28
+   |
+15 |     for (i, item) in block.iter().enumerate() {
+   |                            ^^^^ method not found in `&Vec<Vec<Spanned<TokenTree>>>`
+
+error[E0308]: mismatched types
+  --> src/ttree_visualize.rs:25:32
+   |
+25 |                     visualize0(b, src, level + 1);
+   |                     ---------- ^ expected `&Vec<Vec<Spanned<TokenTree>>>`, found `Vec<Vec<Spanned<TokenTree>>>`
+   |                     |
+   |                     arguments to this function are incorrect
+   |
+   = note: expected reference `&Vec<_>`
+                 found struct `Vec<_>`
+note: function defined here
+  --> src/ttree_visualize.rs:9:4
+   |
+9  | fn visualize0(block: &Block, src: &str, level: usize) {
+   |    ^^^^^^^^^^ -------------
+help: consider borrowing here
+   |
+25 |                     visualize0(&b, src, level + 1);
+   |                                +
+
+error[E0308]: mismatched types
+  --> src/ttree_visualize.rs:33:32
+   |
+33 |                     visualize0(b, src, level + 1);
+   |                     ---------- ^ expected `&Vec<Vec<Spanned<TokenTree>>>`, found `Vec<Vec<Spanned<TokenTree>>>`
+   |                     |
+   |                     arguments to this function are incorrect
+   |
+   = note: expected reference `&Vec<_>`
+                 found struct `Vec<_>`
+note: function defined here
+  --> src/ttree_visualize.rs:9:4
+   |
+9  | fn visualize0(block: &Block, src: &str, level: usize) {
+   |    ^^^^^^^^^^ -------------
+help: consider borrowing here
+   |
+33 |                     visualize0(&b, src, level + 1);
+   |                                +
+
+error[E0308]: mismatched types
+  --> src/ttree_visualize.rs:38:32
+   |
+38 |                     visualize0(b, src, level + 1);
+   |                     ---------- ^ expected `&Vec<Vec<Spanned<TokenTree>>>`, found `Vec<Vec<Spanned<TokenTree>>>`
+   |                     |
+   |                     arguments to this function are incorrect
+   |
+   = note: expected reference `&Vec<_>`
+                 found struct `Vec<_>`
+note: function defined here
+  --> src/ttree_visualize.rs:9:4
+   |
+9  | fn visualize0(block: &Block, src: &str, level: usize) {
+   |    ^^^^^^^^^^ -------------
+help: consider borrowing here
+   |
+38 |                     visualize0(&b, src, level + 1);
+   |                                +
+
+error[E0599]: no method named `type_check` found for reference `&ir::Function` in the current scope
+  --> src/ir.rs:14:15
+   |
+14 |             f.type_check();
+   |               ^^^^^^^^^^ method not found in `&Function`
+
+error[E0599]: no method named `gen_predecessors` found for struct `ir::Function` in the current scope
+  --> src/ir.rs:48:14
+   |
+21 | pub struct Function {
+   | ------------------- method `gen_predecessors` not found for this struct
+...
+48 |         this.gen_predecessors();
+   |              ^^^^^^^^^^^^^^^^ method not found in `Function`
+
+error[E0599]: no method named `type_check` found for reference `&ir::Inst` in the current scope
+  --> src/ir.rs:56:29
+   |
+56 |             .for_each(|i| i.type_check(tys));
+   |                             ^^^^^^^^^^ method not found in `&ir::Inst`
+
+error[E0599]: no method named `type_check` found for reference `&ir::Exit` in the current scope
+  --> src/ir.rs:58:18
+   |
+58 |             exit.type_check(tys);
+   |                  ^^^^^^^^^^ method not found in `&ir::Exit`
+
+error[E0599]: no method named `successors` found for reference `&ir::Block` in the current scope
+  --> src/ir.rs:69:34
+   |
+69 |             for succ_id in block.successors() {
+   |                                  ^^^^^^^^^^ method not found in `&ir::Block`
+
+error[E0599]: no method named `iter` found for reference `&ir::Function` in the current scope
+  --> src/ir.rs:80:33
+   |
+80 |         for (id, block) in self.iter() {
+   |                                 ^^^^ method not found in `&Function`
+   |
+help: some of the expressions' fields have a method of the same name
+   |
+80 |         for (id, block) in self.blocks.iter() {
+   |                                 +++++++
+80 |         for (id, block) in self.predecessors.iter() {
+   |                                 +++++++++++++
+80 |         for (id, block) in self.spans.iter() {
+   |                                 ++++++
+80 |         for (id, block) in self.tys.iter() {
+   |                                 ++++
+
+error[E0599]: no method named `iter` found for struct `Vec<ir::Register>` in the current scope
+   --> src/ir.rs:131:47
+    |
+131 |                         for (i, r) in returns.iter().enumerate() {
+    |                                               ^^^^ method not found in `Vec<Register>`
+
+error[E0599]: no method named `iter` found for struct `Vec<ir::Register>` in the current scope
+   --> src/ir.rs:138:44
+    |
+138 |                         for (i, r) in args.iter().enumerate() {
+    |                                            ^^^^ method not found in `Vec<Register>`
+
+error[E0599]: no method named `gen_def_use` found for struct `ir::Block` in the current scope
+   --> src/ir.rs:185:14
+    |
+166 | pub struct Block {
+    | ---------------- method `gen_def_use` not found for this struct
+...
+185 |         this.gen_def_use();
+    |              ^^^^^^^^^^^ method not found in `ir::Block`
+
+error[E0599]: no method named `visit_regs` found for mutable reference `&mut ir::Block` in the current scope
+   --> src/ir.rs:194:14
+    |
+194 |         self.visit_regs(|&mut r, is_def| {
+    |         -----^^^^^^^^^^ method not found in `&mut Block`
+
+error[E0599]: no method named `visit_regs` found for mutable reference `&mut ir::JumpLocation` in the current scope
+   --> src/ir.rs:247:42
+    |
+247 |             Exit::Jump(branch) => branch.visit_regs(|r| f(r, false)),
+    |                                          ^^^^^^^^^^ method not found in `&mut JumpLocation`
+
+error[E0599]: no method named `visit_regs` found for mutable reference `&mut ir::JumpLocation` in the current scope
+   --> src/ir.rs:252:25
+    |
+252 |                 branch1.visit_regs(|r| f(r, false));
+    |                         ^^^^^^^^^^ method not found in `&mut JumpLocation`
+
+error[E0599]: no method named `visit_regs` found for mutable reference `&mut ir::JumpLocation` in the current scope
+   --> src/ir.rs:253:25
+    |
+253 |                 branch2.visit_regs(|r| f(r, false));
+    |                         ^^^^^^^^^^ method not found in `&mut JumpLocation`
+
+error[E0599]: no method named `ty` found for reference `&ir::StoreKind` in the current scope
+   --> src/ir.rs:280:60
+    |
+280 |             Self::Store(r, sk) => assert_eq!(ty_of(r), &sk.ty(tys)),
+    |                                                            ^^ method not found in `&StoreKind`
+
+error[E0599]: no associated item named `MAX` found for type `usize` in the current scope
+   --> src/ir.rs:440:41
+    |
+440 |     pub const DUMMY: Self = Self(usize::MAX);
+    |                                         ^^^ associated item not found in `usize`
+    |
+help: you are looking for the module in `std`, not the primitive type
+    |
+440 |     pub const DUMMY: Self = Self(std::usize::MAX);
+    |                                  +++++
+
+error[E0599]: no method named `display_with_name` found for reference `&ir::Function` in the current scope
+   --> src/ir.rs:489:14
+    |
+489 |         self.display_with_name(f, "block")
+    |              ^^^^^^^^^^^^^^^^^ method not found in `&Function`
+
+error[E0599]: no method named `display_with_name` found for reference `&ir::Function` in the current scope
+   --> src/ir.rs:496:22
+    |
+496 |             function.display_with_name(f, name)?;
+    |                      ^^^^^^^^^^^^^^^^^ method not found in `&Function`
+
+error[E0599]: no method named `then_some` found for type `bool` in the current scope
+  --> src/ir_builder.rs:25:19
+   |
+25 |         condition.then_some(self)
+   |                   ^^^^^^^^^ method not found in `bool`
+
+error[E0599]: no associated item named `ENTRY` found for struct `ir::BlockId` in the current scope
+   --> src/ir_builder.rs:76:40
+    |
+76  |             current_block_id: BlockId::ENTRY,
+    |                                        ^^^^^ associated item not found in `BlockId`
+    |
+   ::: src/ir.rs:436:1
+    |
+436 | pub struct BlockId(pub usize);
+    | ------------------ associated item `ENTRY` not found for this struct
+
+error[E0599]: no associated item named `ENTRY` found for struct `ir::BlockId` in the current scope
+   --> src/ir_builder.rs:77:37
+    |
+77  |             next_block_id: BlockId::ENTRY.0 + 1,
+    |                                     ^^^^^ associated item not found in `BlockId`
+    |
+   ::: src/ir.rs:436:1
+    |
+436 | pub struct BlockId(pub usize);
+    | ------------------ associated item `ENTRY` not found for this struct
+
+error[E0599]: no function or associated item named `into_vec` found for slice `[_]` in the current scope
+  --> src/ir_builder.rs:81:21
+   |
+81 |             scopes: vec![Map::new()],
+   |                     ^^^^^^^^^^^^^^^^ function or associated item not found in `[_]`
+   |
+help: there is an associated function `to_vec` with a similar name
+  --> /build/rustc-1.78.0-src/library/alloc/src/slice.rs:116:9
+   = note: this error originates in the macro `vec` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: no method named `new_reg` found for struct `IrBuilder` in the current scope
+  --> src/ir_builder.rs:98:28
+   |
+58 | struct IrBuilder<'a> {
+   | -------------------- method `new_reg` not found for this struct
+...
+98 |             let reg = self.new_reg(ir_ty.clone(), p_name.span.clone());
+   |                            ^^^^^^^ method not found in `IrBuilder<'a>`
+
+error[E0599]: no method named `new_var` found for struct `IrBuilder` in the current scope
+   --> src/ir_builder.rs:101:32
+    |
+58  | struct IrBuilder<'a> {
+    | -------------------- method `new_var` not found for this struct
+...
+101 |             let var_reg = self.new_var(p_name.clone(), ir_ty);
+    |                                ^^^^^^^ method not found in `IrBuilder<'a>`
+
+error[E0599]: no method named `push_write` found for struct `IrBuilder` in the current scope
+   --> src/ir_builder.rs:102:18
+    |
+58  | struct IrBuilder<'a> {
+    | -------------------- method `push_write` not found for this struct
+...
+102 |             self.push_write(var_reg, reg);
+    |                  ^^^^^^^^^^ method not found in `IrBuilder<'a>`
+
+error[E0599]: no method named `build_block` found for struct `IrBuilder` in the current scope
+   --> src/ir_builder.rs:104:24
+    |
+58  | struct IrBuilder<'a> {
+    | -------------------- method `build_block` not found for this struct
+...
+104 |         let reg = self.build_block(body, returns.is_some())?;
+    |                        ^^^^^^^^^^^ method not found in `IrBuilder<'a>`
+
+error[E0599]: no function or associated item named `into_vec` found for slice `[_]` in the current scope
+   --> src/ir_builder.rs:106:13
+    |
+106 |             vec![reg.unwrap()]
+    |             ^^^^^^^^^^^^^^^^^^ function or associated item not found in `[_]`
+    |
+help: there is an associated function `to_vec` with a similar name
+   --> /build/rustc-1.78.0-src/library/alloc/src/slice.rs:116:9
+    = note: this error originates in the macro `vec` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: no method named `switch_to_new_block` found for struct `IrBuilder` in the current scope
+   --> src/ir_builder.rs:111:14
+    |
+58  | struct IrBuilder<'a> {
+    | -------------------- method `switch_to_new_block` not found for this struct
+...
+111 |         self.switch_to_new_block(
+    |         -----^^^^^^^^^^^^^^^^^^^ method not found in `IrBuilder<'a>`
+
+error[E0599]: no associated item named `DUMMY` found for struct `ir::BlockId` in the current scope
+   --> src/ir_builder.rs:113:22
+    |
+113 |             BlockId::DUMMY,
+    |                      ^^^^^ associated item not found in `BlockId`
+    |
+   ::: src/ir.rs:436:1
+    |
+436 | pub struct BlockId(pub usize);
+    | ------------------ associated item `DUMMY` not found for this struct
+
+error[E0599]: no function or associated item named `new` found for struct `ir::Function` in the current scope
+   --> src/ir_builder.rs:116:22
+    |
+116 |         Ok(Function::new(
+    |                      ^^^ function or associated item not found in `Function`
+    |
+   ::: src/ir.rs:21:1
+    |
+21  | pub struct Function {
+    | ------------------- function or associated item `new` not found for this struct
+
+error[E0599]: no method named `enter_scope` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:129:14
+    |
+129 |         self.enter_scope();
+    |              ^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `iter` found for reference `&Vec<ast::Spanned<ast::StmtKind>>` in the current scope
+   --> src/ir_builder.rs:131:32
+    |
+131 |         for (i, stmt) in stmts.iter().enumerate() {
+    |                                ^^^^ method not found in `&Vec<Spanned<StmtKind>>`
+
+error[E0599]: no method named `build_stmt` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:133:37
+    |
+133 |             last_stmt_return = self.build_stmt(&stmt.kind, unvoid && is_last)?;
+    |                                     ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `exit_scope` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:135:14
+    |
+135 |         self.exit_scope();
+    |              ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `new_var` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:143:38
+    |
+143 |                 let alloc_reg = self.new_var(name.clone(), to_ir_ty(&ty.kind));
+    |                                      ^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_expr_unvoid` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:144:38
+    |
+144 |                 let value_reg = self.build_expr_unvoid(body)?;
+    |                                      ^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `push_write` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:145:22
+    |
+145 |                 self.push_write(alloc_reg, value_reg);
+    |                      ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_expr` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:148:35
+    |
+148 |             S::Expr(expr) => self.build_expr(expr, unvoid)?,
+    |                                   ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_expr` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:154:25
+    |
+154 |         assert_eq!(self.build_expr(expr, false)?, None);
+    |                         ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_expr` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:159:17
+    |
+159 |         Ok(self.build_expr(expr, true)?.unwrap())
+    |                 ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_place` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:169:38
+    |
+169 |                 let place_reg = self.build_place(kind, span.clone())?;
+    |                                      ^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `then` found for type `bool` in the current scope
+   --> src/ir_builder.rs:170:24
+    |
+170 |                 unvoid.then(|| self.push_store(StoreKind::Read(place_reg), span))
+    |                        ^^^^ method not found in `bool`
+
+error[E0599]: no method named `push_store` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:170:37
+    |
+170 |                 unvoid.then(|| self.push_store(StoreKind::Read(place_reg), span))
+    |                                     ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_place` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:173:38
+    |
+173 |                 let place_reg = self.build_place(&place.kind, place.span.clone())?;
+    |                                      ^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_expr_unvoid` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:174:38
+    |
+174 |                 let value_reg = self.build_expr_unvoid(value)?;
+    |                                      ^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `push_write` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:175:22
+    |
+175 |                 self.push_write(place_reg, value_reg);
+    |                      ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `push_store` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:178:32
+    |
+178 |             &E::Int(i) => self.push_store(Sk::Int(i.into()), span).some_if(unvoid),
+    |                                ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_expr_unvoid` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:185:32
+    |
+185 |                 let reg = self.build_expr_unvoid(e)?;
+    |                                ^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `push_store` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:186:22
+    |
+186 |                 self.push_store(Sk::UnaryOp(op_kind, reg), span)
+    |                      ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_expr_unvoid` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:197:36
+    |
+197 |                 let lhs_reg = self.build_expr_unvoid(lhs)?;
+    |                                    ^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_expr_unvoid` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:198:36
+    |
+198 |                 let rhs_reg = self.build_expr_unvoid(rhs)?;
+    |                                    ^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `push_store` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:199:22
+    |
+199 |                 self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg), span)
+    |                      ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_expr` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:202:37
+    |
+202 |             E::Paren(inner) => self.build_expr(inner.as_ref(), unvoid)?,
+    |                                     ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_block` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:203:33
+    |
+203 |             E::Block(b) => self.build_block(b, unvoid)?,
+    |                                 ^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `reserve_block_id` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:205:36
+    |
+205 |                 let then_id = self.reserve_block_id();
+    |                                    ^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `reserve_block_id` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:206:35
+    |
+206 |                 let end_id = self.reserve_block_id();
+    |                                   ^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `reserve_block_id` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:208:26
+    |
+208 |                     self.reserve_block_id()
+    |                          ^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `enter_scope` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:214:22
+    |
+214 |                 self.enter_scope();
+    |                      ^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_expr_unvoid` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:215:37
+    |
+215 |                 let cond_reg = self.build_expr_unvoid(cond)?;
+    |                                     ^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `switch_to_new_block` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:216:22
+    |
+216 |                 self.switch_to_new_block(
+    |                 -----^^^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_block` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:226:39
+    |
+226 |                 let then_yield = self.build_block(then_body, unvoid)?;
+    |                                       ^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `exit_scope` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:227:22
+    |
+227 |                 self.exit_scope();
+    |                      ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `switch_to_new_block` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:229:22
+    |
+229 |                 self.switch_to_new_block(Exit::Jump(JumpLocation::Block(end_id)), else_id);
+    |                      ^^^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `enter_scope` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:235:30
+    |
+235 |                         self.enter_scope();
+    |                              ^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_block` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:236:47
+    |
+236 |                         let else_yield = self.build_block(e, unvoid)?;
+    |                                               ^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `exit_scope` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:237:30
+    |
+237 |                         self.exit_scope();
+    |                              ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `switch_to_new_block` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:239:30
+    |
+239 |                         self.switch_to_new_block(Exit::Jump(JumpLocation::Block(end_id)), end_id);
+    |                              ^^^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `push_store` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:248:30
+    |
+248 |                         self.push_store(StoreKind::Phi(choices), span).some()
+    |                              ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `reserve_block_id` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:255:36
+    |
+255 |                 let cond_id = self.reserve_block_id();
+    |                                    ^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `reserve_block_id` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:256:36
+    |
+256 |                 let body_id = self.reserve_block_id();
+    |                                    ^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `reserve_block_id` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:257:35
+    |
+257 |                 let end_id = self.reserve_block_id();
+    |                                   ^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `switch_to_new_block` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:258:22
+    |
+258 |                 self.switch_to_new_block(Exit::Jump(JumpLocation::Block(cond_id)), cond_id);
+    |                      ^^^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `enter_scope` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:261:22
+    |
+261 |                 self.enter_scope(); // with code like `while x is Some(y): ...`, `y` should be accessible from the body
+    |                      ^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_expr_unvoid` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:262:37
+    |
+262 |                 let cond_reg = self.build_expr_unvoid(cond)?;
+    |                                     ^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `switch_to_new_block` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:263:22
+    |
+263 |                 self.switch_to_new_block(
+    |                 -----^^^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_block` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:273:22
+    |
+273 |                 self.build_block(body, true)?;
+    |                      ^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `exit_scope` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:274:22
+    |
+274 |                 self.exit_scope();
+    |                      ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `switch_to_new_block` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:275:22
+    |
+275 |                 self.switch_to_new_block(Exit::Jump(JumpLocation::Block(cond_id)), end_id);
+    |                      ^^^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `get_var` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:306:35
+    |
+306 |             Pk::Var(name) => self.get_var(name),
+    |                                   ^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `build_expr_unvoid` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:307:37
+    |
+307 |             Pk::Deref(e, _) => self.build_expr_unvoid(e),
+    |                                     ^^^^^^^^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `push_store` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:320:24
+    |
+320 |         let reg = self.push_store(StoreKind::StackAlloc(ty), name.span);
+    |                        ^^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `last_mut` found for struct `Vec<BTreeMap<Rc<str>, ir::Register>>` in the current scope
+   --> src/ir_builder.rs:321:21
+    |
+321 |         self.scopes.last_mut().unwrap().insert(name.kind, reg);
+    |                     ^^^^^^^^
+    |
+help: there is a method `as_mut` with a similar name
+    |
+321 |         self.scopes.as_mut().unwrap().insert(name.kind, reg);
+    |                     ~~~~~~
+
+error[E0599]: no method named `iter` found for struct `Vec<BTreeMap<Rc<str>, ir::Register>>` in the current scope
+   --> src/ir_builder.rs:327:14
+    |
+326 | /         self.scopes
+327 | |             .iter()
+    | |             -^^^^ method not found in `Vec<BTreeMap<Rc<str>, Register>>`
+    | |_____________|
+    | 
+
+error[E0599]: no method named `push_inst` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:337:14
+    |
+337 |         self.push_inst(Inst::Write(dst, src));
+    |              ^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `new_reg` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:341:24
+    |
+341 |         let reg = self.new_reg(sk.ty(&self.tys), span);
+    |                        ^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `ty` found for enum `ir::StoreKind` in the current scope
+   --> src/ir_builder.rs:341:35
+    |
+341 |         let reg = self.new_reg(sk.ty(&self.tys), span);
+    |                                   ^^ method not found in `StoreKind`
+    |
+   ::: src/ir.rs:293:1
+    |
+293 | pub enum StoreKind {
+    | ------------------ method `ty` not found for this enum
+
+error[E0599]: no method named `push_inst` found for mutable reference `&mut IrBuilder<'a>` in the current scope
+   --> src/ir_builder.rs:342:14
+    |
+342 |         self.push_inst(Inst::Store(reg, sk));
+    |              ^^^^^^^^^ method not found in `&mut IrBuilder<'a>`
+
+error[E0599]: no method named `checked_add` found for type `u128` in the current scope
+   --> src/ir_builder.rs:354:14
+    |
+352 |           self.next_reg_id = self
+    |  ____________________________-
+353 | |             .next_reg_id
+354 | |             .checked_add(1)
+    | |_____________-^^^^^^^^^^^
+    |
+   ::: /home/olive/.cargo/registry/src/index.crates.io-6f17d22bba15001f/num-traits-0.2.19/src/ops/checked.rs:8:8
+    |
+8   |       fn checked_add(&self, v: &Self) -> Option<Self>;
+    |          ----------- the method is available for `u128` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `CheckedAdd` which provides `checked_add` is implemented but not in scope; perhaps you want to import it
+    |
+1   + use crate::parser::_::_num_traits::CheckedAdd;
+    |
+help: there is a method `checked_div` with a similar name
+    |
+354 |             .checked_div(1)
+    |              ~~~~~~~~~~~
+
+error[E0599]: no function or associated item named `new` found for struct `ir::Block` in the current scope
+   --> src/ir_builder.rs:363:28
+    |
+363 |         let block = Block::new(insts, exit);
+    |                            ^^^ function or associated item not found in `ir::Block`
+    |
+   ::: src/ir.rs:166:1
+    |
+166 | pub struct Block {
+    | ---------------- function or associated item `new` not found for this struct
+
+error[E0599]: no method named `checked_add` found for type `usize` in the current scope
+   --> src/ir_builder.rs:372:14
+    |
+370 |           self.next_block_id = self
+    |  ______________________________-
+371 | |             .next_block_id
+372 | |             .checked_add(1)
+    | |_____________-^^^^^^^^^^^
+    |
+   ::: /home/olive/.cargo/registry/src/index.crates.io-6f17d22bba15001f/num-traits-0.2.19/src/ops/checked.rs:8:8
+    |
+8   |       fn checked_add(&self, v: &Self) -> Option<Self>;
+    |          ----------- the method is available for `usize` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `CheckedAdd` which provides `checked_add` is implemented but not in scope; perhaps you want to import it
+    |
+1   + use crate::parser::_::_num_traits::CheckedAdd;
+    |
+help: there is a method `checked_div` with a similar name
+    |
+372 |             .checked_div(1)
+    |              ~~~~~~~~~~~
+
+error[E0599]: no method named `iter` found for struct `Vec<ast::Spanned<ast::DeclKind>>` in the current scope
+   --> src/ir_builder.rs:385:10
+    |
+383 |       let function_return_types = program
+    |  _________________________________-
+384 | |         .decls
+385 | |         .iter()
+    | |         -^^^^ method not found in `Vec<Spanned<DeclKind>>`
+    | |_________|
+    | 
+
+error[E0599]: no function or associated item named `new` found for struct `IrBuilder` in the current scope
+   --> src/ir_builder.rs:396:42
+    |
+58  | struct IrBuilder<'a> {
+    | -------------------- function or associated item `new` not found for this struct
+...
+396 |                 let builder = IrBuilder::new(&function_return_types);
+    |                                          ^^^ function or associated item not found in `IrBuilder<'_>`
+
+error[E0599]: no method named `first` found for struct `Vec<String>` in the current scope
+  --> src/main.rs:33:18
+   |
+33 |             args.first()
+   |                  ^^^^^ method not found in `Vec<String>`
+
+error[E0599]: no method named `type_check` found for struct `ir::Program` in the current scope
+   --> src/main.rs:115:8
+    |
+115 |     ir.type_check();
+    |        ^^^^^^^^^^ method not found in `Program`
+    |
+   ::: src/ir.rs:6:1
+    |
+6   | pub struct Program {
+    | ------------------ method `type_check` not found for this struct
+
+Some errors have detailed explanations: E0116, E0308, E0599, E0614.
+For more information about an error, try `rustc --explain E0116`.
+error: could not compile `olea` (bin "olea") due to 259 previous errors

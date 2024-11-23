@@ -1,6 +1,7 @@
-fn foo(x int, y int):
-    meow + (:
-        awa
-        ewe
-    ) + x
-    while true: foo
+fn foo() int:
+    let x int = 42
+    let y int = 69
+    x + (:
+     y = 2
+     y
+    )

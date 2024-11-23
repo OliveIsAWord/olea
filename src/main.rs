@@ -8,7 +8,7 @@ mod ttree_visualize;
 //mod codegen_fox32;
 mod compiler_types;
 mod ir;
-// mod ir_builder;
+mod ir_builder;
 // mod ir_optimizer;
 
 use annotate_snippets::{Level, Message, Renderer, Snippet};
@@ -78,6 +78,7 @@ fn main() -> ExitCode {
     };
     println!("# Token tree:");
     ttree_visualize::visualize(&ttree, &src);
+    println!();
     let ast = match parser::parse(&ttree, &src) {
         Ok(x) => x,
         Err(ast::Spanned { kind, span }) => {
@@ -93,6 +94,30 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    println!("#Syntax tree:\n{ast:?}");
+    println!("#Syntax tree:\n{ast:?}\n");
+    let ir = match ir_builder::build(&ast) {
+        Ok(x) => x,
+        Err(ast::Spanned { kind, span }) => {
+            use ir_builder::ErrorKind as E;
+            let (title, note) = match kind {
+                E::VariableNotFound(v) => (format!("could not find variable `{v}`"), None),
+                E::DoesNotYield(span) => (
+                    format!("this expression needs to yield a value but doesn't"),
+                    Some(("required by this outer context".to_owned(), span)),
+                ),
+            };
+            let mut e = Snippet::source(&src)
+                .origin(file_path)
+                .fold(true)
+                .annotation(Level::Error.span(span));
+            if let Some((message, span)) = &note {
+                e = e.annotation(Level::Info.span(span.clone()).label(message));
+            }
+            error_snippet(Level::Error.title(&title).snippet(e));
+            return ExitCode::FAILURE;
+        }
+    };
+    ir.type_check();
+    println!("#IR:\n{ir}");
     ExitCode::SUCCESS
 }

@@ -3,6 +3,7 @@ use crate::compiler_types::{Map, Str};
 #[allow(clippy::wildcard_imports)]
 // We can make these imports explicit when it's less likely to create churn.
 use crate::ir::*;
+use ast::{Name, Span, Spanned};
 
 /// This trait defines a helper method for transforming a `T` into an `Option<T>` with a postfix syntax.
 trait ToSome {
@@ -25,20 +26,19 @@ impl<T> ToSome for T {
     }
 }
 
-fn unvoid_assert<T: std::fmt::Debug>(unvoid: bool, item: Option<T>) -> Option<T> {
-    match (unvoid, &item) {
-        (true, Some(_)) | (false, None) => (),
-        (false, Some(_)) | (true, None) => {
-            panic!("unvoid assert\nunvoid: {unvoid}\nitem: {item:?}")
-        }
-    }
-    item
+pub enum ErrorKind {
+    VariableNotFound(Str),
+    DoesNotYield(Span),
 }
 
-const fn to_ir_ty(ty: &ast::Type) -> Ty {
-    use ast::Type as T;
+type Error = Spanned<ErrorKind>;
+type Result<T> = std::result::Result<T, Error>;
+
+fn to_ir_ty(ty: &ast::TyKind) -> Ty {
+    use ast::TyKind as T;
     match ty {
         &T::Int => Ty::Int,
+        T::Pointer(inner) => Ty::Pointer(Box::new(to_ir_ty(&inner.kind))),
     }
 }
 
@@ -50,6 +50,7 @@ struct IrBuilder<'a> {
     next_block_id: usize,
     blocks: Map<BlockId, Block>,
     tys: Map<Register, Ty>,
+    spans: Map<Register, Span>,
     scopes: Vec<Map<Str, Register>>,
     next_reg_id: u128,
     function_return_types: &'a Map<Str, Option<Ty>>,
@@ -64,6 +65,7 @@ impl<'a> IrBuilder<'a> {
             next_block_id: BlockId::ENTRY.0 + 1,
             blocks: Map::new(),
             tys: Map::new(),
+            spans: Map::new(),
             scopes: vec![Map::new()],
             next_reg_id: 0,
             function_return_types,
@@ -78,16 +80,16 @@ impl<'a> IrBuilder<'a> {
             returns,
             body,
         }: &ast::Function,
-    ) -> Function {
+    ) -> Result<Function> {
         for (p_name, p_ty) in parameters {
-            let ir_ty = to_ir_ty(p_ty);
-            let reg = self.new_reg(ir_ty.clone());
+            let ir_ty = to_ir_ty(&p_ty.kind);
+            let reg = self.new_reg(ir_ty.clone(), p_name.span.clone());
             self.parameters.push(reg);
             // Currently, we assume all variables are stack allocated, so we copy the argument to a stack allocation.
             let var_reg = self.new_var(p_name.clone(), ir_ty);
             self.push_write(var_reg, reg);
         }
-        let reg = self.build_block(body, returns.is_some());
+        let reg = self.build_block(body, returns.is_some())?;
         let return_regs = if returns.is_some() {
             vec![reg.unwrap()]
         } else {
@@ -99,80 +101,126 @@ impl<'a> IrBuilder<'a> {
             BlockId::DUMMY,
         );
         assert_eq!(self.scopes.len(), 1);
-        let f = Function::new(self.parameters, self.blocks, self.tys);
-        f.type_check();
-        f
+        Ok(Function::new(
+            self.parameters,
+            self.blocks,
+            self.tys,
+            self.spans,
+        ))
     }
 
-    fn build_block(&mut self, ast::Block(stmts): &ast::Block, unvoid: bool) -> Option<Register> {
+    fn build_block_unvoid(&mut self, block: &ast::Block, outer: Span) -> Result<Register> {
+        let r = self.build_block(block, true)?;
+        r.ok_or_else(|| Error {
+            kind: ErrorKind::DoesNotYield(outer),
+            span: block.0.last().unwrap().span.clone(),
+        })
+    }
+
+    fn build_block(
+        &mut self,
+        ast::Block(stmts): &ast::Block,
+        unvoid: bool,
+    ) -> Result<Option<Register>> {
         self.enter_scope();
         let mut last_stmt_return = None;
         for (i, stmt) in stmts.iter().enumerate() {
             let is_last = i == stmts.len() - 1;
-            last_stmt_return = self.build_stmt(stmt, unvoid && is_last);
+            last_stmt_return = self.build_stmt(stmt, unvoid && is_last)?;
         }
         self.exit_scope();
-        unvoid_assert(unvoid, last_stmt_return)
+        Ok(last_stmt_return)
     }
 
-    fn build_stmt(&mut self, stmt: &ast::Stmt, unvoid: bool) -> Option<Register> {
-        use ast::Stmt as S;
-        let reg = match stmt {
+    fn build_stmt(&mut self, stmt: &ast::Stmt, unvoid: bool) -> Result<Option<Register>> {
+        use ast::StmtKind as S;
+        let ast::Stmt { kind, span } = stmt;
+        let span = span.clone();
+        let reg = match kind {
             S::Let(name, ty, body) => {
-                let alloc_reg = self.new_var(name.clone(), to_ir_ty(ty));
-                let value_reg = self.build_expr_unvoid(body);
+                let alloc_reg = self.new_var(name.clone(), to_ir_ty(&ty.kind));
+                let value_reg = self.build_expr_unvoid(body, span)?;
                 self.push_write(alloc_reg, value_reg);
                 None
             }
-            S::Expr(expr) => self.build_expr(expr, unvoid),
+            S::Expr(expr) => self.build_expr(expr, unvoid)?,
         };
-        unvoid_assert(unvoid, reg)
+        Ok(reg)
     }
 
-    fn build_expr_void(&mut self, expr: &ast::Expr) {
-        assert_eq!(self.build_expr(expr, false), None);
+    fn build_expr_void(&mut self, expr: &ast::Expr) -> Result<()> {
+        if let Some(r) = self.build_expr(expr, false)? {
+            eprintln!("suspicious: builder yielded {r}");
+        }
+        Ok(())
     }
 
-    fn build_expr_unvoid(&mut self, expr: &ast::Expr) -> Register {
-        self.build_expr(expr, true).unwrap()
+    fn build_expr_unvoid(&mut self, expr: &ast::Expr, outer: Span) -> Result<Register> {
+        let reg = self.build_expr(expr, true)?;
+        match reg {
+            Some(r) => Ok(r),
+            None => Err(Error {
+                kind: ErrorKind::DoesNotYield(outer),
+                span: expr.span.clone(),
+            }),
+        }
     }
 
-    fn build_expr(&mut self, expr: &ast::Expr, unvoid: bool) -> Option<Register> {
-        use ast::Expr as E;
+    fn build_expr(&mut self, expr: &ast::Expr, unvoid: bool) -> Result<Option<Register>> {
+        use ast::ExprKind as E;
         use StoreKind as Sk;
-        let reg = match expr {
-            &E::Int(i) => self.push_store(Sk::Int(i.into())).some_if(unvoid),
-            E::BinOp(op, lhs, rhs) => {
-                use ast::BinOp as A;
-                use BinOp as B;
-                let op_kind = match op {
-                    A::Add => B::Add,
-                    A::Sub => B::Sub,
-                };
-                let lhs_reg = self.build_expr_unvoid(lhs);
-                let rhs_reg = self.build_expr_unvoid(rhs);
-                self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg))
-                    .some_if(unvoid)
+        let ast::Expr { kind, span } = expr;
+        let span = span.clone();
+        // let span2 = span.clone(); // maybe if i write enough of these, Rust 2024 will make it Copy
+        let reg = match kind {
+            E::Place(kind) => {
+                let place_reg = self.build_place(kind, span.clone())?;
+                unvoid.then(|| self.push_store(StoreKind::Read(place_reg), span))
             }
-            E::Var(string) => {
-                let var_reg = self.get_var(string);
-                self.push_store(StoreKind::Read(var_reg)).some_if(unvoid)
-            }
-            E::Assign(var, body) => {
-                let value_reg = self.build_expr_unvoid(body);
-                let var_reg = self.get_var(var);
-                self.push_write(var_reg, value_reg);
+            E::Assign(place, value) => {
+                let place_reg = self.build_place(&place.kind, place.span.clone())?;
+                let value_reg = self.build_expr_unvoid(value, span)?;
+                self.push_write(place_reg, value_reg);
                 None
             }
-            E::Block(b) => self.build_block(b, unvoid),
+            &E::Int(i) => self.push_store(Sk::Int(i.into()), span).some_if(unvoid),
+            E::UnaryOp(op, e) => {
+                use ast::UnaryOpKind as A;
+                use UnaryOp as B;
+                let op_kind = match op.kind {
+                    A::Neg => B::Neg,
+                };
+                let reg = self.build_expr_unvoid(e, span.clone())?;
+                self.push_store(Sk::UnaryOp(op_kind, reg), span)
+                    .some_if(unvoid)
+            }
+            E::BinOp(op, lhs, rhs) => {
+                use ast::BinOpKind as A;
+                use BinOp as B;
+                let op_kind = match op.kind {
+                    A::Add => B::Add,
+                    A::Sub => B::Sub,
+                    A::Mul => B::Mul,
+                };
+                let lhs_reg = self.build_expr_unvoid(lhs, span.clone())?;
+                let rhs_reg = self.build_expr_unvoid(rhs, span.clone())?;
+                self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg), span)
+                    .some_if(unvoid)
+            }
+            E::Paren(inner) => self.build_expr(inner.as_ref(), unvoid)?,
+            E::Block(b) => self.build_block(b, unvoid)?,
             E::If(cond, then_body, else_body) => {
                 let then_id = self.reserve_block_id();
-                let else_id = self.reserve_block_id();
                 let end_id = self.reserve_block_id();
+                let else_id = if else_body.is_some() {
+                    self.reserve_block_id()
+                } else {
+                    end_id
+                };
 
                 // evaluate condition, jump to either branch
                 self.enter_scope();
-                let cond_reg = self.build_expr_unvoid(cond);
+                let cond_reg = self.build_expr_unvoid(cond, span.clone())?;
                 self.switch_to_new_block(
                     Exit::CondJump(
                         Condition::NonZero(cond_reg),
@@ -183,22 +231,29 @@ impl<'a> IrBuilder<'a> {
                 );
 
                 // evaluate true branch, jump to end
-                let then_yield = self.build_expr(then_body, unvoid);
-                let then_id = self.current_block_id;
+                let then_yield = self.build_block(then_body, unvoid)?;
                 self.exit_scope();
+                let then_id = self.current_block_id;
                 self.switch_to_new_block(Exit::Jump(JumpLocation::Block(end_id)), else_id);
 
                 // evaluate false branch, jump to end
-                self.enter_scope();
-                let else_yield = self.build_expr(else_body, unvoid);
-                let else_id = self.current_block_id;
-                self.exit_scope();
-                self.switch_to_new_block(Exit::Jump(JumpLocation::Block(end_id)), end_id);
+                let else_yield = else_body
+                    .as_ref()
+                    .map(|e| {
+                        self.enter_scope();
+                        let else_yield = self.build_block(e, unvoid)?;
+                        self.exit_scope();
+                        let else_id = self.current_block_id;
+                        self.switch_to_new_block(Exit::Jump(JumpLocation::Block(end_id)), end_id);
+                        Ok(else_yield.map(|e| (e, else_id)))
+                    })
+                    .transpose()?
+                    .flatten();
 
                 match (then_yield, else_yield) {
-                    (Some(a), Some(b)) => {
+                    (Some(a), Some((b, else_id))) => {
                         let choices = [(then_id, a), (else_id, b)].into_iter().collect();
-                        self.push_store(StoreKind::Phi(choices)).some()
+                        self.push_store(StoreKind::Phi(choices), span).some()
                     }
                     _ => None,
                 }
@@ -212,7 +267,7 @@ impl<'a> IrBuilder<'a> {
 
                 // condition evaluation, jump to either inner body or end of expression
                 self.enter_scope(); // with code like `while x is Some(y): ...`, `y` should be accessible from the body
-                let cond_reg = self.build_expr_unvoid(cond);
+                let cond_reg = self.build_expr_unvoid(cond, span)?;
                 self.switch_to_new_block(
                     Exit::CondJump(
                         Condition::NonZero(cond_reg),
@@ -223,13 +278,15 @@ impl<'a> IrBuilder<'a> {
                 );
 
                 // body evaluation, jump back to condition
-                self.build_expr_void(body);
+                self.build_block(body, true)?;
                 self.exit_scope();
                 self.switch_to_new_block(Exit::Jump(JumpLocation::Block(cond_id)), end_id);
 
                 // continue evaluation after while loop
                 None
             }
+            E::Call(..) => todo!("function call"),
+            /*
             E::Call(name, args) => {
                 let arg_regs = args.iter().map(|arg| self.build_expr_unvoid(arg)).collect();
                 let result_reg = self
@@ -245,9 +302,17 @@ impl<'a> IrBuilder<'a> {
                 });
                 result_reg
             }
+            */
         };
         // println!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");
-        unvoid_assert(unvoid, reg)
+        Ok(reg)
+    }
+    fn build_place(&mut self, kind: &ast::PlaceKind, span: Span) -> Result<Register> {
+        use ast::PlaceKind as Pk;
+        match kind {
+            Pk::Var(name) => self.get_var(name),
+            Pk::Deref(e, _) => self.build_expr_unvoid(e, span),
+        }
     }
 
     fn enter_scope(&mut self) {
@@ -258,26 +323,29 @@ impl<'a> IrBuilder<'a> {
         self.scopes.pop();
     }
 
-    fn new_var(&mut self, name: Str, ty: Ty) -> Register {
-        let reg = self.push_store(StoreKind::StackAlloc(ty));
-        self.scopes.last_mut().unwrap().insert(name, reg);
+    fn new_var(&mut self, name: Name, ty: Ty) -> Register {
+        let reg = self.push_store(StoreKind::StackAlloc(ty), name.span);
+        self.scopes.last_mut().unwrap().insert(name.kind, reg);
         reg
     }
 
-    fn get_var(&mut self, name: &str) -> Register {
+    fn get_var(&mut self, name: &Name) -> Result<Register> {
         self.scopes
             .iter()
             .rev()
-            .find_map(|scope| scope.get(name).copied())
-            .unwrap_or_else(|| panic!("variable {name:?} not found"))
+            .find_map(|scope| scope.get(name.kind.as_ref()).copied())
+            .ok_or_else(|| Error {
+                kind: ErrorKind::VariableNotFound(name.kind.clone()),
+                span: name.span.clone(),
+            })
     }
 
     fn push_write(&mut self, dst: Register, src: Register) {
         self.push_inst(Inst::Write(dst, src));
     }
 
-    fn push_store(&mut self, sk: StoreKind) -> Register {
-        let reg = self.new_reg(sk.ty(&self.tys));
+    fn push_store(&mut self, sk: StoreKind, span: Span) -> Register {
+        let reg = self.new_reg(sk.ty(&self.tys), span);
         self.push_inst(Inst::Store(reg, sk));
         reg
     }
@@ -286,13 +354,14 @@ impl<'a> IrBuilder<'a> {
         self.current_block.push(inst);
     }
 
-    fn new_reg(&mut self, ty: Ty) -> Register {
+    fn new_reg(&mut self, ty: Ty, span: Span) -> Register {
         let reg = Register(self.next_reg_id);
         self.next_reg_id = self
             .next_reg_id
             .checked_add(1)
             .expect("register allocation overflow");
         self.tys.insert(reg, ty);
+        self.spans.insert(reg, span);
         reg
     }
 
@@ -313,28 +382,61 @@ impl<'a> IrBuilder<'a> {
     }
 }
 
-pub fn build(program: &ast::Program) -> Program {
-    use ast::Decl as D;
+pub fn build(program: &ast::Program) -> Result<Program> {
+    use ast::DeclKind as D;
     let mut ir = Program {
         functions: Map::new(),
     };
     let function_return_types = program
         .decls
         .iter()
-        .map(|decl| match decl {
-            D::Function(ast::Function { name, returns, .. }) => {
-                (name.clone(), returns.as_ref().map(to_ir_ty))
-            }
+        .map(|decl| match &decl.kind {
+            D::Function(ast::Function { name, returns, .. }) => (
+                name.kind.clone(),
+                returns.as_ref().map(|x| to_ir_ty(&x.kind)),
+            ),
         })
         .collect();
     for decl in &program.decls {
-        match decl {
+        match &decl.kind {
             D::Function(fn_decl) => {
                 let builder = IrBuilder::new(&function_return_types);
-                let function = builder.build_function(fn_decl);
-                ir.functions.insert(fn_decl.name.clone(), function);
+                let function = builder.build_function(fn_decl)?;
+                ir.functions.insert(fn_decl.name.kind.clone(), function);
             }
         }
     }
-    ir
+    Ok(ir)
+}
+
+trait Stage {
+    type Ty;
+}
+
+struct IrFunction<S: Stage> {
+    tys: Map<Register, S::Ty>,
+    // stage: std::marker::PhantomData<S>,
+}
+
+struct Untyped;
+
+enum PartialTy {
+    Int,
+    Pointer(Box<Self>),
+    TyVar(Name),
+}
+
+impl Stage for Untyped {
+    type Ty = PartialTy;
+}
+
+struct Typed;
+
+enum ConcreteTy {
+    Int,
+    Pointer(Box<Self>),
+}
+
+impl Stage for Typed {
+    type Ty = ConcreteTy;
 }

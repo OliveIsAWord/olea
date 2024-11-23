@@ -3,6 +3,7 @@ use crate::ast::Spanned;
 
 pub fn visualize(block: &Block, src: &str) {
     visualize0(block, src, 0);
+    println!();
 }
 
 fn visualize0(block: &Block, src: &str, level: usize) {
@@ -11,7 +12,10 @@ fn visualize0(block: &Block, src: &str, level: usize) {
             print!("    ");
         }
     };
-    for item in block {
+    for (i, item) in block.iter().enumerate() {
+        if i != 0 {
+            println!();
+        }
         indent();
         for Spanned { kind, span } in item {
             match kind {
@@ -19,6 +23,7 @@ fn visualize0(block: &Block, src: &str, level: usize) {
                 Tt::Paren(b, _) => {
                     println!("(");
                     visualize0(b, src, level + 1);
+                    println!();
                     indent();
                     print!(") ");
                 }
@@ -36,6 +41,5 @@ fn visualize0(block: &Block, src: &str, level: usize) {
                 }
             }
         }
-        println!();
     }
 }

@@ -1,3 +1,4 @@
+use crate::ast::Span;
 use crate::compiler_types::{Map, Set, Str};
 
 /// A full or partial program.
@@ -5,6 +6,14 @@ use crate::compiler_types::{Map, Set, Str};
 pub struct Program {
     /// The functions composing this program.
     pub functions: Map<Str, Function>,
+}
+
+impl Program {
+    pub fn type_check(&self) {
+        for (_name, f) in &self.functions {
+            f.type_check();
+        }
+    }
 }
 
 /// A body of code accepts and yields some registers.
@@ -18,6 +27,8 @@ pub struct Function {
     pub predecessors: Map<BlockId, Set<BlockId>>,
     /// The data type of values stored in each register.
     pub tys: Map<Register, Ty>,
+    /// The corresponding source location of each register.
+    pub spans: Map<Register, Span>,
 }
 
 impl Function {
@@ -25,11 +36,13 @@ impl Function {
         parameters: Vec<Register>,
         blocks: Map<BlockId, Block>,
         tys: Map<Register, Ty>,
+        spans: Map<Register, Span>,
     ) -> Self {
         let mut this = Function {
             parameters,
             blocks,
             tys,
+            spans,
             predecessors: Map::new(),
         };
         this.gen_predecessors();
@@ -79,13 +92,21 @@ impl Function {
                             Sk::StackAlloc(ty) => write!(f, "StackAlloc({ty:?})"),
                             Sk::Int(i) => write!(f, "{i}"),
                             Sk::Copy(r) => write!(f, "{r}"),
-                            Sk::Read(r) => write!(f, "{r}*"),
+                            Sk::Read(r) => write!(f, "{r}^"),
+                            Sk::UnaryOp(op, inner) => write!(
+                                f,
+                                "{}{inner}",
+                                match op {
+                                    UnaryOp::Neg => "-",
+                                }
+                            ),
                             Sk::BinOp(op, lhs, rhs) => write!(
                                 f,
                                 "{lhs} {} {rhs}",
                                 match op {
                                     BinOp::Add => "+",
                                     BinOp::Sub => "-",
+                                    BinOp::Mul => "*",
                                 }
                             ),
                             Sk::Phi(regs) => {
@@ -100,7 +121,7 @@ impl Function {
                             }
                         }
                     }
-                    Inst::Write(dst, src) => write!(f, "{dst}* = {src}"),
+                    Inst::Write(dst, src) => write!(f, "{dst}^ = {src}"),
                     Inst::Call {
                         name,
                         returns,
@@ -187,6 +208,7 @@ impl Block {
                 Inst::Store(r, sk) => {
                     f(r, true);
                     match sk {
+                        Sk::UnaryOp(_, r) => f(r, false),
                         Sk::BinOp(_, r1, r2) => {
                             f(r1, false);
                             f(r2, false);
@@ -275,6 +297,8 @@ pub enum StoreKind {
     Copy(Register),
     /// A choice of values based on the immediately preceding block.
     Phi(Map<BlockId, Register>),
+    /// An operation on the value of one register.
+    UnaryOp(UnaryOp, Register),
     /// An operation on the value of two registers.
     BinOp(BinOp, Register, Register),
     /// A pointer to a unique allocation for a value of a given type.
@@ -296,6 +320,7 @@ impl StoreKind {
         match self {
             &Self::Int(_) => Ty::Int,
             Self::Phi(regs) => all(&regs.values().copied().collect::<Vec<_>>()), // TODO silly and bad
+            Self::UnaryOp(_, r) => tys.get(r).unwrap().clone(),
             &Self::BinOp(_, lhs, rhs) => all(&[lhs, rhs]),
             Self::StackAlloc(ty) => Ty::Pointer(Box::new(ty.clone())),
             Self::Copy(r) => tys.get(r).unwrap().clone(),
@@ -307,6 +332,13 @@ impl StoreKind {
     }
 }
 
+/// A logic or arithmetic operation taking and yielding one value.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum UnaryOp {
+    /// Negation.
+    Neg,
+}
+
 /// A logic or arithmetic operation taking two values and yielding one.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum BinOp {
@@ -314,6 +346,8 @@ pub enum BinOp {
     Add,
     /// Subtraction.
     Sub,
+    /// Multiplication.
+    Mul,
 }
 
 /// The direction of control flow after all instructions of a block have been executed.
@@ -458,7 +492,7 @@ impl std::fmt::Display for Function {
 
 impl std::fmt::Display for Program {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        for (name, function) in self.functions.iter() {
+        for (name, function) in &self.functions {
             function.display_with_name(f, name)?;
             write!(f, "\n\n")?;
         }
