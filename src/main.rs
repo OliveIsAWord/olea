@@ -2,14 +2,15 @@
 
 mod arborist;
 pub mod ast;
-mod lexer;
-mod parser;
-mod ttree_visualize;
-//mod codegen_fox32;
+mod codegen_fox32;
 mod compiler_types;
 mod ir;
 mod ir_builder;
-// mod ir_optimizer;
+mod ir_optimizer;
+mod lexer;
+mod parser;
+mod ttree_visualize;
+mod typechecker;
 
 use annotate_snippets::{Level, Message, Renderer, Snippet};
 use std::process::ExitCode;
@@ -44,7 +45,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    println!("# Source code:\n{src}");
+    // println!("# Source code:\n{src}");
     let tokens = lexer::tokenize(&src);
     // dbg!(tokens.has_error);
     /*
@@ -76,9 +77,9 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    println!("# Token tree:");
-    ttree_visualize::visualize(&ttree, &src);
-    println!();
+    //println!("# Token tree:");
+    //ttree_visualize::visualize(&ttree, &src);
+    //println!();
     let ast = match parser::parse(&ttree, &src) {
         Ok(x) => x,
         Err(ast::Spanned { kind, span }) => {
@@ -94,8 +95,8 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    println!("#Syntax tree:\n{ast:?}\n");
-    let ir = match ir_builder::build(&ast) {
+    //println!("#Syntax tree:\n{ast:?}\n");
+    let mut ir = match ir_builder::build(&ast) {
         Ok(x) => x,
         Err(ast::Spanned { kind, span }) => {
             use ir_builder::ErrorKind as E;
@@ -117,7 +118,66 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    ir.type_check();
+
     println!("#IR:\n{ir}");
+
+    match typechecker::typecheck(&mut ir) {
+        Ok(()) => {}
+        Err((fn_name, e)) => {
+            use typechecker::ErrorKind as E;
+            let fun = ir.functions.get(&fn_name).unwrap();
+            let snippet = Snippet::source(&src).origin(file_path).fold(true);
+            let (title, snippet): (String, _) = match e {
+                E::NotPointer(reg) => (
+                    format!(
+                        "cannot dereference a value of type {}",
+                        fun.tys.get(&reg).unwrap()
+                    ),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
+                /*
+                E::NotMatching(reg1, reg2) => {
+                    let span1 = fun.spans.get(&reg1).unwrap().clone();
+                    let span2 = fun.spans.get(&reg2).unwrap().clone();
+                    let ty1 = fun.tys.get(&reg1).unwrap();
+                    let ty2 = fun.tys.get(&reg2).unwrap();
+                    m1 = format!("has type {ty1}");
+                    m2 = format!("has type {ty2}");
+                    (
+                        "mismatched_types".to_owned(),
+                        snippet
+                            .annotation(Level::Error.span(span2).label(&m2))
+                            .annotation(Level::Error.span(span1).label(&m1)),
+                    )
+                }
+                */
+                E::Expected(reg, given_ty) => {
+                    let span = fun.spans.get(&reg).unwrap().clone();
+                    let reg_ty = fun.tys.get(&reg).unwrap();
+                    (
+                        format!("expected {given_ty}, got {reg_ty}"),
+                        snippet.annotation(Level::Error.span(span)),
+                    )
+                } /*
+                  E::ExpectedInner(reg, ty1, ty2) => {
+                      let span = fun.spans.get(&reg).unwrap().clone();
+                      (
+                          format!("expected {ty2}, got {ty1}"),
+                          snippet.annotation(Level::Error.span(span)),
+                      )
+                  }
+                  */
+            };
+            error_snippet(Level::Error.title(&title).snippet(snippet));
+            return ExitCode::FAILURE;
+        }
+    }
+    println!("#Optimizer phase");
+    ir_optimizer::optimize(&mut ir);
+    println!();
+
+    let asm = codegen_fox32::gen_program(&ir);
+    println!("#Codegen");
+    println!("{asm}");
     ExitCode::SUCCESS
 }

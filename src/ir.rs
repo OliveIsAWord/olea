@@ -9,11 +9,13 @@ pub struct Program {
 }
 
 impl Program {
+    /*
     pub fn type_check(&self) {
         for (_name, f) in &self.functions {
             f.type_check();
         }
     }
+    */
 }
 
 /// A body of code accepts and yields some registers.
@@ -23,12 +25,14 @@ pub struct Function {
     pub parameters: Vec<Register>,
     /// The basic blocks of code comprising this function.
     pub blocks: Map<BlockId, Block>,
-    /// The blocks that can directly jump to a given block.
-    pub predecessors: Map<BlockId, Set<BlockId>>,
     /// The data type of values stored in each register.
     pub tys: Map<Register, Ty>,
     /// The corresponding source location of each register.
     pub spans: Map<Register, Span>,
+    /// The blocks that can directly jump to a given block.
+    pub predecessors: Map<BlockId, Set<BlockId>>,
+    /// The dominator tree
+    pub dominator_tree: DominatorTree,
 }
 
 impl Function {
@@ -38,16 +42,19 @@ impl Function {
         tys: Map<Register, Ty>,
         spans: Map<Register, Span>,
     ) -> Self {
+        let dominator_tree = DominatorTree::new(&blocks);
         let mut this = Function {
             parameters,
             blocks,
             tys,
             spans,
             predecessors: Map::new(),
+            dominator_tree,
         };
         this.gen_predecessors();
         this
     }
+    /*
     pub fn type_check(&self) {
         let tys = &self.tys;
         self.blocks
@@ -58,6 +65,7 @@ impl Function {
             exit.type_check(tys);
         }
     }
+    */
     /// Returns an iterator over the blocks and their IDs of the function. The first item is always the entry block.
     pub fn iter(&self) -> impl Iterator<Item = (BlockId, &Block)> {
         // NOTE: This relies on block 0 being first because of BTreeSet and the sort order of blocks
@@ -159,6 +167,8 @@ pub enum Ty {
     Int,
     /// A pointer into memory storing a value of a given type.
     Pointer(Box<Self>),
+    /// A function pointer accepting and returning some values.
+    Function(Vec<Self>, Vec<Self>),
 }
 
 /// A basic block, as in a block of code with one entrance and one exit where each instruction is executed in sequence exactly once before another block executes or the function returns.
@@ -274,18 +284,22 @@ pub enum Inst {
 }
 
 impl Inst {
+    /*
     fn type_check(&self, tys: &Map<Register, Ty>) {
         let ty_of = |r| tys.get(r).unwrap();
         match self {
             Self::Store(r, sk) => assert_eq!(ty_of(r), &sk.ty(tys)),
             Self::Write(dst, src) => match ty_of(dst) {
                 Ty::Pointer(inner) => assert_eq!(inner.as_ref(), ty_of(src)),
-                e @ Ty::Int => panic!("typeck error: attempted to Write to {dst:?} of type {e:?}"),
+                e @ (Ty::Int | Ty::Function(..)) => {
+                    panic!("typeck error: attempted to Write to {dst} of type {e}")
+                }
             },
             Self::Call { .. } => {} // TODO
             Self::Nop => {}
         }
     }
+    */
 }
 
 /// A method of calculating a value to store in a register.
@@ -307,40 +321,15 @@ pub enum StoreKind {
     Read(Register),
 }
 
-impl StoreKind {
-    pub fn ty(&self, tys: &Map<Register, Ty>) -> Ty {
-        let all = |regs: &[Register]| {
-            let (first, rest) = (regs[0], &regs[1..]);
-            let ty = tys.get(&first).unwrap();
-            for reg in rest {
-                assert_eq!(tys.get(reg).unwrap(), ty);
-            }
-            ty.clone()
-        };
-        match self {
-            &Self::Int(_) => Ty::Int,
-            Self::Phi(regs) => all(&regs.values().copied().collect::<Vec<_>>()), // TODO silly and bad
-            Self::UnaryOp(_, r) => tys.get(r).unwrap().clone(),
-            &Self::BinOp(_, lhs, rhs) => all(&[lhs, rhs]),
-            Self::StackAlloc(ty) => Ty::Pointer(Box::new(ty.clone())),
-            Self::Copy(r) => tys.get(r).unwrap().clone(),
-            Self::Read(r) => match tys.get(r).unwrap() {
-                Ty::Pointer(inner) => inner.as_ref().clone(),
-                e @ Ty::Int => panic!("typeck error: attempted to Read from {r:?} of type {e:?}"),
-            },
-        }
-    }
-}
-
 /// A logic or arithmetic operation taking and yielding one value.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum UnaryOp {
     /// Negation.
     Neg,
 }
 
 /// A logic or arithmetic operation taking two values and yielding one.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum BinOp {
     /// Addition.
     Add,
@@ -371,6 +360,7 @@ impl Exit {
                 match condition {
                     Condition::NonZero(r) => match ty_of(r) {
                         Ty::Int | Ty::Pointer(_) => (),
+                        e @ Ty::Function(..) => panic!("can't nonzero a {e}"),
                     },
                 }
                 // TODO: any sort of JumpLocation checking?
@@ -444,6 +434,82 @@ impl BlockId {
     }
 }
 
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct DominatorTree {
+    pub children: Map<BlockId, Self>,
+}
+
+impl DominatorTree {
+    pub fn new(blocks: &Map<BlockId, Block>) -> Self {
+        let mut this = Self {
+            children: blocks
+                .keys()
+                .map(|&id| {
+                    (
+                        id,
+                        Self {
+                            children: Map::new(),
+                        },
+                    )
+                })
+                .collect(),
+        };
+        this.make_immediate(blocks);
+        this
+    }
+    fn make_immediate(&mut self, blocks: &Map<BlockId, Block>) {
+        fn traverse_except(blocks: &Map<BlockId, Block>, except: BlockId) -> Set<BlockId> {
+            let mut unreachable: Set<_> =
+                blocks.keys().copied().filter(|&id| id != except).collect();
+            let mut open = vec![BlockId::ENTRY];
+            while let Some(id) = open.pop() {
+                if unreachable.remove(&id) {
+                    open.extend(blocks.get(&id).unwrap().successors());
+                }
+            }
+            unreachable
+        }
+        let mut closed = Set::new();
+        // TODO: this is an unlovely quadratic loop. if this is a problem, fix it or change algorithms
+        while let Some(child_id) = self
+            .children
+            .keys()
+            .copied()
+            .find(|child_id| !closed.contains(child_id))
+        {
+            closed.insert(child_id);
+            let mut new_children = traverse_except(blocks, child_id)
+                .into_iter()
+                .filter_map(|dommed_id| self.children.remove_entry(&dommed_id))
+                .collect();
+            self.children
+                .get_mut(&child_id)
+                .unwrap()
+                .children
+                .append(&mut new_children);
+        }
+        for child in self.children.values_mut() {
+            child.make_immediate(blocks);
+        }
+    }
+    pub fn visit(&self, mut f: impl FnMut(BlockId)) {
+        self.visit_inner(&mut f)
+    }
+    fn visit_inner(&self, f: &mut impl FnMut(BlockId)) {
+        for (&id, children) in &self.children {
+            f(id);
+            children.visit_inner(f);
+        }
+    }
+    pub fn iter(&self) -> impl Iterator<Item = BlockId> + '_ {
+        // obviously it's bad to allocate a vec for this, but it's our little secret.
+        // the lifetime bound (i think) lets us change this to something better if need be
+        let mut ids = vec![];
+        self.visit(|id| ids.push(id));
+        ids.into_iter()
+    }
+}
+
 impl std::fmt::Display for Register {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "%{}", self.0)
@@ -479,6 +545,39 @@ impl std::fmt::Display for Exit {
             Self::Jump(loc) => write!(f, "Jump {loc}"),
             Self::CondJump(cond, loc_true, loc_false) => {
                 write!(f, "Jump if {cond} then {loc_true} else {loc_false}")
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for Ty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Int => write!(f, "int"),
+            Self::Pointer(inner) => write!(f, "{inner}^"),
+            Self::Function(params, returns) => {
+                write!(f, "fn(")?;
+                for (i, param) in params.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{param}")?;
+                }
+                write!(f, ")")?;
+                match returns.len() {
+                    0 => Ok(()),
+                    1 => write!(f, " {}", returns[0]),
+                    _ => {
+                        write!(f, " {{")?;
+                        for (i, ret) in returns.iter().enumerate() {
+                            if i != 0 {
+                                write!(f, ", ")?;
+                            }
+                            write!(f, "{ret}")?;
+                        }
+                        write!(f, "}}")
+                    }
+                }
             }
         }
     }

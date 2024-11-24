@@ -155,12 +155,21 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                             let src_reg = regs.get(src).unwrap();
                             write_inst!(code, "mov {}, [{}]", reg.foo(), src_reg.bar());
                         }
+                        Sk::UnaryOp(op, inner) => {
+                            let inner_reg = regs.get(inner).unwrap();
+                            let op_mnemonic = match op {
+                                UnaryOp::Neg => "neg",
+                            };
+                            write_inst!(code, "mov {}, {}", reg.foo(), inner_reg.foo());
+                            write_inst!(code, "{} {}", op_mnemonic, reg.foo());
+                        }
                         Sk::BinOp(op, lhs, rhs) => {
                             let lhs_reg = regs.get(lhs).unwrap();
                             let rhs_reg = regs.get(rhs).unwrap();
                             let op_mnemonic = match op {
                                 BinOp::Add => "add",
                                 BinOp::Sub => "sub",
+                                BinOp::Mul => "mul",
                             };
                             write_inst!(code, "mov {}, {}", reg.foo(), lhs_reg.foo());
                             write_inst!(code, "{} {}, {}", op_mnemonic, reg.foo(), rhs_reg.foo());

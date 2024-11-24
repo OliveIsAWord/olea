@@ -177,6 +177,7 @@ impl<'a> IrBuilder<'a> {
                 let place_reg = self.build_place(kind, span.clone())?;
                 unvoid.then(|| self.push_store(StoreKind::Read(place_reg), span))
             }
+            // NOTE: We're implicitly checking and evaluating the place expression first, but typechecking currently has to check the value expression first. Should we change our order here?
             E::Assign(place, value) => {
                 let place_reg = self.build_place(&place.kind, place.span.clone())?;
                 let value_reg = self.build_expr_unvoid(value, span)?;
@@ -207,6 +208,7 @@ impl<'a> IrBuilder<'a> {
                 self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg), span)
                     .some_if(unvoid)
             }
+            // NOTE: When building Paren and Block, we forget their spans, which means subsequent error diagnostics will only ever point to the inner expression. Is this good or bad? We could change this by creating a Copy of the inner register, assigning the copy the outer span.
             E::Paren(inner) => self.build_expr(inner.as_ref(), unvoid)?,
             E::Block(b) => self.build_block(b, unvoid)?,
             E::If(cond, then_body, else_body) => {
@@ -345,7 +347,7 @@ impl<'a> IrBuilder<'a> {
     }
 
     fn push_store(&mut self, sk: StoreKind, span: Span) -> Register {
-        let reg = self.new_reg(sk.ty(&self.tys), span);
+        let reg = self.new_reg(guess_ty(&sk, &self.tys), span);
         self.push_inst(Inst::Store(reg, sk));
         reg
     }
@@ -382,6 +384,23 @@ impl<'a> IrBuilder<'a> {
     }
 }
 
+pub fn guess_ty(sk: &StoreKind, tys: &Map<Register, Ty>) -> Ty {
+    use StoreKind as Sk;
+    let t = |r| tys.get(r).unwrap().clone();
+    match sk {
+        &Sk::Int(_) => Ty::Int,
+        Sk::Phi(regs) => t(regs.iter().min().expect("empty phi").1),
+        Sk::UnaryOp(_, r) => t(r),
+        Sk::BinOp(_, lhs, _rhs) => t(lhs),
+        Sk::StackAlloc(ty) => Ty::Pointer(Box::new(ty.clone())),
+        Sk::Copy(r) => t(r),
+        Sk::Read(r) => match tys.get(r).unwrap() {
+            Ty::Pointer(inner) => inner.as_ref().clone(),
+            e @ (Ty::Int | Ty::Function(..)) => e.clone(), // Dummy type
+        },
+    }
+}
+
 pub fn build(program: &ast::Program) -> Result<Program> {
     use ast::DeclKind as D;
     let mut ir = Program {
@@ -407,36 +426,4 @@ pub fn build(program: &ast::Program) -> Result<Program> {
         }
     }
     Ok(ir)
-}
-
-trait Stage {
-    type Ty;
-}
-
-struct IrFunction<S: Stage> {
-    tys: Map<Register, S::Ty>,
-    // stage: std::marker::PhantomData<S>,
-}
-
-struct Untyped;
-
-enum PartialTy {
-    Int,
-    Pointer(Box<Self>),
-    TyVar(Name),
-}
-
-impl Stage for Untyped {
-    type Ty = PartialTy;
-}
-
-struct Typed;
-
-enum ConcreteTy {
-    Int,
-    Pointer(Box<Self>),
-}
-
-impl Stage for Typed {
-    type Ty = ConcreteTy;
 }

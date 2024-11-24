@@ -1,7 +1,2 @@
-fn foo() int:
-    let x int = 42
-    let y int = 69
-    x + (:
-     y = 2
-     y
-    )
+fn foo(x int, y int):
+    x^ = y^

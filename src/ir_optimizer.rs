@@ -22,7 +22,7 @@ pub fn optimize(ir: &mut Program) {
             println!("{name}: no change");
         } else {
             output = new_output;
-            println!("!! {name}:\n{output}\n");
+            println!("!! {name}:\n{output}");
         }
     }
 }
@@ -192,66 +192,6 @@ pub fn dead_code_elimination(f: &mut Function) {
     }
 }
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct DominatorTree {
-    children: Map<BlockId, Self>,
-}
-
-impl DominatorTree {
-    pub fn new(blocks: &Map<BlockId, Block>) -> Self {
-        let mut this = Self {
-            children: blocks
-                .keys()
-                .map(|&id| {
-                    (
-                        id,
-                        Self {
-                            children: Map::new(),
-                        },
-                    )
-                })
-                .collect(),
-        };
-        this.make_immediate(blocks);
-        this
-    }
-    fn make_immediate(&mut self, blocks: &Map<BlockId, Block>) {
-        fn traverse_except(blocks: &Map<BlockId, Block>, except: BlockId) -> Set<BlockId> {
-            let mut unreachable: Set<_> =
-                blocks.keys().copied().filter(|&id| id != except).collect();
-            let mut open = vec![BlockId::ENTRY];
-            while let Some(id) = open.pop() {
-                if unreachable.remove(&id) {
-                    open.extend(blocks.get(&id).unwrap().successors());
-                }
-            }
-            unreachable
-        }
-        let mut closed = Set::new();
-        // TODO: this is an unlovely quadratic loop. if this is a problem, fix it or change algorithms
-        while let Some(child_id) = self
-            .children
-            .keys()
-            .copied()
-            .find(|child_id| !closed.contains(child_id))
-        {
-            closed.insert(child_id);
-            let mut new_children = traverse_except(blocks, child_id)
-                .into_iter()
-                .filter_map(|dommed_id| self.children.remove_entry(&dommed_id))
-                .collect();
-            self.children
-                .get_mut(&child_id)
-                .unwrap()
-                .children
-                .append(&mut new_children);
-        }
-        for child in self.children.values_mut() {
-            child.make_immediate(blocks);
-        }
-    }
-}
-
 pub fn common_subexpression_elimination(f: &mut Function) {
     use StoreKind as Sk;
     fn visit(
@@ -265,7 +205,7 @@ pub fn common_subexpression_elimination(f: &mut Function) {
         for inst in &mut block.insts {
             let Inst::Store(r, sk) = inst else { continue };
             match sk {
-                Sk::Int(..) | Sk::Phi(_) | Sk::BinOp(..) => {}
+                Sk::Int(..) | Sk::Phi(_) | Sk::UnaryOp(..) | Sk::BinOp(..) => {}
                 | Sk::Read(_) // impure, performing CSE can erroneously erase a write
                 | Sk::StackAlloc(_) // unique allocation, can't be copied
                 | Sk:: Copy(_) // pointless to copy a copy
