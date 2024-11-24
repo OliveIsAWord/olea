@@ -29,6 +29,7 @@ impl<T> ToSome for T {
 pub enum ErrorKind {
     VariableNotFound(Str),
     DoesNotYield(Span),
+    CantAssignToConstant,
 }
 
 type Error = Spanned<ErrorKind>;
@@ -53,11 +54,19 @@ struct IrBuilder<'a> {
     spans: Map<Register, Span>,
     scopes: Vec<Map<Str, Register>>,
     next_reg_id: u128,
-    function_return_types: &'a Map<Str, Option<Ty>>,
+    function_tys: &'a Map<Str, (Vec<Ty>, Option<Ty>)>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MaybeVar {
+    // A register containing the value we're accessing.
+    Constant(Register),
+    // A register containing a pointer to the value we're accessing.
+    Variable(Register),
 }
 
 impl<'a> IrBuilder<'a> {
-    fn new(function_return_types: &'a Map<Str, Option<Ty>>) -> Self {
+    fn new(function_tys: &'a Map<Str, (Vec<Ty>, Option<Ty>)>) -> Self {
         Self {
             parameters: vec![],
             current_block: vec![],
@@ -68,7 +77,7 @@ impl<'a> IrBuilder<'a> {
             spans: Map::new(),
             scopes: vec![Map::new()],
             next_reg_id: 0,
-            function_return_types,
+            function_tys,
         }
     }
 
@@ -81,8 +90,11 @@ impl<'a> IrBuilder<'a> {
             body,
         }: &ast::Function,
     ) -> Result<Function> {
+        let return_tys = returns.into_iter().map(|t| to_ir_ty(&t.kind)).collect();
+        let mut param_tys = vec![];
         for (p_name, p_ty) in parameters {
             let ir_ty = to_ir_ty(&p_ty.kind);
+            param_tys.push(ir_ty.clone());
             let reg = self.new_reg(ir_ty.clone(), p_name.span.clone());
             self.parameters.push(reg);
             // Currently, we assume all variables are stack allocated, so we copy the argument to a stack allocation.
@@ -102,6 +114,7 @@ impl<'a> IrBuilder<'a> {
         );
         assert_eq!(self.scopes.len(), 1);
         Ok(Function::new(
+            (param_tys, return_tys),
             self.parameters,
             self.blocks,
             self.tys,
@@ -173,13 +186,22 @@ impl<'a> IrBuilder<'a> {
         let span = span.clone();
         // let span2 = span.clone(); // maybe if i write enough of these, Rust 2024 will make it Copy
         let reg = match kind {
-            E::Place(kind) => {
-                let place_reg = self.build_place(kind, span.clone())?;
-                unvoid.then(|| self.push_store(StoreKind::Read(place_reg), span))
-            }
+            E::Place(kind) => match self.build_place(kind, span.clone())? {
+                MaybeVar::Variable(place_reg) => self
+                    .push_store(StoreKind::Read(place_reg), span)
+                    .some_if(unvoid),
+                MaybeVar::Constant(value_reg) => Some(value_reg),
+            },
             // NOTE: We're implicitly checking and evaluating the place expression first, but typechecking currently has to check the value expression first. Should we change our order here?
             E::Assign(place, value) => {
-                let place_reg = self.build_place(&place.kind, place.span.clone())?;
+                let MaybeVar::Variable(place_reg) =
+                    self.build_place(&place.kind, place.span.clone())?
+                else {
+                    return Err(Error {
+                        kind: ErrorKind::CantAssignToConstant,
+                        span,
+                    });
+                };
                 let value_reg = self.build_expr_unvoid(value, span)?;
                 self.push_write(place_reg, value_reg);
                 None
@@ -287,33 +309,42 @@ impl<'a> IrBuilder<'a> {
                 // continue evaluation after while loop
                 None
             }
-            E::Call(..) => todo!("function call"),
-            /*
-            E::Call(name, args) => {
-                let arg_regs = args.iter().map(|arg| self.build_expr_unvoid(arg)).collect();
-                let result_reg = self
-                    .function_return_types
-                    .get(name)
-                    .unwrap()
-                    .clone()
-                    .map(|ty| self.new_reg(ty));
+            E::Call(callee, args) => {
+                let callee = self.build_expr_unvoid(callee, span.clone())?;
+                let args = args
+                    .iter()
+                    .map(|arg| self.build_expr_unvoid(arg, span.clone()))
+                    .collect::<Result<_>>()?;
+                let returns = self.new_reg(Ty::Int, span);
                 self.push_inst(Inst::Call {
-                    name: name.clone(),
-                    returns: result_reg.into_iter().collect(),
-                    args: arg_regs,
+                    callee,
+                    args,
+                    returns: vec![returns],
                 });
-                result_reg
+                Some(returns)
             }
-            */
         };
         // println!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");
         Ok(reg)
     }
-    fn build_place(&mut self, kind: &ast::PlaceKind, span: Span) -> Result<Register> {
+    // This function returns a MaybeVar because not all syntactic place expressions are semantic place expressions. For example, we can't assign a value to a function. Different code paths we expect a place expression will have to properly handle these cases.
+    fn build_place(&mut self, kind: &ast::PlaceKind, span: Span) -> Result<MaybeVar> {
         use ast::PlaceKind as Pk;
         match kind {
-            Pk::Var(name) => self.get_var(name),
-            Pk::Deref(e, _) => self.build_expr_unvoid(e, span),
+            Pk::Var(name) => self
+                .get_var(name)
+                .map(MaybeVar::Variable)
+                .or_else(|| {
+                    self.function_tys
+                        .contains_key(&name.kind)
+                        .then(|| self.push_store(StoreKind::Function(name.kind.clone()), span))
+                        .map(MaybeVar::Constant)
+                })
+                .ok_or_else(|| Error {
+                    kind: ErrorKind::VariableNotFound(name.kind.clone()),
+                    span: name.span.clone(),
+                }),
+            Pk::Deref(e, _) => self.build_expr_unvoid(e, span).map(MaybeVar::Variable),
         }
     }
 
@@ -331,15 +362,11 @@ impl<'a> IrBuilder<'a> {
         reg
     }
 
-    fn get_var(&mut self, name: &Name) -> Result<Register> {
+    fn get_var(&mut self, name: &Name) -> Option<Register> {
         self.scopes
             .iter()
             .rev()
             .find_map(|scope| scope.get(name.kind.as_ref()).copied())
-            .ok_or_else(|| Error {
-                kind: ErrorKind::VariableNotFound(name.kind.clone()),
-                span: name.span.clone(),
-            })
     }
 
     fn push_write(&mut self, dst: Register, src: Register) {
@@ -347,9 +374,33 @@ impl<'a> IrBuilder<'a> {
     }
 
     fn push_store(&mut self, sk: StoreKind, span: Span) -> Register {
-        let reg = self.new_reg(guess_ty(&sk, &self.tys), span);
+        let reg = self.new_reg(self.guess_ty(&sk), span);
         self.push_inst(Inst::Store(reg, sk));
         reg
+    }
+    pub fn guess_ty(&self, sk: &StoreKind) -> Ty {
+        use StoreKind as Sk;
+        let t = |r| self.tys.get(r).unwrap().clone();
+        match sk {
+            &Sk::Int(_) => Ty::Int,
+            Sk::Phi(regs) => t(regs.iter().min().expect("empty phi").1),
+            Sk::UnaryOp(_, r) => t(r),
+            Sk::BinOp(_, lhs, _rhs) => t(lhs),
+            Sk::StackAlloc(ty) => Ty::Pointer(Box::new(ty.clone())),
+            Sk::Copy(r) => t(r),
+            Sk::Read(r) => match self.tys.get(r).unwrap() {
+                Ty::Pointer(inner) => inner.as_ref().clone(),
+                e @ (Ty::Int | Ty::Function(..)) => e.clone(), // Dummy type
+            },
+            Sk::Function(name) => {
+                let (args, returns) = self
+                    .function_tys
+                    .get(name)
+                    .expect("constructed function instruction to unknown function")
+                    .clone();
+                Ty::Function(args, returns.into_iter().collect())
+            }
+        }
     }
 
     fn push_inst(&mut self, inst: Inst) {
@@ -384,42 +435,33 @@ impl<'a> IrBuilder<'a> {
     }
 }
 
-pub fn guess_ty(sk: &StoreKind, tys: &Map<Register, Ty>) -> Ty {
-    use StoreKind as Sk;
-    let t = |r| tys.get(r).unwrap().clone();
-    match sk {
-        &Sk::Int(_) => Ty::Int,
-        Sk::Phi(regs) => t(regs.iter().min().expect("empty phi").1),
-        Sk::UnaryOp(_, r) => t(r),
-        Sk::BinOp(_, lhs, _rhs) => t(lhs),
-        Sk::StackAlloc(ty) => Ty::Pointer(Box::new(ty.clone())),
-        Sk::Copy(r) => t(r),
-        Sk::Read(r) => match tys.get(r).unwrap() {
-            Ty::Pointer(inner) => inner.as_ref().clone(),
-            e @ (Ty::Int | Ty::Function(..)) => e.clone(), // Dummy type
-        },
-    }
-}
-
 pub fn build(program: &ast::Program) -> Result<Program> {
     use ast::DeclKind as D;
     let mut ir = Program {
         functions: Map::new(),
     };
-    let function_return_types = program
+    let function_tys = program
         .decls
         .iter()
         .map(|decl| match &decl.kind {
-            D::Function(ast::Function { name, returns, .. }) => (
+            D::Function(ast::Function {
+                name,
+                parameters,
+                returns,
+                body: _,
+            }) => (
                 name.kind.clone(),
-                returns.as_ref().map(|x| to_ir_ty(&x.kind)),
+                (
+                    parameters.iter().map(|arg| to_ir_ty(&arg.1.kind)).collect(),
+                    returns.as_ref().map(|ret| to_ir_ty(&ret.kind)),
+                ),
             ),
         })
         .collect();
     for decl in &program.decls {
         match &decl.kind {
             D::Function(fn_decl) => {
-                let builder = IrBuilder::new(&function_return_types);
+                let builder = IrBuilder::new(&function_tys);
                 let function = builder.build_function(fn_decl)?;
                 ir.functions.insert(fn_decl.name.kind.clone(), function);
             }

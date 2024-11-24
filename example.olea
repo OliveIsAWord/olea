@@ -1,2 +1,11 @@
-fn foo(x int, y int):
-    x^ = y^
+fn is_odd(n int) int:
+    if n:
+        is_even(n - 1)
+    else:
+        0
+
+fn is_even(n int) int:
+    if n:
+        is_odd(n - 1)
+    else:
+        1

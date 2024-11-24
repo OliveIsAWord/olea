@@ -174,6 +174,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                             write_inst!(code, "mov {}, {}", reg.foo(), lhs_reg.foo());
                             write_inst!(code, "{} {}, {}", op_mnemonic, reg.foo(), rhs_reg.foo());
                         }
+                        Sk::Function(name) => write_inst!(code, "mov {}, {name}", reg.foo()),
                         Sk::Phi(_) => (),
                     }
                 }
@@ -183,7 +184,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                     write_inst!(code, "mov [{}], {}", dst_reg.bar(), src_reg.foo());
                 }
                 Inst::Call {
-                    name,
+                    callee,
                     returns,
                     args,
                 } => {
@@ -205,7 +206,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                         let reg = regs.get(r).unwrap();
                         write_inst!(code, "push {}", reg.foo());
                     }
-                    write_inst!(code, "call {name}");
+                    write_inst!(code, "call {callee}");
                     write_comment!(code, "get return values");
                     for r in returns {
                         let reg = regs.get(r).unwrap();

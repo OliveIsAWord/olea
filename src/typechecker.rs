@@ -14,9 +14,12 @@ type Result<T = ()> = std::result::Result<T, Error>;
 
 type Tys = Map<Register, Ty>;
 type Blocks = Map<BlockId, Block>;
+// NOTE: This can be changed to take 2 lifetime parameters. Also, we can AsRef the value type into something like `(&'a [Ty], &'a [Ty])` if need be.
+type FunctionTys<'a> = &'a Map<&'a str, &'a (Vec<Ty>, Vec<Ty>)>;
 
 #[derive(Debug)]
 struct TypeChecker<'a> {
+    function_tys: FunctionTys<'a>,
     tys: &'a Tys,
     name: &'a str,
 }
@@ -81,6 +84,10 @@ impl<'a> TypeChecker<'a> {
                 }
                 ty.clone()
             }
+            Sk::Function(name) => {
+                let (params, returns) = self.function_tys.get(name.as_ref()).expect("function get");
+                Ty::Function(params.clone(), returns.clone())
+            }
         };
         Ok(ty)
     }
@@ -100,7 +107,16 @@ impl<'a> TypeChecker<'a> {
                 self.expect(src, inner)
             }
             Inst::Nop => Ok(()),
-            e @ Inst::Call{..} => todo!("{e:?}"),
+            Inst::Call {
+                callee,
+                args,
+                returns,
+            } => {
+                let arg_tys = args.iter().map(|&r| self.t(r).clone()).collect();
+                let return_tys = returns.iter().map(|&r| self.t(r).clone()).collect();
+                let fn_ty = Ty::Function(arg_tys, return_tys);
+                self.expect(*callee, &fn_ty)
+            }
         }
     }
     fn visit_block(&self, block: &Block) -> Result {
@@ -109,8 +125,12 @@ impl<'a> TypeChecker<'a> {
         }
         Ok(())
     }
-    fn visit_function(f: &'a Function, name: &'a str) -> Result {
-        let this = Self { tys: &f.tys, name };
+    fn visit_function(f: &'a Function, name: &'a str, function_tys: FunctionTys<'a>) -> Result {
+        let this = Self {
+            function_tys,
+            tys: &f.tys,
+            name,
+        };
         for i in f.dominator_tree.iter() {
             let block = f.blocks.get(&i).unwrap();
             this.visit_block(block)?;
@@ -120,9 +140,14 @@ impl<'a> TypeChecker<'a> {
 }
 
 pub fn typecheck(program: &mut Program) -> Result {
-    for (fn_name, f) in &mut program.functions {
+    let function_tys = program
+        .functions
+        .iter()
+        .map(|(name, f)| (name.as_ref(), &f.function_ty))
+        .collect();
+    for (fn_name, f) in &program.functions {
         // println!("typechecking {fn_name}");
-        TypeChecker::visit_function(f, fn_name)?;
+        TypeChecker::visit_function(f, fn_name, &function_tys)?;
     }
     Ok(())
 }

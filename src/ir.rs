@@ -21,6 +21,8 @@ impl Program {
 /// A body of code accepts and yields some registers.
 #[derive(Clone, Debug)]
 pub struct Function {
+    /// The types of the parameters and returned values.
+    pub function_ty: (Vec<Ty>, Vec<Ty>),
     /// A list of registers containing the input values in order at the start of the function's execution.
     pub parameters: Vec<Register>,
     /// The basic blocks of code comprising this function.
@@ -37,6 +39,7 @@ pub struct Function {
 
 impl Function {
     pub fn new(
+        function_ty: (Vec<Ty>, Vec<Ty>),
         parameters: Vec<Register>,
         blocks: Map<BlockId, Block>,
         tys: Map<Register, Ty>,
@@ -44,6 +47,7 @@ impl Function {
     ) -> Self {
         let dominator_tree = DominatorTree::new(&blocks);
         let mut this = Function {
+            function_ty,
             parameters,
             blocks,
             tys,
@@ -127,11 +131,12 @@ impl Function {
                                 }
                                 write!(f, ")")
                             }
+                            Sk::Function(name) => write!(f, "{name}"),
                         }
                     }
                     Inst::Write(dst, src) => write!(f, "{dst}^ = {src}"),
                     Inst::Call {
-                        name,
+                        callee,
                         returns,
                         args,
                     } => {
@@ -142,7 +147,7 @@ impl Function {
                             }
                             write!(f, "{r}")?;
                         }
-                        write!(f, "] = {name}(")?;
+                        write!(f, "] = {callee}(")?;
                         for (i, r) in args.iter().enumerate() {
                             if i != 0 {
                                 write!(f, ", ")?;
@@ -231,7 +236,7 @@ impl Block {
                                 f(r, false);
                             }
                         }
-                        Sk::Int(..) | Sk::StackAlloc(_) => {}
+                        Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => {}
                     }
                 }
                 Inst::Write(r1, r2) => {
@@ -239,10 +244,11 @@ impl Block {
                     f(r2, false);
                 }
                 Inst::Call {
-                    name: _,
+                    callee,
                     returns,
                     args,
                 } => {
+                    f(callee, false);
                     for r in returns {
                         f(r, true);
                     }
@@ -275,7 +281,7 @@ pub enum Inst {
     Write(Register, Register),
     /// Execute a function, passing the values in a list of registers as arguments and storing return values in a list of registers.
     Call {
-        name: Str,
+        callee: Register,
         returns: Vec<Register>,
         args: Vec<Register>,
     },
@@ -319,6 +325,8 @@ pub enum StoreKind {
     StackAlloc(Ty),
     /// A read access through a pointer to memory.
     Read(Register),
+    /// The pointer to a function.
+    Function(Str),
 }
 
 /// A logic or arithmetic operation taking and yielding one value.

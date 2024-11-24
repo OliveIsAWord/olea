@@ -205,7 +205,7 @@ pub fn common_subexpression_elimination(f: &mut Function) {
         for inst in &mut block.insts {
             let Inst::Store(r, sk) = inst else { continue };
             match sk {
-                Sk::Int(..) | Sk::Phi(_) | Sk::UnaryOp(..) | Sk::BinOp(..) => {}
+                Sk::Int(..) | Sk::Phi(_) | Sk::UnaryOp(..) | Sk::BinOp(..) | Sk::Function(_) => {}
                 | Sk::Read(_) // impure, performing CSE can erroneously erase a write
                 | Sk::StackAlloc(_) // unique allocation, can't be copied
                 | Sk:: Copy(_) // pointless to copy a copy

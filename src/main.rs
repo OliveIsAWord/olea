@@ -106,6 +106,7 @@ fn main() -> ExitCode {
                     format!("this expression needs to yield a value but doesn't"),
                     Some(("required by this outer context".to_owned(), span)),
                 ),
+                E::CantAssignToConstant => ("Can't assign to constant".to_owned(), None),
             };
             let mut e = Snippet::source(&src)
                 .origin(file_path)
@@ -136,20 +137,10 @@ fn main() -> ExitCode {
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
                 /*
-                E::NotMatching(reg1, reg2) => {
-                    let span1 = fun.spans.get(&reg1).unwrap().clone();
-                    let span2 = fun.spans.get(&reg2).unwrap().clone();
-                    let ty1 = fun.tys.get(&reg1).unwrap();
-                    let ty2 = fun.tys.get(&reg2).unwrap();
-                    m1 = format!("has type {ty1}");
-                    m2 = format!("has type {ty2}");
-                    (
-                        "mismatched_types".to_owned(),
-                        snippet
-                            .annotation(Level::Error.span(span2).label(&m2))
-                            .annotation(Level::Error.span(span1).label(&m1)),
-                    )
-                }
+                E::NotFunction(reg) => (
+                    format!("expected function, got {}", fun.tys.get(&reg).unwrap()),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
                 */
                 E::Expected(reg, given_ty) => {
                     let span = fun.spans.get(&reg).unwrap().clone();
@@ -158,15 +149,7 @@ fn main() -> ExitCode {
                         format!("expected {given_ty}, got {reg_ty}"),
                         snippet.annotation(Level::Error.span(span)),
                     )
-                } /*
-                  E::ExpectedInner(reg, ty1, ty2) => {
-                      let span = fun.spans.get(&reg).unwrap().clone();
-                      (
-                          format!("expected {ty2}, got {ty1}"),
-                          snippet.annotation(Level::Error.span(span)),
-                      )
-                  }
-                  */
+                }
             };
             error_snippet(Level::Error.title(&title).snippet(snippet));
             return ExitCode::FAILURE;
