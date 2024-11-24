@@ -400,6 +400,7 @@ pub enum Condition {
     /// Take the first branch if the register contains a non-zero value, meaning:
     /// - An integer not equal to zero.
     /// - A pointer whose address is not equal to zero.
+    /// - A function whose address is not equal to zero (so all of them?).
     NonZero(Register),
 }
 

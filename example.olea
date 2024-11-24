@@ -1,11 +1,5 @@
-fn is_odd(n int) int:
-    if n:
-        is_even(n - 1)
-    else:
+fn foo(x int, y int^) int^:
+    if foo:
         0
-
-fn is_even(n int) int:
-    if n:
-        is_odd(n - 1)
     else:
         1

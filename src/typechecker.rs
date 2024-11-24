@@ -20,6 +20,7 @@ type FunctionTys<'a> = &'a Map<&'a str, &'a (Vec<Ty>, Vec<Ty>)>;
 #[derive(Debug)]
 struct TypeChecker<'a> {
     function_tys: FunctionTys<'a>,
+    returns: &'a [Ty],
     tys: &'a Tys,
     name: &'a str,
 }
@@ -119,15 +120,41 @@ impl<'a> TypeChecker<'a> {
             }
         }
     }
+    fn visit_jump_loc(&self, loc: &JumpLocation) -> Result {
+        match loc {
+            JumpLocation::Block(_) => Ok(()),
+            JumpLocation::Return(regs) => {
+                if regs.len() != self.returns.len() {
+                    // The IR lowering phase will always produce functions with 0 or 1 returns, and it checks that all paths return the appropriate number of values. This code path will only run when typechecking transformed IR, namely after lowering IR types to machine-friendly types.
+                    todo!("proper error diagnostic for wrong number of returns");
+                }
+                regs.iter()
+                    .zip(self.returns)
+                    .map(|(&r, ty)| self.expect(r, ty))
+                    .collect()
+            }
+        }
+    }
     fn visit_block(&self, block: &Block) -> Result {
         for inst in &block.insts {
             self.visit_inst(inst)?;
         }
-        Ok(())
+        match &block.exit {
+            Exit::Jump(loc) => self.visit_jump_loc(loc),
+            Exit::CondJump(cond, loc1, loc2) => {
+                match cond {
+                    Condition::NonZero(_) => {}
+                }
+                self.visit_jump_loc(loc1)?;
+                self.visit_jump_loc(loc2)
+            }
+        }
     }
     fn visit_function(f: &'a Function, name: &'a str, function_tys: FunctionTys<'a>) -> Result {
+        let returns = &function_tys.get(name).unwrap().1;
         let this = Self {
             function_tys,
+            returns,
             tys: &f.tys,
             name,
         };
