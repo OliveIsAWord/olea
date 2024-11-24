@@ -1,5 +1,3 @@
-fn foo(x int, y int^) int^:
-    if foo:
-        0
-    else:
-        1
+fn foo() int^:
+    let x = foo()
+    x

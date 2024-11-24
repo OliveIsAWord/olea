@@ -136,12 +136,10 @@ fn main() -> ExitCode {
                     ),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
-                /*
                 E::NotFunction(reg) => (
                     format!("expected function, got {}", fun.tys.get(&reg).unwrap()),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
-                */
                 E::Expected(reg, given_ty) => {
                     let span = fun.spans.get(&reg).unwrap().clone();
                     let reg_ty = fun.tys.get(&reg).unwrap();

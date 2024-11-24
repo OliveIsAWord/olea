@@ -392,9 +392,7 @@ impl<'src> Parser<'src> {
             let name = self
                 .name()
                 .ok_or_else(|| self.err("expected name for let statement"))?;
-            let ty = self
-                .ty()
-                .and_then(|o| o.ok_or_else(|| self.err("let binding needs a type annotation")))?;
+            let ty = self.ty()?;
             if self.just(P::Equals).is_none() {
                 return Err(self.err("expected `=` for let statement"));
             }

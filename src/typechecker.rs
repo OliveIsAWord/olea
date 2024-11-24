@@ -5,6 +5,8 @@ use crate::ir::*;
 pub enum ErrorKind {
     // We dereferenced a register of a non-pointer type.
     NotPointer(Register),
+    // We called a register of a non-function type.
+    NotFunction(Register),
     // The register has one type but we expected another.
     Expected(Register, Ty),
 }
@@ -113,6 +115,12 @@ impl<'a> TypeChecker<'a> {
                 args,
                 returns,
             } => {
+                match self.t(*callee) {
+                    Ty::Function(..) => {}
+                    Ty::Int | Ty::Pointer(_) => {
+                        return Err((self.name.into(), ErrorKind::NotFunction(*callee)))
+                    }
+                }
                 let arg_tys = args.iter().map(|&r| self.t(r).clone()).collect();
                 let return_tys = returns.iter().map(|&r| self.t(r).clone()).collect();
                 let fn_ty = Ty::Function(arg_tys, return_tys);
@@ -173,7 +181,10 @@ pub fn typecheck(program: &mut Program) -> Result {
         .map(|(name, f)| (name.as_ref(), &f.function_ty))
         .collect();
     for (fn_name, f) in &program.functions {
-        // println!("typechecking {fn_name}");
+        println!("typechecking {fn_name}");
+        for (r, ty) in &f.tys {
+            println!("  {r} {ty}");
+        }
         TypeChecker::visit_function(f, fn_name, &function_tys)?;
     }
     Ok(())

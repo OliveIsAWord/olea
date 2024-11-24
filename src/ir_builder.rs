@@ -151,8 +151,12 @@ impl<'a> IrBuilder<'a> {
         let span = span.clone();
         let reg = match kind {
             S::Let(name, ty, body) => {
-                let alloc_reg = self.new_var(name.clone(), to_ir_ty(&ty.kind));
                 let value_reg = self.build_expr_unvoid(body, span)?;
+                let alloc_ty = ty.as_ref().map_or_else(
+                    || self.tys.get(&value_reg).unwrap().clone(),
+                    |t| to_ir_ty(&t.kind),
+                );
+                let alloc_reg = self.new_var(name.clone(), alloc_ty);
                 self.push_write(alloc_reg, value_reg);
                 None
             }
@@ -311,17 +315,32 @@ impl<'a> IrBuilder<'a> {
             }
             E::Call(callee, args) => {
                 let callee = self.build_expr_unvoid(callee, span.clone())?;
+                let returns: Vec<_> = match self.tys.get(&callee).unwrap() {
+                    Ty::Function(_, returns) => {
+                        assert!(returns.len() == 1);
+                        // somewhat silly clone because we need mutable access to `self` for `new_reg`.
+                        returns
+                            .clone()
+                            .into_iter()
+                            .map(|ty| self.new_reg(ty, span.clone()))
+                            .collect()
+                    }
+                    Ty::Int | Ty::Pointer(_) => {
+                        // dummy return
+                        vec![self.new_reg(Ty::Int, span.clone())]
+                    }
+                };
+                let return_reg = returns.first().copied();
                 let args = args
                     .iter()
                     .map(|arg| self.build_expr_unvoid(arg, span.clone()))
                     .collect::<Result<_>>()?;
-                let returns = self.new_reg(Ty::Int, span);
                 self.push_inst(Inst::Call {
                     callee,
                     args,
-                    returns: vec![returns],
+                    returns,
                 });
-                Some(returns)
+                return_reg
             }
         };
         // println!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");

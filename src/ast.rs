@@ -71,7 +71,7 @@ pub type Stmt = Spanned<StmtKind>;
 #[derive(Clone, Debug)]
 pub enum StmtKind {
     /// A local variable declaration. This introduces a name which is bound to a value and can be accessed by all following statements in the block.
-    Let(Name, Ty, Expr),
+    Let(Name, Option<Ty>, Expr),
     /// An expression whose yielded value, if any, is ignored (unless it is the final statement of a block). See [`ExprKind`].
     Expr(Expr),
 }
