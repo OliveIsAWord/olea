@@ -20,6 +20,7 @@ mod ir_builder;
 mod ir_optimizer;
 mod lexer;
 mod parser;
+#[allow(dead_code)]
 mod ttree_visualize;
 mod typechecker;
 
@@ -57,7 +58,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // println!("# Source code:\n{src}");
+    println!("# Source code:\n{src}");
     let tokens = lexer::tokenize(&src);
     // dbg!(tokens.has_error);
     /*
@@ -90,7 +91,7 @@ fn main() -> ExitCode {
         }
     };
     //println!("# Token tree:");
-    ttree_visualize::visualize(&ttree, &src);
+    //ttree_visualize::visualize(&ttree, &src);
     //println!();
     let ast = match parser::parse(&ttree, &src) {
         Ok(x) => x,

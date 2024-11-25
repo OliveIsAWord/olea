@@ -204,7 +204,8 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                         let reg = regs.get(r).unwrap();
                         write_inst!(code, "push {}", reg.foo());
                     }
-                    write_inst!(code, "call {callee}");
+                    let callee_reg = regs.get(callee).unwrap();
+                    write_inst!(code, "call {}", callee_reg.foo());
                     write_comment!(code, "get return values");
                     for r in returns {
                         let reg = regs.get(r).unwrap();

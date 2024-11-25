@@ -193,6 +193,31 @@ impl<'src> Parser<'src> {
     }
     #[allow(clippy::unnecessary_wraps)]
     fn ty(&mut self) -> Parsed<Ty> {
+        if let Some(fn_span) = self.just(P::Fn) {
+            let Some(Spanned {
+                kind: Tt::Paren(params, _),
+                span,
+            }) = self.peek()
+            else {
+                return Err(self.err("expected function type parameters"));
+            };
+            self.next().unwrap();
+            let params = self.block(
+                |this| {
+                    this.ty()
+                        .transpose()
+                        .unwrap_or_else(|| Err(this.err("expected parameter type")))
+                },
+                params,
+                span.start..span.start,
+                span.end..span.end,
+            )?;
+            let returns = self.ty()?.map(Box::new);
+            return Ok(Some(Spanned {
+                kind: TyKind::Function(params, returns),
+                span: fn_span.start..self.get_previous_span().end,
+            }));
+        }
         let Some(name) = self.name() else {
             return Ok(None);
         };

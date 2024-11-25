@@ -179,10 +179,12 @@ pub fn typecheck(program: &Program) -> Result {
         .map(|(name, f)| (name.as_ref(), (f.param_tys.as_ref(), f.return_tys.as_ref())))
         .collect();
     for (fn_name, f) in &program.functions {
+        /*
         println!("typechecking {fn_name}");
         for (r, ty) in &f.tys {
             println!("  {r} {ty}");
         }
+        */
         TypeChecker::visit_function(f, fn_name, &function_tys)?;
     }
     Ok(())

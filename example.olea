@@ -1,3 +1,6 @@
-fn foo() int^:
-    let x = foo()
-    x
+fn foo(bar fn(int) int) fn(int, int) int:
+    let z = baz(bar(23), 32)
+    baz
+
+fn baz(x int, y int) int:
+    x + y

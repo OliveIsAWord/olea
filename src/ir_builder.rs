@@ -37,6 +37,10 @@ fn to_ir_ty(ty: &ast::TyKind) -> Ty {
     match ty {
         &T::Int => Ty::Int,
         T::Pointer(inner) => Ty::Pointer(Box::new(to_ir_ty(&inner.kind))),
+        T::Function(params, returns) => Ty::Function(
+            params.iter().map(|t| to_ir_ty(&t.kind)).collect(),
+            returns.iter().map(|t| to_ir_ty(&t.kind)).collect(),
+        ),
     }
 }
 
