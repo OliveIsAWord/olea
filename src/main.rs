@@ -2,19 +2,20 @@
 
 #![warn(missing_docs)]
 #![allow(
-    clippy::type_complexity,
-    clippy::similar_names,
-    clippy::wildcard_imports,
     clippy::cast_possible_truncation,
+    clippy::missing_panics_doc,
+    clippy::option_if_let_else,
+    clippy::similar_names,
     clippy::too_many_lines,
-    clippy::option_if_let_else
+    clippy::type_complexity,
+    clippy::wildcard_imports
 )]
 
 mod arborist;
 pub mod ast;
 mod codegen_fox32;
 pub mod compiler_types;
-mod ir;
+pub mod ir;
 mod ir_builder;
 mod ir_optimizer;
 mod lexer;

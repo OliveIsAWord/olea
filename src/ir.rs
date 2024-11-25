@@ -1,3 +1,5 @@
+//! The Olea intermediate representation, a low level language that consists of [SSA](https://en.wikipedia.org/wiki/Static_single-assignment_form) registers and [basic blocks](https://en.wikipedia.org/wiki/Basic_block).
+
 use crate::compiler_types::{Map, Set, Span, Str};
 
 /// A full or partial program.
@@ -5,16 +7,6 @@ use crate::compiler_types::{Map, Set, Span, Str};
 pub struct Program {
     /// The functions composing this program.
     pub functions: Map<Str, Function>,
-}
-
-impl Program {
-    /*
-    pub fn type_check(&self) {
-        for (_name, f) in &self.functions {
-            f.type_check();
-        }
-    }
-    */
 }
 
 /// A body of code accepts and yields some registers.
@@ -34,11 +26,13 @@ pub struct Function {
     pub spans: Map<Register, Span>,
     /// The blocks that can directly jump to a given block.
     pub predecessors: Map<BlockId, Set<BlockId>>,
-    /// The dominator tree
+    /// The dominator tree of this function. See [`DominatorTree`].
     pub dominator_tree: DominatorTree,
 }
 
 impl Function {
+    /// Construct a function.
+    #[must_use]
     pub fn new(
         param_tys: Vec<Ty>,
         return_tys: Vec<Ty>,
@@ -61,23 +55,12 @@ impl Function {
         this.gen_predecessors();
         this
     }
-    /*
-    pub fn type_check(&self) {
-        let tys = &self.tys;
-        self.blocks
-            .values()
-            .flat_map(|b| &b.insts)
-            .for_each(|i| i.type_check(tys));
-        for Block { exit, .. } in self.blocks.values() {
-            exit.type_check(tys);
-        }
-    }
-    */
     /// Returns an iterator over the blocks and their IDs of the function. The first item is always the entry block.
     pub fn iter(&self) -> impl Iterator<Item = (BlockId, &Block)> {
         // NOTE: This relies on block 0 being first because of BTreeSet and the sort order of blocks
         self.blocks.iter().map(|(&id, block)| (id, block))
     }
+    /// Traverse the control flow graph to update the mapping of immediate predecessors for each block.
     pub fn gen_predecessors(&mut self) {
         let mut p: Map<_, _> = self.blocks.keys().map(|&id| (id, Set::new())).collect();
         for (&id, block) in &self.blocks {
@@ -193,6 +176,8 @@ pub struct Block {
 }
 
 impl Block {
+    /// Construct a block.
+    #[must_use]
     pub fn new(insts: Vec<Inst>, exit: Exit) -> Self {
         let mut this = Self {
             insts,
@@ -203,9 +188,11 @@ impl Block {
         this.gen_def_use();
         this
     }
+    /// Get all the blocks this block can jump to.
     pub fn successors(&self) -> impl Iterator<Item = BlockId> {
         self.exit.successors()
     }
+    /// Update the sets of used and defined registers.
     pub fn gen_def_use(&mut self) {
         let mut def = Set::new();
         let mut used = Set::new();
@@ -219,6 +206,7 @@ impl Block {
         self.defined_regs = def;
         self.used_regs = used;
     }
+    /// Mutably access every register usage with an additional parameter signalling whether this is the definition of the register.
     pub fn visit_regs<F: FnMut(&mut Register, bool)>(&mut self, mut f: F) {
         for inst in &mut self.insts {
             use StoreKind as Sk;
@@ -284,8 +272,11 @@ pub enum Inst {
     Write(Register, Register),
     /// Execute a function, passing the values in a list of registers as arguments and storing return values in a list of registers.
     Call {
+        /// The register containing the function.
         callee: Register,
+        /// The list of registers that store the function's returned values.
         returns: Vec<Register>,
+        /// The list of registers whose values are passed as arguments to the function.
         args: Vec<Register>,
     },
     /// Do nothing.
@@ -341,6 +332,7 @@ pub enum Exit {
 }
 
 impl Exit {
+    /// Get all the blocks this exit can jump to.
     pub fn successors(&self) -> impl Iterator<Item = BlockId> {
         let mut ids = vec![];
         let mut add = |loc: &JumpLocation| match loc {
@@ -380,6 +372,7 @@ pub enum JumpLocation {
 }
 
 impl JumpLocation {
+    /// Mutably access every register this jump location uses.
     pub fn visit_regs<F: FnMut(&mut Register)>(&mut self, mut f: F) {
         match self {
             Self::Block(_) => {}
@@ -401,20 +394,28 @@ pub struct Register(pub u128);
 pub struct BlockId(pub usize);
 
 impl BlockId {
+    /// The ID of the block first executed when calling a function.
     pub const ENTRY: Self = Self(0);
+    /// A placeholder ID which does not correspond to a block.
     pub const DUMMY: Self = Self(usize::MAX);
 
+    /// Check if this ID is the entry ID.
+    #[must_use]
     pub const fn is_entry(self) -> bool {
         self.0 == 0
     }
 }
 
+/// A [dominator tree](https://en.wikipedia.org/wiki/Dominator_(graph_theory)), a tree of blocks where a block's ancestors are all the blocks that must execute before it.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct DominatorTree {
+    /// The tree of blocks.
     pub children: Map<BlockId, Self>,
 }
 
 impl DominatorTree {
+    /// Construct a dominator tree.
+    #[must_use]
     pub fn new(blocks: &Map<BlockId, Block>) -> Self {
         let mut this = Self {
             children: blocks
@@ -467,6 +468,7 @@ impl DominatorTree {
             child.make_immediate(blocks);
         }
     }
+    /// Access every block ID in the dominator tree such that a given block is visited before any of the blocks it strictly dominates.
     pub fn visit(&self, mut f: impl FnMut(BlockId)) {
         self.visit_inner(&mut f);
     }
@@ -476,6 +478,7 @@ impl DominatorTree {
             children.visit_inner(f);
         }
     }
+    /// Get the block IDs of this dominator tree in visiting order.
     pub fn iter(&self) -> impl Iterator<Item = BlockId> + '_ {
         // obviously it's bad to allocate a vec for this, but it's our little secret.
         // the lifetime bound (i think) lets us change this to something better if need be
