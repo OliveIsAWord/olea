@@ -1,9 +1,6 @@
 use crate::ast;
-use crate::compiler_types::{Map, Str};
-#[allow(clippy::wildcard_imports)]
-// We can make these imports explicit when it's less likely to create churn.
+use crate::compiler_types::{Map, Name, Span, Spanned, Str};
 use crate::ir::*;
-use ast::{Name, Span, Spanned};
 
 /// This trait defines a helper method for transforming a `T` into an `Option<T>` with a postfix syntax.
 trait ToSome {
@@ -90,7 +87,7 @@ impl<'a> IrBuilder<'a> {
             body,
         }: &ast::Function,
     ) -> Result<Function> {
-        let return_tys = returns.into_iter().map(|t| to_ir_ty(&t.kind)).collect();
+        let return_tys = returns.iter().map(|t| to_ir_ty(&t.kind)).collect();
         let mut param_tys = vec![];
         for (p_name, p_ty) in parameters {
             let ir_ty = to_ir_ty(&p_ty.kind);
@@ -101,11 +98,10 @@ impl<'a> IrBuilder<'a> {
             let var_reg = self.new_var(p_name.clone(), ir_ty);
             self.push_write(var_reg, reg);
         }
-        let reg = self.build_block(body, returns.is_some())?;
-        let return_regs = if returns.is_some() {
-            vec![reg.unwrap()]
+        let return_regs = if let Some(returns) = returns.as_ref() {
+            vec![self.build_block_unvoid(body, returns.span.clone())?]
         } else {
-            assert_eq!(reg, None);
+            self.build_block(body, false)?;
             vec![]
         };
         self.switch_to_new_block(
@@ -114,7 +110,8 @@ impl<'a> IrBuilder<'a> {
         );
         assert_eq!(self.scopes.len(), 1);
         Ok(Function::new(
-            (param_tys, return_tys),
+            param_tys,
+            return_tys,
             self.parameters,
             self.blocks,
             self.tys,
@@ -163,13 +160,6 @@ impl<'a> IrBuilder<'a> {
             S::Expr(expr) => self.build_expr(expr, unvoid)?,
         };
         Ok(reg)
-    }
-
-    fn build_expr_void(&mut self, expr: &ast::Expr) -> Result<()> {
-        if let Some(r) = self.build_expr(expr, false)? {
-            eprintln!("suspicious: builder yielded {r}");
-        }
-        Ok(())
     }
 
     fn build_expr_unvoid(&mut self, expr: &ast::Expr, outer: Span) -> Result<Register> {
@@ -403,10 +393,9 @@ impl<'a> IrBuilder<'a> {
         match sk {
             &Sk::Int(_) => Ty::Int,
             Sk::Phi(regs) => t(regs.iter().min().expect("empty phi").1),
-            Sk::UnaryOp(_, r) => t(r),
             Sk::BinOp(_, lhs, _rhs) => t(lhs),
             Sk::StackAlloc(ty) => Ty::Pointer(Box::new(ty.clone())),
-            Sk::Copy(r) => t(r),
+            Sk::Copy(r) | Sk::UnaryOp(UnaryOp::Neg, r) => t(r),
             Sk::Read(r) => match self.tys.get(r).unwrap() {
                 Ty::Pointer(inner) => inner.as_ref().clone(),
                 e @ (Ty::Int | Ty::Function(..)) => e.clone(), // Dummy type

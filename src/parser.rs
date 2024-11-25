@@ -1,5 +1,8 @@
+#![allow(clippy::range_plus_one)]
+
 use crate::arborist::{self as a, PlainToken as P, TokenTree as Tt};
 use crate::ast::*;
+use crate::compiler_types::{Name, Span, Spanned};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
@@ -12,7 +15,7 @@ pub enum ErrorKind {
     Custom(&'static str),
 }
 
-fn err_span(message: &'static str, span: Span) -> Error {
+const fn err_span(message: &'static str, span: Span) -> Error {
     Error {
         span,
         kind: ErrorKind::Custom(message),
@@ -65,7 +68,7 @@ impl<'src> Parser<'src> {
         let Spanned { kind, span } = self.peek()?;
         if *kind == Tt::Plain(token) {
             self.next().unwrap();
-            Some(span.clone())
+            Some(span)
         } else {
             None
         }
@@ -100,7 +103,7 @@ impl<'src> Parser<'src> {
         let Some(span) = self.just(P::Int) else {
             return Ok(None);
         };
-        let int_str = &self.source[span.clone()];
+        let int_str = &self.source[span];
         int_str
             .parse()
             .map(Some)
@@ -129,8 +132,8 @@ impl<'src> Parser<'src> {
             tokens,
             i: 0,
             source,
-            start_span: start_span.clone(),
-            end_span: end_span.clone(),
+            start_span,
+            end_span,
         };
         let o = item_parser(&mut this)?;
         match this.get_span_checked() {
@@ -433,6 +436,7 @@ impl<'src> Parser<'src> {
     fn decl(&mut self) -> Parsed<Decl> {
         self.spanned2(Self::decl_kind)
     }
+    #[allow(clippy::single_match_else)]
     fn decl_kind(&mut self) -> Parsed<DeclKind> {
         let Some(Spanned { kind, .. }) = self.next() else {
             return Ok(None);

@@ -59,7 +59,6 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
     }
 }
 
-// TODO: accept function name as additional argument
 macro_rules! write_label {
     ($dst:expr, $($arg:tt)*) => {{
         use ::std::fmt::Write;
@@ -94,9 +93,9 @@ pub fn gen_program(ir: &Program) -> String {
     write_comment!(code, "Generated source code:");
     // TODO: this shouldn't be a hardcoded value
     if ir.functions.contains_key("main") {
-        write_inst!(code, "call main");
+        write_inst!(code, "jmp main");
     }
-    for (name, f) in ir.functions.iter() {
+    for (name, f) in &ir.functions {
         let fn_output = gen_function(f, name);
         code.push_str(&fn_output);
         code.push('\n');
@@ -133,7 +132,6 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         use StoreKind as Sk;
         assert!(indices.remove(&i));
         let block = f.blocks.get(&i).unwrap();
-        // TODO: this function and its usage is almost certainly wrong and/or bad
         write_label!(code, "{function_name}_{}", i.0);
         for inst in &block.insts {
             match inst {

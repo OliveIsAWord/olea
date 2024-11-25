@@ -1,12 +1,10 @@
-use crate::ast::{Span, Spanned};
+use crate::compiler_types::{Span, Spanned};
 pub use crate::lexer::PlainToken;
-use crate::lexer::{self, ControlToken, Token, Tokens};
+use crate::lexer::{ControlToken, Token, Tokens};
 
-type T = Token;
 type C = ControlToken;
-type P = PlainToken;
 use Token::Control as Co;
-use Token::Plain as Pl;
+// use Token::Plain as Pl;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TokenTree {
@@ -44,7 +42,7 @@ impl Arborizer<'_> {
     fn peek(&self) -> Option<(Token, Span)> {
         self.tokens
             .get(self.i)
-            .map(|lexer::Spanned { token, span }| (token, span.start..span.start + span.len))
+            .map(|Spanned { kind, span }| (kind, span))
     }
     fn next(&mut self) -> Option<(Token, Span)> {
         let token = self.peek()?;
@@ -74,14 +72,13 @@ impl Arborizer<'_> {
     }
     fn get_span(&self) -> Span {
         if let Some((_, span)) = self.peek() {
-            return span;
+            span
+        } else {
+            self.tokens.eoi_span.clone()
         }
-        let span = self.tokens.eoi_span;
-        span.start..span.start + span.len
     }
     fn get_previous_span(&self) -> Span {
-        let span = self.tokens.get(self.i - 1).unwrap().span;
-        span.start..span.start + span.len
+        self.tokens.get(self.i - 1).unwrap().span
     }
     fn unexpected(&self, token: ControlToken) -> Result<()> {
         Err(Spanned {
@@ -108,7 +105,7 @@ impl Arborizer<'_> {
                 unreachable!("unexpected eof");
             };
             match token {
-                Pl(t) => item.push(Spanned {
+                Token::Plain(t) => item.push(Spanned {
                     kind: Tt::Plain(t),
                     span,
                 }),
@@ -222,7 +219,7 @@ impl Arborizer<'_> {
         match self.next() {
             None => Ok(()),
             Some((t, _)) => match t {
-                Pl(_) => unreachable!(),
+                Token::Plain(_) => unreachable!(),
                 Co(c) => self.unexpected(c),
             },
         }

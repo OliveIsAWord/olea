@@ -1,9 +1,19 @@
-#![allow(dead_code)]
+//! A compiler for the Olea programming language.
+
+#![warn(missing_docs)]
+#![allow(
+    clippy::type_complexity,
+    clippy::similar_names,
+    clippy::wildcard_imports,
+    clippy::cast_possible_truncation,
+    clippy::too_many_lines,
+    clippy::option_if_let_else
+)]
 
 mod arborist;
 pub mod ast;
 mod codegen_fox32;
-mod compiler_types;
+pub mod compiler_types;
 mod ir;
 mod ir_builder;
 mod ir_optimizer;
@@ -12,12 +22,13 @@ mod parser;
 mod ttree_visualize;
 mod typechecker;
 
-use annotate_snippets::{Level, Message, Renderer, Snippet};
+use annotate_snippets::{renderer::Style, Level, Message, Renderer, Snippet};
+use compiler_types::Spanned;
 use std::process::ExitCode;
 
 fn error(message: &str) {
     // Don't render message in bold, as is default.
-    let error_renderer = Renderer::styled().emphasis(Default::default());
+    let error_renderer = Renderer::styled().emphasis(Style::default());
     let error = Level::Error.title(message);
     anstream::eprintln!("{}", error_renderer.render(error));
 }
@@ -59,7 +70,7 @@ fn main() -> ExitCode {
     */
     let ttree = match arborist::arborize(&tokens) {
         Ok(x) => x,
-        Err(ast::Spanned { kind, span }) => {
+        Err(Spanned { kind, span }) => {
             use arborist::ErrorKind as E;
             let title = match kind {
                 E::Unexpected(c) => format!("unexpected {c:?}"),
@@ -78,11 +89,11 @@ fn main() -> ExitCode {
         }
     };
     //println!("# Token tree:");
-    //ttree_visualize::visualize(&ttree, &src);
+    ttree_visualize::visualize(&ttree, &src);
     //println!();
     let ast = match parser::parse(&ttree, &src) {
         Ok(x) => x,
-        Err(ast::Spanned { kind, span }) => {
+        Err(Spanned { kind, span }) => {
             let parser::ErrorKind::Custom(title) = kind;
             error_snippet(
                 Level::Error.title(title).snippet(
@@ -98,12 +109,12 @@ fn main() -> ExitCode {
     //println!("#Syntax tree:\n{ast:?}\n");
     let mut ir = match ir_builder::build(&ast) {
         Ok(x) => x,
-        Err(ast::Spanned { kind, span }) => {
+        Err(Spanned { kind, span }) => {
             use ir_builder::ErrorKind as E;
             let (title, note) = match kind {
                 E::VariableNotFound(v) => (format!("could not find variable `{v}`"), None),
                 E::DoesNotYield(span) => (
-                    format!("this expression needs to yield a value but doesn't"),
+                    "this expression needs to yield a value but doesn't".to_string(),
                     Some(("required by this outer context".to_owned(), span)),
                 ),
                 E::CantAssignToConstant => ("Can't assign to constant".to_owned(), None),
@@ -122,7 +133,7 @@ fn main() -> ExitCode {
 
     println!("#IR:\n{ir}");
 
-    match typechecker::typecheck(&mut ir) {
+    match typechecker::typecheck(&ir) {
         Ok(()) => {}
         Err((fn_name, e)) => {
             use typechecker::ErrorKind as E;

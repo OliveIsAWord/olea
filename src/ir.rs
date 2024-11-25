@@ -1,5 +1,4 @@
-use crate::ast::Span;
-use crate::compiler_types::{Map, Set, Str};
+use crate::compiler_types::{Map, Set, Span, Str};
 
 /// A full or partial program.
 #[derive(Clone, Debug)]
@@ -21,8 +20,10 @@ impl Program {
 /// A body of code accepts and yields some registers.
 #[derive(Clone, Debug)]
 pub struct Function {
-    /// The types of the parameters and returned values.
-    pub function_ty: (Vec<Ty>, Vec<Ty>),
+    /// The types of the parameters.
+    pub param_tys: Vec<Ty>,
+    /// The types of the returned values.
+    pub return_tys: Vec<Ty>,
     /// A list of registers containing the input values in order at the start of the function's execution.
     pub parameters: Vec<Register>,
     /// The basic blocks of code comprising this function.
@@ -39,15 +40,17 @@ pub struct Function {
 
 impl Function {
     pub fn new(
-        function_ty: (Vec<Ty>, Vec<Ty>),
+        param_tys: Vec<Ty>,
+        return_tys: Vec<Ty>,
         parameters: Vec<Register>,
         blocks: Map<BlockId, Block>,
         tys: Map<Register, Ty>,
         spans: Map<Register, Span>,
     ) -> Self {
         let dominator_tree = DominatorTree::new(&blocks);
-        let mut this = Function {
-            function_ty,
+        let mut this = Self {
+            param_tys,
+            return_tys,
             parameters,
             blocks,
             tys,
@@ -191,7 +194,7 @@ pub struct Block {
 
 impl Block {
     pub fn new(insts: Vec<Inst>, exit: Exit) -> Self {
-        let mut this = Block {
+        let mut this = Self {
             insts,
             exit,
             defined_regs: Set::new(),
@@ -289,25 +292,6 @@ pub enum Inst {
     Nop,
 }
 
-impl Inst {
-    /*
-    fn type_check(&self, tys: &Map<Register, Ty>) {
-        let ty_of = |r| tys.get(r).unwrap();
-        match self {
-            Self::Store(r, sk) => assert_eq!(ty_of(r), &sk.ty(tys)),
-            Self::Write(dst, src) => match ty_of(dst) {
-                Ty::Pointer(inner) => assert_eq!(inner.as_ref(), ty_of(src)),
-                e @ (Ty::Int | Ty::Function(..)) => {
-                    panic!("typeck error: attempted to Write to {dst} of type {e}")
-                }
-            },
-            Self::Call { .. } => {} // TODO
-            Self::Nop => {}
-        }
-    }
-    */
-}
-
 /// A method of calculating a value to store in a register.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum StoreKind {
@@ -357,24 +341,6 @@ pub enum Exit {
 }
 
 impl Exit {
-    pub fn type_check(&self, tys: &Map<Register, Ty>) {
-        let ty_of = |r| tys.get(r).unwrap();
-        match self {
-            Self::Jump(location) => match location {
-                JumpLocation::Block(_) => (),
-                JumpLocation::Return(_) => (), // TODO
-            },
-            Self::CondJump(condition, _branch1, _branch2) => {
-                match condition {
-                    Condition::NonZero(r) => match ty_of(r) {
-                        Ty::Int | Ty::Pointer(_) => (),
-                        e @ Ty::Function(..) => panic!("can't nonzero a {e}"),
-                    },
-                }
-                // TODO: any sort of JumpLocation checking?
-            }
-        }
-    }
     pub fn successors(&self) -> impl Iterator<Item = BlockId> {
         let mut ids = vec![];
         let mut add = |loc: &JumpLocation| match loc {
@@ -438,7 +404,7 @@ impl BlockId {
     pub const ENTRY: Self = Self(0);
     pub const DUMMY: Self = Self(usize::MAX);
 
-    pub fn is_entry(self) -> bool {
+    pub const fn is_entry(self) -> bool {
         self.0 == 0
     }
 }
@@ -502,7 +468,7 @@ impl DominatorTree {
         }
     }
     pub fn visit(&self, mut f: impl FnMut(BlockId)) {
-        self.visit_inner(&mut f)
+        self.visit_inner(&mut f);
     }
     fn visit_inner(&self, f: &mut impl FnMut(BlockId)) {
         for (&id, children) in &self.children {

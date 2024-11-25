@@ -1,3 +1,5 @@
+use crate::compiler_types::{Span, Spanned};
+
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(u8)]
 pub enum ControlToken {
@@ -38,20 +40,19 @@ pub enum Token {
     Plain(PlainToken),
 }
 
-type T = Token;
 type C = ControlToken;
 type P = PlainToken;
 use Token::Control as Co;
 use Token::Plain as Pl;
 
 impl From<ControlToken> for Token {
-    fn from(value: ControlToken) -> Token {
+    fn from(value: ControlToken) -> Self {
         Co(value)
     }
 }
 
 impl From<PlainToken> for Token {
-    fn from(value: PlainToken) -> Token {
+    fn from(value: PlainToken) -> Self {
         Pl(value)
     }
 }
@@ -82,18 +83,6 @@ const PUNCTUATION: &[(&str, Token)] = &[
     ("^", Pl(P::Hat)),
 ];
 
-#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Span {
-    pub start: usize,
-    pub len: usize,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Spanned {
-    pub token: Token,
-    pub span: Span,
-}
-
 /// # Invariants
 /// `tokens` and `span` have the same length.
 #[derive(Clone, Debug, Default)]
@@ -116,23 +105,10 @@ impl Tokens {
         self.kinds.push(token);
         self.spans.push(span);
     }
-    pub fn get(&self, i: usize) -> Option<Spanned> {
-        let token = *self.kinds.get(i)?;
-        let span = self.spans[i];
-        Some(Spanned { token, span })
-    }
-    pub fn last(&self) -> Option<Spanned> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self.get(self.len() - 1).unwrap())
-        }
-    }
-    pub fn len(&self) -> usize {
-        self.kinds.len()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+    pub fn get(&self, i: usize) -> Option<Spanned<Token>> {
+        let kind = *self.kinds.get(i)?;
+        let span = self.spans[i].clone();
+        Some(Spanned { kind, span })
     }
 }
 
@@ -169,11 +145,8 @@ impl<'a> View<'a> {
 
 pub fn tokenize(src_bytes: &str) -> Tokens {
     let mut src = View::new(src_bytes);
-    let eoi_span = Span {
-        start: src.index,
-        len: 0,
-    };
-    let mut tokens = Tokens::new(eoi_span);
+    let eoi_span = src_bytes.len()..src_bytes.len();
+    let mut tokens = Tokens::new(eoi_span.clone());
     let mut indents: Vec<usize> = vec![];
     let mut was_newline = true;
     loop {
@@ -204,7 +177,7 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                                     ERR,
                                     Span {
                                         start: start + indent,
-                                        len: 0,
+                                        end: start + indent,
                                     },
                                 );
                             } else {
@@ -212,7 +185,7 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                                     Co(C::Indent),
                                     Span {
                                         start: start + last_indent,
-                                        len: indent - last_indent,
+                                        end: start + indent,
                                     },
                                 );
                             };
@@ -221,10 +194,7 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                         Ordering::Less => {
                             has_dedented = true;
                             indents.pop().unwrap();
-                            let span = Span {
-                                start: src.index,
-                                len: 0,
-                            };
+                            let span = src.index..src.index;
                             tokens.push(Co(C::Dedent), span);
                         }
                     }
@@ -266,7 +236,7 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
         };
         let span = Span {
             start,
-            len: src.index - start,
+            end: src.index,
         };
         tokens.push(token, span);
         if !was_newline {
@@ -279,10 +249,10 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
         .last()
         .is_some_and(|&t| t != Co(C::Newline) && t != Co(C::Dedent))
     {
-        tokens.push(Co(C::Newline), eoi_span);
+        tokens.push(Co(C::Newline), eoi_span.clone());
     }
     for _ in indents {
-        tokens.push(Co(C::Dedent), eoi_span);
+        tokens.push(Co(C::Dedent), eoi_span.clone());
     }
     tokens
 }

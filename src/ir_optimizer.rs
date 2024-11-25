@@ -1,10 +1,8 @@
 use crate::compiler_types::{Map, Set};
 use crate::ir::*;
 
-#[allow(clippy::type_complexity)] // I think I dislike this lint.
 #[rustfmt::skip] // rustfmt wants to split up longer lines.
 pub const PASSES: &[(&str, fn(&mut Function))] = &[
-    ("remove redundant reads", remove_redundant_reads),
     ("remove redundant writes", remove_redundant_writes),
     ("dead code elimination", dead_code_elimination),
     ("common subexpression elimination", common_subexpression_elimination),
@@ -23,75 +21,6 @@ pub fn optimize(ir: &mut Program) {
         } else {
             output = new_output;
             println!("!! {name}:\n{output}");
-        }
-    }
-}
-
-// TODO: make this actually work
-pub fn remove_redundant_reads(f: &mut Function) {
-    let mut stack_reads: Map<Register, Vec<(BlockId, usize)>> = f
-        .blocks
-        .values()
-        .flat_map(|b| &b.insts)
-        .filter_map(|inst| match inst {
-            &Inst::Store(r, StoreKind::StackAlloc(_)) => Some(r),
-            _ => None,
-        })
-        .map(|r| (r, vec![]))
-        .collect();
-    for (&block_id, block) in &f.blocks {
-        for (i, inst) in block.insts.iter().enumerate() {
-            let &Inst::Store(_, StoreKind::Read(src)) = inst else {
-                continue;
-            };
-            if let Some(vec) = stack_reads.get_mut(&src) {
-                vec.push((block_id, i));
-            }
-        }
-    }
-    for locs in stack_reads.values_mut() {
-        locs.sort();
-    }
-    for (src, locs) in stack_reads {
-        for (original_block_id, i) in locs {
-            let mut closed = Set::new();
-            let mut open = vec![BlockId::DUMMY];
-            let mut registers = Set::new();
-            while let Some(block_id) = open.pop() {
-                if !closed.insert(block_id) {
-                    continue;
-                }
-                let insts = if block_id == BlockId::DUMMY {
-                    &f.blocks.get(&original_block_id).unwrap().insts[..i]
-                } else if block_id == original_block_id {
-                    &f.blocks.get(&original_block_id).unwrap().insts[i + 1..]
-                } else {
-                    f.blocks.get(&block_id).unwrap().insts.as_ref()
-                };
-                let mut reached_beginning = block_id != original_block_id;
-                for inst in insts.iter().rev() {
-                    let r = match *inst {
-                        Inst::Store(val, StoreKind::Read(prev_stack)) if prev_stack == src => val,
-                        Inst::Write(prev_stack, val) if prev_stack == src => val,
-                        _ => continue,
-                    };
-                    registers.insert(r);
-                    reached_beginning = false;
-                    break;
-                }
-                if reached_beginning {
-                    let block_id = if block_id == BlockId::DUMMY {
-                        original_block_id
-                    } else {
-                        block_id
-                    };
-                    open.extend(f.predecessors.get(&block_id).unwrap().iter());
-                }
-            }
-            match &mut f.blocks.get_mut(&original_block_id).unwrap().insts[i] {
-                Inst::Store(_, _x) => (), //StoreKind::Phi(registers),
-                _ => unreachable!(),
-            }
         }
     }
 }
@@ -183,8 +112,7 @@ pub fn dead_code_elimination(f: &mut Function) {
             let old_len = block.insts.len();
             block.insts.retain(|inst| match inst {
                 Inst::Store(r, _) => used.contains(r),
-                Inst::Write(_, _) => true,
-                Inst::Call { .. } => true,
+                Inst::Write(_, _) | Inst::Call { .. } => true,
                 Inst::Nop => false,
             });
             changed |= block.insts.len() != old_len;

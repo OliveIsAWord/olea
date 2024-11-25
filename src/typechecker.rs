@@ -15,14 +15,13 @@ type Error = (Str, ErrorKind);
 type Result<T = ()> = std::result::Result<T, Error>;
 
 type Tys = Map<Register, Ty>;
-type Blocks = Map<BlockId, Block>;
-// NOTE: This can be changed to take 2 lifetime parameters. Also, we can AsRef the value type into something like `(&'a [Ty], &'a [Ty])` if need be.
-type FunctionTys<'a> = &'a Map<&'a str, &'a (Vec<Ty>, Vec<Ty>)>;
+// NOTE: This can be changed to take 2 lifetime parameters.
+type FunctionTys<'a> = &'a Map<&'a str, (&'a [Ty], &'a [Ty])>;
 
 #[derive(Debug)]
 struct TypeChecker<'a> {
     function_tys: FunctionTys<'a>,
-    returns: &'a [Ty],
+    return_tys: &'a [Ty],
     tys: &'a Tys,
     name: &'a str,
 }
@@ -89,7 +88,7 @@ impl<'a> TypeChecker<'a> {
             }
             Sk::Function(name) => {
                 let (params, returns) = self.function_tys.get(name.as_ref()).expect("function get");
-                Ty::Function(params.clone(), returns.clone())
+                Ty::Function(params.to_vec(), returns.to_vec())
             }
         };
         Ok(ty)
@@ -132,14 +131,13 @@ impl<'a> TypeChecker<'a> {
         match loc {
             JumpLocation::Block(_) => Ok(()),
             JumpLocation::Return(regs) => {
-                if regs.len() != self.returns.len() {
+                if regs.len() != self.return_tys.len() {
                     // The IR lowering phase will always produce functions with 0 or 1 returns, and it checks that all paths return the appropriate number of values. This code path will only run when typechecking transformed IR, namely after lowering IR types to machine-friendly types.
                     todo!("proper error diagnostic for wrong number of returns");
                 }
                 regs.iter()
-                    .zip(self.returns)
-                    .map(|(&r, ty)| self.expect(r, ty))
-                    .collect()
+                    .zip(self.return_tys)
+                    .try_for_each(|(&r, ty)| self.expect(r, ty))
             }
         }
     }
@@ -159,10 +157,10 @@ impl<'a> TypeChecker<'a> {
         }
     }
     fn visit_function(f: &'a Function, name: &'a str, function_tys: FunctionTys<'a>) -> Result {
-        let returns = &function_tys.get(name).unwrap().1;
+        let return_tys = &function_tys.get(name).unwrap().1;
         let this = Self {
             function_tys,
-            returns,
+            return_tys,
             tys: &f.tys,
             name,
         };
@@ -174,11 +172,11 @@ impl<'a> TypeChecker<'a> {
     }
 }
 
-pub fn typecheck(program: &mut Program) -> Result {
+pub fn typecheck(program: &Program) -> Result {
     let function_tys = program
         .functions
         .iter()
-        .map(|(name, f)| (name.as_ref(), &f.function_ty))
+        .map(|(name, f)| (name.as_ref(), (f.param_tys.as_ref(), f.return_tys.as_ref())))
         .collect();
     for (fn_name, f) in &program.functions {
         println!("typechecking {fn_name}");

@@ -4,22 +4,7 @@
 //!
 //! The types in this module represent the syntactic forms that comprise the Olea grammar. We use a convention for each category of item of an enum `FooKind` representing the element itself, and a `Foo` which contains a `FooKind` as well as the source span of the element.
 
-use crate::compiler_types::Str;
-
-/// A source span, a single subsection of a source file corresponding to an item.
-pub type Span = core::ops::Range<usize>;
-
-/// A string that carries its own span.
-pub type Name = Spanned<Str>;
-
-/// A wrapper type for associating an item with a source span. This type is aliased by an item type `Foo` wrapping around a `FooKind`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Spanned<T> {
-    /// The inner value.
-    pub kind: T,
-    /// The span corresponding to the inner value.
-    pub span: Span,
-}
+use crate::compiler_types::{Name, Span, Spanned};
 
 /// A full source program, made of a list of declarations.
 #[derive(Clone, Debug)]
@@ -76,7 +61,7 @@ pub enum StmtKind {
     Expr(Expr),
 }
 
-/// See [ExprKind].
+/// See [`ExprKind`].
 pub type Expr = Spanned<ExprKind>;
 
 /// An expression, a piece of code which may yield a value when executed.
