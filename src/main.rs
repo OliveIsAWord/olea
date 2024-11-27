@@ -18,7 +18,7 @@ pub mod compiler_types;
 pub mod ir;
 mod ir_builder;
 mod ir_display;
-// pub mod ir_liveness;
+pub mod ir_liveness;
 // TODO: rewrite to account for `used_regs` not including phi arguments.
 // mod ir_optimizer;
 mod lexer;
@@ -172,12 +172,11 @@ fn main() -> ExitCode {
     // println!("#Optimizer phase");
     // ir_optimizer::optimize(&mut ir);
     // println!();
-    /*
     for (name, f) in &ir.functions {
         let live = ir_liveness::calculate_liveness(f);
-        println!("{name}: {live:?}");
+        println!("{name}:");
+        live.pretty_print();
     }
-    */
     if false {
         let asm = codegen_fox32::gen_program(&ir);
         println!("#Codegen");

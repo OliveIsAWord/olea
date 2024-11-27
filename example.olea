@@ -1,6 +1,6 @@
-fn foo() int:
+fn foo(z int) int:
     let x = 10 + 20
     x + if 1:
         x * 2
     else:
-        42
+        z
