@@ -1,6 +1,6 @@
-fn foo(bar fn(int) int) fn(int, int) int:
-    let z = baz(bar(23), 32)
-    baz
-
-fn baz(x int, y int) int:
-    x + y
+fn foo() int:
+    let x = 10 + 20
+    x + if 1:
+        x * 2
+    else:
+        42

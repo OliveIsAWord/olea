@@ -17,7 +17,10 @@ mod codegen_fox32;
 pub mod compiler_types;
 pub mod ir;
 mod ir_builder;
-mod ir_optimizer;
+mod ir_display;
+// pub mod ir_liveness;
+// TODO: rewrite to account for `used_regs` not including phi arguments.
+// mod ir_optimizer;
 mod lexer;
 mod parser;
 #[allow(dead_code)]
@@ -109,7 +112,7 @@ fn main() -> ExitCode {
         }
     };
     //println!("#Syntax tree:\n{ast:?}\n");
-    let mut ir = match ir_builder::build(&ast) {
+    let ir = match ir_builder::build(&ast) {
         Ok(x) => x,
         Err(Spanned { kind, span }) => {
             use ir_builder::ErrorKind as E;
@@ -166,12 +169,19 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     }
-    println!("#Optimizer phase");
-    ir_optimizer::optimize(&mut ir);
-    println!();
-
-    let asm = codegen_fox32::gen_program(&ir);
-    println!("#Codegen");
-    println!("{asm}");
+    // println!("#Optimizer phase");
+    // ir_optimizer::optimize(&mut ir);
+    // println!();
+    /*
+    for (name, f) in &ir.functions {
+        let live = ir_liveness::calculate_liveness(f);
+        println!("{name}: {live:?}");
+    }
+    */
+    if false {
+        let asm = codegen_fox32::gen_program(&ir);
+        println!("#Codegen");
+        println!("{asm}");
+    }
     ExitCode::SUCCESS
 }

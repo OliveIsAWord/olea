@@ -70,85 +70,6 @@ impl Function {
         }
         self.predecessors = p;
     }
-    fn display_with_name(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-        name: &str,
-    ) -> Result<(), std::fmt::Error> {
-        for (id, block) in self.iter() {
-            if !id.is_entry() {
-                writeln!(f)?;
-            }
-            write!(f, "{name}_{}:", id.0)?;
-            for inst in &block.insts {
-                write!(f, "\n    ")?;
-                match inst {
-                    Inst::Store(r, sk) => {
-                        use StoreKind as Sk;
-                        write!(f, "{r} = ")?;
-                        match sk {
-                            Sk::StackAlloc(ty) => write!(f, "StackAlloc({ty:?})"),
-                            Sk::Int(i) => write!(f, "{i}"),
-                            Sk::Copy(r) => write!(f, "{r}"),
-                            Sk::Read(r) => write!(f, "{r}^"),
-                            Sk::UnaryOp(op, inner) => write!(
-                                f,
-                                "{}{inner}",
-                                match op {
-                                    UnaryOp::Neg => "-",
-                                }
-                            ),
-                            Sk::BinOp(op, lhs, rhs) => write!(
-                                f,
-                                "{lhs} {} {rhs}",
-                                match op {
-                                    BinOp::Add => "+",
-                                    BinOp::Sub => "-",
-                                    BinOp::Mul => "*",
-                                }
-                            ),
-                            Sk::Phi(regs) => {
-                                write!(f, "Phi(")?;
-                                for (i, (id, reg)) in regs.iter().enumerate() {
-                                    if i != 0 {
-                                        write!(f, ", ")?;
-                                    }
-                                    write!(f, "{id}: {reg}")?;
-                                }
-                                write!(f, ")")
-                            }
-                            Sk::Function(name) => write!(f, "{name}"),
-                        }
-                    }
-                    Inst::Write(dst, src) => write!(f, "{dst}^ = {src}"),
-                    Inst::Call {
-                        callee,
-                        returns,
-                        args,
-                    } => {
-                        write!(f, "[")?;
-                        for (i, r) in returns.iter().enumerate() {
-                            if i != 0 {
-                                write!(f, ", ")?;
-                            }
-                            write!(f, "{r}")?;
-                        }
-                        write!(f, "] = {callee}(")?;
-                        for (i, r) in args.iter().enumerate() {
-                            if i != 0 {
-                                write!(f, ", ")?;
-                            }
-                            write!(f, "{r}")?;
-                        }
-                        write!(f, ")")
-                    }
-                    Inst::Nop => write!(f, "Nop"),
-                }?;
-            }
-            write!(f, "\n    {}", block.exit)?;
-        }
-        Ok(())
-    }
 }
 
 /// The type of any value operated on.
@@ -196,7 +117,7 @@ impl Block {
     pub fn gen_def_use(&mut self) {
         let mut def = Set::new();
         let mut used = Set::new();
-        self.visit_regs(|&mut r, is_def| {
+        self.visit_regs(|r, is_def| {
             if is_def {
                 def.insert(r);
             } else {
@@ -206,60 +127,12 @@ impl Block {
         self.defined_regs = def;
         self.used_regs = used;
     }
-    /// Mutably access every register usage with an additional parameter signalling whether this is the definition of the register.
-    pub fn visit_regs<F: FnMut(&mut Register, bool)>(&mut self, mut f: F) {
-        for inst in &mut self.insts {
-            use StoreKind as Sk;
-            match inst {
-                Inst::Store(r, sk) => {
-                    f(r, true);
-                    match sk {
-                        Sk::UnaryOp(_, r) => f(r, false),
-                        Sk::BinOp(_, r1, r2) => {
-                            f(r1, false);
-                            f(r2, false);
-                        }
-                        Sk::Read(r) | Sk::Copy(r) => {
-                            f(r, false);
-                        }
-                        Sk::Phi(regs) => {
-                            for r in regs.values_mut() {
-                                f(r, false);
-                            }
-                        }
-                        Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => {}
-                    }
-                }
-                Inst::Write(r1, r2) => {
-                    f(r1, false);
-                    f(r2, false);
-                }
-                Inst::Call {
-                    callee,
-                    returns,
-                    args,
-                } => {
-                    f(callee, false);
-                    for r in returns {
-                        f(r, true);
-                    }
-                    for r in args {
-                        f(r, false);
-                    }
-                }
-                Inst::Nop => {}
-            }
+    /// Access every register instance of this block with an additional parameter signalling whether this is the definition of the register, not including phi arguments.
+    pub fn visit_regs<F: FnMut(Register, bool)>(&self, mut f: F) {
+        for inst in &self.insts {
+            inst.visit_regs(&mut f);
         }
-        match &mut self.exit {
-            Exit::Jump(branch) => branch.visit_regs(|r| f(r, false)),
-            Exit::CondJump(cond, branch1, branch2) => {
-                match cond {
-                    Condition::NonZero(r) => f(r, false),
-                }
-                branch1.visit_regs(|r| f(r, false));
-                branch2.visit_regs(|r| f(r, false));
-            }
-        }
+        self.exit.visit_regs(|r| f(r, false));
     }
 }
 
@@ -281,6 +154,48 @@ pub enum Inst {
     },
     /// Do nothing.
     Nop,
+}
+
+impl Inst {
+    /// Access every register instance of this instruction with an additional parameter signalling whether this is the definition of the register, not including phi arguments.
+    pub fn visit_regs<F: FnMut(Register, bool)>(&self, mut f: F) {
+        use StoreKind as Sk;
+        match self {
+            Self::Store(r, sk) => {
+                f(*r, true);
+                match sk {
+                    &Sk::UnaryOp(_, r) => f(r, false),
+                    &Sk::BinOp(_, r1, r2) => {
+                        f(r1, false);
+                        f(r2, false);
+                    }
+                    &Sk::Read(r) | &Sk::Copy(r) => {
+                        f(r, false);
+                    }
+                    Sk::Phi(_) => (), // Don't visit phi node arguments because they conceptually live in the predecessor block.
+                    Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => {}
+                }
+            }
+            &Self::Write(r1, r2) => {
+                f(r1, false);
+                f(r2, false);
+            }
+            Self::Call {
+                callee,
+                returns,
+                args,
+            } => {
+                f(*callee, false);
+                for &r in returns {
+                    f(r, true);
+                }
+                for &r in args {
+                    f(r, false);
+                }
+            }
+            Self::Nop => {}
+        }
+    }
 }
 
 /// A method of calculating a value to store in a register.
@@ -350,6 +265,19 @@ impl Exit {
         }
         ids.into_iter()
     }
+    /// Access every register usage of this block exit.
+    pub fn visit_regs<F: FnMut(Register)>(&self, mut f: F) {
+        match self {
+            Self::Jump(branch) => branch.visit_regs(f),
+            Self::CondJump(cond, branch1, branch2) => {
+                match *cond {
+                    Condition::NonZero(r) => f(r),
+                }
+                branch1.visit_regs(&mut f);
+                branch2.visit_regs(f);
+            }
+        }
+    }
 }
 
 /// A runtime condition to determine which of two control flow paths to take.
@@ -372,12 +300,12 @@ pub enum JumpLocation {
 }
 
 impl JumpLocation {
-    /// Mutably access every register this jump location uses.
-    pub fn visit_regs<F: FnMut(&mut Register)>(&mut self, mut f: F) {
+    /// Access every register this jump location uses.
+    pub fn visit_regs<F: FnMut(Register)>(&self, mut f: F) {
         match self {
             Self::Block(_) => {}
             Self::Return(regs) => {
-                for r in regs {
+                for &r in regs {
                     f(r);
                 }
             }
@@ -485,94 +413,5 @@ impl DominatorTree {
         let mut ids = vec![];
         self.visit(|id| ids.push(id));
         ids.into_iter()
-    }
-}
-
-impl std::fmt::Display for Register {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "%{}", self.0)
-    }
-}
-
-impl std::fmt::Display for BlockId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "block_{}", self.0)
-    }
-}
-
-impl std::fmt::Display for JumpLocation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match self {
-            Self::Block(b) => write!(f, "{b}"),
-            Self::Return(regs) => write!(f, "Return({regs:?})"),
-        }
-    }
-}
-
-impl std::fmt::Display for Condition {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match self {
-            Self::NonZero(r) => write!(f, "NonZero({r})"),
-        }
-    }
-}
-
-impl std::fmt::Display for Exit {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match self {
-            Self::Jump(loc) => write!(f, "Jump {loc}"),
-            Self::CondJump(cond, loc_true, loc_false) => {
-                write!(f, "Jump if {cond} then {loc_true} else {loc_false}")
-            }
-        }
-    }
-}
-
-impl std::fmt::Display for Ty {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match self {
-            Self::Int => write!(f, "int"),
-            Self::Pointer(inner) => write!(f, "{inner}^"),
-            Self::Function(params, returns) => {
-                write!(f, "fn(")?;
-                for (i, param) in params.iter().enumerate() {
-                    if i != 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{param}")?;
-                }
-                write!(f, ")")?;
-                match returns.len() {
-                    0 => Ok(()),
-                    1 => write!(f, " {}", returns[0]),
-                    _ => {
-                        write!(f, " {{")?;
-                        for (i, ret) in returns.iter().enumerate() {
-                            if i != 0 {
-                                write!(f, ", ")?;
-                            }
-                            write!(f, "{ret}")?;
-                        }
-                        write!(f, "}}")
-                    }
-                }
-            }
-        }
-    }
-}
-
-impl std::fmt::Display for Function {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        self.display_with_name(f, "block")
-    }
-}
-
-impl std::fmt::Display for Program {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        for (name, function) in &self.functions {
-            function.display_with_name(f, name)?;
-            write!(f, "\n\n")?;
-        }
-        Ok(())
     }
 }
