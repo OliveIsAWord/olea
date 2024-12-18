@@ -1,24 +1,28 @@
-use crate::compiler_types::{Map, Set};
+use crate::compiler_types::{Map, Set, Str};
 use crate::ir::*;
+use crate::ir_liveness::{FunctionLiveness, calculate_liveness};
 
 const NUM_REGISTERS: usize = 32;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum StoreLoc {
     Register(u8),
+    Constant(Str),
     // Stack(u32),
 }
 
 impl StoreLoc {
-    pub fn foo(self) -> String {
+    pub fn foo(&self) -> Str {
         match self {
-            Self::Register(i) => format!("r{i}"),
+            Self::Register(i) => format!("r{i}").into(),
+            Self::Constant(c) => c.clone(),
         }
     }
     // stricter, must be syntactically dereferenceable
-    pub fn bar(self) -> String {
+    pub fn bar(&self) -> Str {
         match self {
-            Self::Register(i) => format!("r{i}"),
+            Self::Register(i) => format!("r{i}").into(),
+            Self::Constant(c) => c.clone(),
         }
     }
 }
@@ -30,7 +34,7 @@ struct RegAllocInfo {
     pub stack_size: u32,
 }
 
-fn reg_alloc(f: &Function) -> RegAllocInfo {
+fn reg_alloc(f: &Function, live: &FunctionLiveness) -> RegAllocInfo {
     let mut stack_size = 0;
     let local_locs: Map<Register, u32> = f
         .blocks
@@ -46,17 +50,13 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
         })
         .collect();
     let mut regs = Map::new();
-    for (i, &reg) in f.tys.keys().enumerate() {
-        if i >= NUM_REGISTERS {
-            todo!("stack allocation");
+    for (&id, block) in &f.blocks {
+        let block_live = &live.blocks[&id];
+        for (inst, inst_live) in block.insts.iter().zip(&block.insts) {
+            
         }
-        regs.insert(reg, StoreLoc::Register(i as u8));
     }
-    RegAllocInfo {
-        regs,
-        local_locs,
-        stack_size,
-    }
+    todo!()
 }
 
 macro_rules! write_label {
@@ -105,11 +105,12 @@ pub fn gen_program(ir: &Program) -> String {
 
 pub fn gen_function(f: &Function, function_name: &str) -> String {
     let mut code = String::new();
+    let live = calculate_liveness(f);
     let RegAllocInfo {
         regs,
         local_locs,
         stack_size,
-    } = reg_alloc(f);
+    } = reg_alloc(f, &live);
     let write_exit = |code: &mut String, returns: &[Register], prefix: &str| {
         write_inst!(*code, "{prefix}add rsp, {stack_size}");
         for r in returns {
@@ -188,15 +189,16 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                 } => {
                     write_comment!(code, "begin function call");
                     write_comment!(code, "save register state");
-                    for &r in regs.values().rev() {
+                    for r in regs.values() {
                         if regs
                             .iter()
-                            .any(|(&ir_reg, &loc)| returns.contains(&ir_reg) && r == loc)
+                            .any(|(&ir_reg, loc)| returns.contains(&ir_reg) && r == loc)
                         {
                             continue;
                         }
                         match r {
                             StoreLoc::Register(_) => write_inst!(code, "push {}", r.foo()),
+                            StoreLoc::Constant(_) => {}
                         }
                     }
                     write_comment!(code, "pass arguments");
@@ -212,15 +214,16 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                         write_inst!(code, "pop {}", reg.foo());
                     }
                     write_comment!(code, "restore register state");
-                    for &r in regs.values().rev() {
+                    for r in regs.values().rev() {
                         if regs
                             .iter()
-                            .any(|(&ir_reg, &loc)| returns.contains(&ir_reg) && r == loc)
+                            .any(|(&ir_reg, loc)| returns.contains(&ir_reg) && r == loc)
                         {
                             continue;
                         }
                         match r {
                             StoreLoc::Register(_) => write_inst!(code, "pop {}", r.foo()),
+                            StoreLoc::Constant(_) => {}
                         }
                     }
                     write_comment!(code, "end function call");

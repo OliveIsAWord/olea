@@ -13,12 +13,12 @@
 
 mod arborist;
 pub mod ast;
-mod codegen_fox32;
 pub mod compiler_types;
 pub mod ir;
 mod ir_builder;
 mod ir_display;
 pub mod ir_liveness;
+mod retry;
 // TODO: rewrite to account for `used_regs` not including phi arguments.
 // mod ir_optimizer;
 mod lexer;
@@ -177,10 +177,8 @@ fn main() -> ExitCode {
         println!("{name}:");
         live.pretty_print();
     }
-    if false {
-        let asm = codegen_fox32::gen_program(&ir);
-        println!("#Codegen");
-        println!("{asm}");
-    }
+    let asm = retry::gen_program(&ir);
+    println!("#Codegen");
+    println!("{asm}");
     ExitCode::SUCCESS
 }
