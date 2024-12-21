@@ -218,8 +218,11 @@ impl Display for Condition {
 
 impl Display for Program {
     fn fmt(&self, f: F) -> Result {
-        for (name, function) in &self.functions {
-            write!(f, "{}\n\n", function.with_name(name))?;
+        for (i, (name, function)) in self.functions.iter().enumerate() {
+            if i != 0 {
+                write!(f, "\n\n")?;
+            }
+            write!(f, "{}", function.with_name(name))?;
         }
         Ok(())
     }

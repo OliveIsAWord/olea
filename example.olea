@@ -1,3 +1,6 @@
 fn foo(z int) int:
     let x = 10 + 20
-    x
+    x + if 1:
+        x * 2
+    else:
+        z

@@ -1,28 +1,65 @@
-use crate::compiler_types::{Map, Set, Str};
+use crate::compiler_types::{Map, Set};
 use crate::ir::*;
-use crate::ir_liveness::{FunctionLiveness, calculate_liveness};
+use crate::ir_liveness::{self, FunctionLiveness};
 
 const NUM_REGISTERS: usize = 32;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum StoreLoc {
     Register(u8),
-    Constant(Str),
     // Stack(u32),
 }
 
 impl StoreLoc {
-    pub fn foo(&self) -> Str {
+    pub fn foo(self) -> String {
         match self {
-            Self::Register(i) => format!("r{i}").into(),
-            Self::Constant(c) => c.clone(),
+            Self::Register(i) => format!("r{i}"),
         }
     }
     // stricter, must be syntactically dereferenceable
-    pub fn bar(&self) -> Str {
+    pub fn bar(self) -> String {
         match self {
-            Self::Register(i) => format!("r{i}").into(),
-            Self::Constant(c) => c.clone(),
+            Self::Register(i) => format!("r{i}"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct LivenessGraph {
+    regs: Map<Register, Set<Register>>,
+}
+
+impl LivenessGraph {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn from_function_liveness(live: &FunctionLiveness) -> Self {
+        let mut this = Self::new();
+        live.blocks
+            .values()
+            .flat_map(|block_live| Some(&block_live.start).into_iter().chain(&block_live.insts))
+            .for_each(|set| this.insert_set(set));
+        this
+    }
+    pub fn minmax(a: Register, b: Register) -> (Register, Register) {
+        let min = a.min(b);
+        let max = a.max(b);
+        assert!(min != max, "inserted same register {a} {b}");
+        (min, max)
+    }
+    pub fn get(&self, a: Register, b: Register) -> bool {
+        let (min, max) = Self::minmax(a, b);
+        self.regs.get(&min).map_or(false, |s| s.contains(&max))
+    }
+    pub fn insert(&mut self, a: Register, b: Register) {
+        let (min, max) = Self::minmax(a, b);
+        self.regs.entry(min).or_default().insert(max);
+    }
+    pub fn insert_set(&mut self, set: &Set<Register>) {
+        for (i, &min) in set.iter().enumerate() {
+            for &max in set.iter().skip(i + 1) {
+                self.insert(min, max);
+            }
         }
     }
 }
@@ -34,7 +71,8 @@ struct RegAllocInfo {
     pub stack_size: u32,
 }
 
-fn reg_alloc(f: &Function, live: &FunctionLiveness) -> RegAllocInfo {
+fn reg_alloc(f: &Function) -> RegAllocInfo {
+    let live = LivenessGraph::from_function_liveness(&ir_liveness::calculate_liveness(f));
     let mut stack_size = 0;
     let local_locs: Map<Register, u32> = f
         .blocks
@@ -50,13 +88,35 @@ fn reg_alloc(f: &Function, live: &FunctionLiveness) -> RegAllocInfo {
         })
         .collect();
     let mut regs = Map::new();
-    for (&id, block) in &f.blocks {
-        let block_live = &live.blocks[&id];
-        for (inst, inst_live) in block.insts.iter().zip(&block.insts) {
-            
-        }
+    let mut open: Set<_> = f.tys.keys().copied().collect();
+    let mut reg_counter = 0;
+    while let Some(reg) = open.pop_first() {
+        let store_loc = if reg_counter < NUM_REGISTERS {
+            let x = StoreLoc::Register(reg_counter as u8);
+            reg_counter += 1;
+            x
+        } else {
+            todo!("stack spilling");
+            // let x = StoreLoc::Stack(stack_size);
+            // stack_size += 4;
+            // x
+        };
+        regs.insert(reg, store_loc);
+        let mut shared: Set<_> = Some(reg).into_iter().collect();
+        open.retain(|&fellow_reg| {
+            if shared.iter().any(|&r| live.get(r, fellow_reg)) {
+                return true;
+            }
+            shared.insert(fellow_reg);
+            regs.insert(fellow_reg, store_loc);
+            false
+        });
     }
-    todo!()
+    RegAllocInfo {
+        regs,
+        local_locs,
+        stack_size,
+    }
 }
 
 macro_rules! write_label {
@@ -95,22 +155,23 @@ pub fn gen_program(ir: &Program) -> String {
     if ir.functions.contains_key("main") {
         write_inst!(code, "jmp main");
     }
-    for (name, f) in &ir.functions {
+    for (i, (name, f)) in ir.functions.iter().enumerate() {
+        if i != 0 {
+            code.push('\n');
+        }
         let fn_output = gen_function(f, name);
         code.push_str(&fn_output);
-        code.push('\n');
     }
     code
 }
 
 pub fn gen_function(f: &Function, function_name: &str) -> String {
     let mut code = String::new();
-    let live = calculate_liveness(f);
     let RegAllocInfo {
         regs,
         local_locs,
         stack_size,
-    } = reg_alloc(f, &live);
+    } = reg_alloc(f);
     let write_exit = |code: &mut String, returns: &[Register], prefix: &str| {
         write_inst!(*code, "{prefix}add rsp, {stack_size}");
         for r in returns {
@@ -121,9 +182,11 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
     };
     write_label!(code, "{function_name}_entry");
     write_inst!(code, "pop rfp");
-    for arg in f.parameters.iter().rev() {
-        let arg_reg = regs.get(arg).unwrap();
-        write_inst!(code, "pop {}", arg_reg.foo());
+    for arg in f.parameters.iter() {
+        match regs.get(arg).unwrap() {
+            StoreLoc::Register(i) => write_inst!(code, "pop r{i}"),
+            // e @ StoreLoc::Stack(_) => todo!("function argument got assigned {e:?}"),
+        }
     }
     write_inst!(code, "push rfp");
     write_inst!(code, "sub rsp, {}", stack_size);
@@ -189,16 +252,15 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                 } => {
                     write_comment!(code, "begin function call");
                     write_comment!(code, "save register state");
-                    for r in regs.values() {
+                    for &r in regs.values().rev() {
                         if regs
                             .iter()
-                            .any(|(&ir_reg, loc)| returns.contains(&ir_reg) && r == loc)
+                            .any(|(&ir_reg, &loc)| returns.contains(&ir_reg) && r == loc)
                         {
                             continue;
                         }
                         match r {
                             StoreLoc::Register(_) => write_inst!(code, "push {}", r.foo()),
-                            StoreLoc::Constant(_) => {}
                         }
                     }
                     write_comment!(code, "pass arguments");
@@ -214,16 +276,15 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                         write_inst!(code, "pop {}", reg.foo());
                     }
                     write_comment!(code, "restore register state");
-                    for r in regs.values().rev() {
+                    for &r in regs.values().rev() {
                         if regs
                             .iter()
-                            .any(|(&ir_reg, loc)| returns.contains(&ir_reg) && r == loc)
+                            .any(|(&ir_reg, &loc)| returns.contains(&ir_reg) && r == loc)
                         {
                             continue;
                         }
                         match r {
                             StoreLoc::Register(_) => write_inst!(code, "pop {}", r.foo()),
-                            StoreLoc::Constant(_) => {}
                         }
                     }
                     write_comment!(code, "end function call");

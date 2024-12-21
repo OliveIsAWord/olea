@@ -311,6 +311,7 @@ impl<'a> IrBuilder<'a> {
                 let callee = self.build_expr_unvoid(callee, span.clone())?;
                 let returns: Vec<_> = match self.tys.get(&callee).unwrap() {
                     Ty::Function(_, returns) => {
+                        assert!(returns.len() == 1);
                         // somewhat silly clone because we need mutable access to `self` for `new_reg`.
                         returns
                             .clone()

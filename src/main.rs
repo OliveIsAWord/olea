@@ -13,12 +13,12 @@
 
 mod arborist;
 pub mod ast;
+mod codegen_fox32;
 pub mod compiler_types;
 pub mod ir;
 mod ir_builder;
 mod ir_display;
 pub mod ir_liveness;
-mod retry;
 // TODO: rewrite to account for `used_regs` not including phi arguments.
 // mod ir_optimizer;
 mod lexer;
@@ -61,10 +61,11 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    println!("# Source code:\n{src}");
+    // println!("# Source code:\n{src}");
+    
     let tokens = lexer::tokenize(&src);
-    // dbg!(tokens.has_error);
     /*
+    dbg!(tokens.has_error);
     for i in 0..tokens.len() {
         let lexer::Spanned {
             token,
@@ -73,6 +74,7 @@ fn main() -> ExitCode {
         println!("{:?} {:?}", &src[start..start + len], token);
     }
     */
+
     let ttree = match arborist::arborize(&tokens) {
         Ok(x) => x,
         Err(Spanned { kind, span }) => {
@@ -96,6 +98,7 @@ fn main() -> ExitCode {
     //println!("# Token tree:");
     //ttree_visualize::visualize(&ttree, &src);
     //println!();
+
     let ast = match parser::parse(&ttree, &src) {
         Ok(x) => x,
         Err(Spanned { kind, span }) => {
@@ -112,6 +115,7 @@ fn main() -> ExitCode {
         }
     };
     //println!("#Syntax tree:\n{ast:?}\n");
+
     let ir = match ir_builder::build(&ast) {
         Ok(x) => x,
         Err(Spanned { kind, span }) => {
@@ -135,8 +139,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-
-    println!("#IR:\n{ir}");
+    println!("#IR:\n{ir}\n");
 
     match typechecker::typecheck(&ir) {
         Ok(()) => {}
@@ -169,16 +172,20 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     }
+
     // println!("#Optimizer phase");
     // ir_optimizer::optimize(&mut ir);
     // println!();
+
     for (name, f) in &ir.functions {
         let live = ir_liveness::calculate_liveness(f);
         println!("{name}:");
         live.pretty_print();
     }
-    let asm = retry::gen_program(&ir);
+    println!();
+
+    let asm = codegen_fox32::gen_program(&ir);
     println!("#Codegen");
-    println!("{asm}");
+    print!("{asm}");
     ExitCode::SUCCESS
 }
