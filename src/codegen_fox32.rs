@@ -40,7 +40,7 @@ impl LivenessGraph {
         let mut this = Self::new();
         live.blocks
             .values()
-            .flat_map(|block_live| Some(&block_live.start).into_iter().chain(&block_live.insts))
+            .flat_map(|block_live| std::iter::once(&block_live.start).chain(&block_live.insts))
             .for_each(|set| this.insert_set(set));
         this
     }
@@ -121,7 +121,8 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
             // x
         };
         regs.insert(reg, store_loc.clone());
-        let mut shared: Set<_> = Some(reg).into_iter().collect();
+        let mut shared = Set::new();
+        shared.insert(reg);
         open.retain(|&fellow_reg| {
             if shared.iter().any(|&r| live_graph.get(r, fellow_reg)) {
                 return true;
@@ -218,7 +219,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
     write_label!(code, "{function_name}_entry");
     if !f.parameters.is_empty() {
         write_inst!(code, "pop rfp");
-        for arg in f.parameters.iter() {
+        for arg in &f.parameters {
             match regs.get(arg).unwrap() {
                 StoreLoc::Register(i) => write_inst!(code, "pop r{i}"),
                 StoreLoc::Constant(_) => unreachable!(),

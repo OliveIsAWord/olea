@@ -45,6 +45,7 @@ pub struct BlockLiveness {
 
 /// Calculate the liveness information for a function.
 #[allow(clippy::assigning_clones)]
+#[must_use]
 pub fn calculate_liveness(f: &Function) -> FunctionLiveness {
     let start_map = calculate_start(f);
     let mut insts_map = Map::new();

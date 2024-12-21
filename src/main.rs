@@ -8,7 +8,8 @@
     clippy::similar_names,
     clippy::too_many_lines,
     clippy::type_complexity,
-    clippy::wildcard_imports
+    clippy::wildcard_imports,
+    clippy::cognitive_complexity
 )]
 
 mod arborist;

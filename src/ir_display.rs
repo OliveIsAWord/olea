@@ -82,7 +82,7 @@ where
         if returns.is_empty() {
             Ok(())
         } else {
-            write!(f, " {}", returns)
+            write!(f, " {returns}")
         }
     }
 }

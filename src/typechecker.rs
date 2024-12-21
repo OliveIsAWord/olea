@@ -88,7 +88,7 @@ impl<'a> TypeChecker<'a> {
             }
             Sk::Function(name) => {
                 let (params, returns) = self.function_tys.get(name.as_ref()).expect("function get");
-                Ty::Function(params.to_vec(), returns.to_vec())
+                Ty::Function(params.clone(), returns.clone())
             }
         };
         Ok(ty)

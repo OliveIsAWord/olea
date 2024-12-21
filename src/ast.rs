@@ -19,9 +19,9 @@ pub type Decl = Spanned<DeclKind>;
 /// A declaration.
 #[derive(Clone, Debug)]
 pub enum DeclKind {
-    /// See [Function].
+    /// See [`Function`].
     Function(Function),
-    /// See [ExternFunction].
+    /// See [`ExternFunction`].
     ExternFunction(ExternFunction),
 }
 
@@ -96,7 +96,7 @@ pub enum ExprKind {
     While(Box<Expr>, Block),
     /// Store a value in a memory location.
     Assign(Place, Box<Expr>),
-    /// See [Block].
+    /// See [`Block`].
     Block(Block),
     /// A function call, composed of a function and a list of arguments to pass to it.
     Call(Box<Expr>, Vec<Expr>),
