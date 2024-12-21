@@ -137,9 +137,8 @@ impl DisplayWithName for Function {
         let reg_def = |r: &'a Register| WithTy(r, self.tys.get(r).unwrap());
         write!(
             f,
-            "fn {name}({}){}",
+            "fn {name}({})",
             Commas(self.parameters.iter().map(reg_def)),
-            ReturnsSpace(&self.return_tys)
         )?;
         for (id, block) in self.iter() {
             write!(f, "\n{}:", id.with_name(name))?;

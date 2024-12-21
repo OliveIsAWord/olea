@@ -7,15 +7,13 @@ use crate::compiler_types::{Map, Set, Span, Str};
 pub struct Program {
     /// The functions composing this program.
     pub functions: Map<Str, Function>,
+    /// The type signature of every function including extern functions.
+    pub function_tys: Map<Str, (Vec<Ty>, Vec<Ty>)>,
 }
 
 /// A body of code accepts and yields some registers.
 #[derive(Clone, Debug)]
 pub struct Function {
-    /// The types of the parameters.
-    pub param_tys: Vec<Ty>,
-    /// The types of the returned values.
-    pub return_tys: Vec<Ty>,
     /// A list of registers containing the input values in order at the start of the function's execution.
     pub parameters: Vec<Register>,
     /// The basic blocks of code comprising this function.
@@ -34,8 +32,6 @@ impl Function {
     /// Construct a function.
     #[must_use]
     pub fn new(
-        param_tys: Vec<Ty>,
-        return_tys: Vec<Ty>,
         parameters: Vec<Register>,
         blocks: Map<BlockId, Block>,
         tys: Map<Register, Ty>,
@@ -43,8 +39,6 @@ impl Function {
     ) -> Self {
         let dominator_tree = DominatorTree::new(&blocks);
         let mut this = Self {
-            param_tys,
-            return_tys,
             parameters,
             blocks,
             tys,

@@ -62,7 +62,7 @@ fn main() -> ExitCode {
         }
     };
     // println!("# Source code:\n{src}");
-    
+
     let tokens = lexer::tokenize(&src);
     /*
     dbg!(tokens.has_error);

@@ -16,7 +16,7 @@ type Result<T = ()> = std::result::Result<T, Error>;
 
 type Tys = Map<Register, Ty>;
 // NOTE: This can be changed to take 2 lifetime parameters.
-type FunctionTys<'a> = &'a Map<&'a str, (&'a [Ty], &'a [Ty])>;
+type FunctionTys<'a> = &'a Map<Str, (Vec<Ty>, Vec<Ty>)>;
 
 #[derive(Debug)]
 struct TypeChecker<'a> {
@@ -173,11 +173,6 @@ impl<'a> TypeChecker<'a> {
 }
 
 pub fn typecheck(program: &Program) -> Result {
-    let function_tys = program
-        .functions
-        .iter()
-        .map(|(name, f)| (name.as_ref(), (f.param_tys.as_ref(), f.return_tys.as_ref())))
-        .collect();
     for (fn_name, f) in &program.functions {
         /*
         println!("typechecking {fn_name}");
@@ -185,7 +180,7 @@ pub fn typecheck(program: &Program) -> Result {
             println!("  {r} {ty}");
         }
         */
-        TypeChecker::visit_function(f, fn_name, &function_tys)?;
+        TypeChecker::visit_function(f, fn_name, &program.function_tys)?;
     }
     Ok(())
 }

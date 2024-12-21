@@ -1,6 +1,7 @@
-fn foo(z int) int:
-    let x = 10 + 20
-    x + if 1:
-        x * 2
-    else:
-        z
+extern fn print_char(int) int
+
+extern fn get_char() int
+
+fn foo():
+    let x = get_char()
+    print_char(x)

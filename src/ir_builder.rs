@@ -91,11 +91,8 @@ impl<'a> IrBuilder<'a> {
             body,
         }: &ast::Function,
     ) -> Result<Function> {
-        let return_tys = returns.iter().map(|t| to_ir_ty(&t.kind)).collect();
-        let mut param_tys = vec![];
         for (p_name, p_ty) in parameters {
             let ir_ty = to_ir_ty(&p_ty.kind);
-            param_tys.push(ir_ty.clone());
             let reg = self.new_reg(ir_ty.clone(), p_name.span.clone());
             self.parameters.push(reg);
             // Currently, we assume all variables are stack allocated, so we copy the argument to a stack allocation.
@@ -114,8 +111,6 @@ impl<'a> IrBuilder<'a> {
         );
         assert_eq!(self.scopes.len(), 1);
         Ok(Function::new(
-            param_tys,
-            return_tys,
             self.parameters,
             self.blocks,
             self.tys,
@@ -449,9 +444,6 @@ impl<'a> IrBuilder<'a> {
 
 pub fn build(program: &ast::Program) -> Result<Program> {
     use ast::DeclKind as D;
-    let mut ir = Program {
-        functions: Map::new(),
-    };
     let function_tys = program
         .decls
         .iter()
@@ -468,16 +460,36 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                     returns.as_ref().map(|ret| to_ir_ty(&ret.kind)),
                 ),
             ),
+            D::ExternFunction(ast::ExternFunction {
+                name,
+                parameters,
+                returns,
+            }) => (
+                name.kind.clone(),
+                (
+                    parameters.iter().map(|arg| to_ir_ty(&arg.kind)).collect(),
+                    returns.as_ref().map(|ret| to_ir_ty(&ret.kind)),
+                ),
+            ),
         })
         .collect();
+    let mut functions = Map::new();
     for decl in &program.decls {
         match &decl.kind {
             D::Function(fn_decl) => {
                 let builder = IrBuilder::new(&function_tys);
                 let function = builder.build_function(fn_decl)?;
-                ir.functions.insert(fn_decl.name.kind.clone(), function);
+                functions.insert(fn_decl.name.kind.clone(), function);
             }
+            D::ExternFunction(_) => {}
         }
     }
-    Ok(ir)
+    let function_tys = function_tys
+        .into_iter()
+        .map(|(name, (params, returns))| (name, (params, returns.into_iter().collect())))
+        .collect();
+    Ok(Program {
+        functions,
+        function_tys,
+    })
 }
