@@ -189,7 +189,9 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         }
     }
     let write_exit = |code: &mut String, returns: &[Register], prefix: &str| {
-        write_inst!(*code, "{prefix}add rsp, {stack_size}");
+        if stack_size != 0 {
+            write_inst!(*code, "{prefix}add rsp, {stack_size}");
+        }
         for r in returns {
             let r_reg = regs.get(r).unwrap().foo();
             write_inst!(*code, "{prefix}push {r_reg}");
@@ -197,15 +199,19 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         write_inst!(*code, "{prefix}ret");
     };
     write_label!(code, "{function_name}_entry");
-    write_inst!(code, "pop rfp");
-    for arg in f.parameters.iter() {
-        match regs.get(arg).unwrap() {
-            StoreLoc::Register(i) => write_inst!(code, "pop r{i}"),
-            // e @ StoreLoc::Stack(_) => todo!("function argument got assigned {e:?}"),
+    if !f.parameters.is_empty() {
+        write_inst!(code, "pop rfp");
+        for arg in f.parameters.iter() {
+            match regs.get(arg).unwrap() {
+                StoreLoc::Register(i) => write_inst!(code, "pop r{i}"),
+                // e @ StoreLoc::Stack(_) => todo!("function argument got assigned {e:?}"),
+            }
         }
+        write_inst!(code, "push rfp");
     }
-    write_inst!(code, "push rfp");
-    write_inst!(code, "sub rsp, {}", stack_size);
+    if stack_size != 0 {
+        write_inst!(code, "sub rsp, {}", stack_size);
+    }
     let mut indices: Set<BlockId> = f.blocks.keys().copied().collect();
     let mut i = BlockId::ENTRY;
     loop {
@@ -220,14 +226,19 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                     match sk {
                         Sk::StackAlloc(_) => {
                             write_inst!(code, "mov {}, rsp", reg.foo());
-                            write_inst!(code, "add {}, {}", reg.foo(), local_locs.get(r).unwrap());
+                            let stack_offset = *local_locs.get(r).unwrap();
+                            if stack_offset != 0 {
+                                write_inst!(code, "add {}, {}", reg.foo(), stack_offset);
+                            }
                         }
                         Sk::Int(int) => {
                             write_inst!(code, "mov {}, {int}", reg.foo());
                         }
                         Sk::Copy(src) => {
                             let src_reg = regs.get(src).unwrap();
-                            write_inst!(code, "mov {}, {}", reg.foo(), src_reg.foo());
+                            if reg != src_reg {
+                                write_inst!(code, "mov {}, {}", reg.foo(), src_reg.foo());
+                            }
                         }
                         Sk::Read(src) => {
                             let src_reg = regs.get(src).unwrap();
@@ -238,7 +249,9 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                             let op_mnemonic = match op {
                                 UnaryOp::Neg => "neg",
                             };
-                            write_inst!(code, "mov {}, {}", reg.foo(), inner_reg.foo());
+                            if reg != inner_reg {
+                                write_inst!(code, "mov {}, {}", reg.foo(), inner_reg.foo());
+                            }
                             write_inst!(code, "{} {}", op_mnemonic, reg.foo());
                         }
                         Sk::BinOp(op, lhs, rhs) => {
@@ -249,7 +262,9 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                                 BinOp::Sub => "sub",
                                 BinOp::Mul => "mul",
                             };
-                            write_inst!(code, "mov {}, {}", reg.foo(), lhs_reg.foo());
+                            if reg != lhs_reg {
+                                write_inst!(code, "mov {}, {}", reg.foo(), lhs_reg.foo());
+                            }
                             write_inst!(code, "{} {}, {}", op_mnemonic, reg.foo(), rhs_reg.foo());
                         }
                         Sk::Function(name) => write_inst!(code, "mov {}, {name}", reg.foo()),
