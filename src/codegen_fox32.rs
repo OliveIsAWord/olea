@@ -1,25 +1,28 @@
-use crate::compiler_types::{Map, Set};
+use crate::compiler_types::{Map, Set, Str};
 use crate::ir::*;
 use crate::ir_liveness::{self, FunctionLiveness};
 
 const NUM_REGISTERS: usize = 32;
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum StoreLoc {
     Register(u8),
+    Constant(Str),
     // Stack(u32),
 }
 
 impl StoreLoc {
-    pub fn foo(self) -> String {
+    pub fn foo(&self) -> Str {
         match self {
-            Self::Register(i) => format!("r{i}"),
+            Self::Register(i) => format!("r{i}").into(),
+            Self::Constant(c) => c.clone(),
         }
     }
     // stricter, must be syntactically dereferenceable
-    pub fn bar(self) -> String {
+    pub fn bar(&self) -> Str {
         match self {
-            Self::Register(i) => format!("r{i}"),
+            Self::Register(i) => format!("r{i}").into(),
+            Self::Constant(c) => c.clone(),
         }
     }
 }
@@ -89,8 +92,22 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
             _ => None,
         })
         .collect();
-    let mut regs = Map::new();
+    let mut regs: Map<Register, StoreLoc> = Map::new();
     let mut open: Set<_> = f.tys.keys().copied().collect();
+    for block in f.blocks.values() {
+        for inst in &block.insts {
+            let Inst::Store(r, sk) = inst else {
+                continue;
+            };
+            let constant_str = match sk {
+                StoreKind::Int(i) => i.to_string().into(),
+                StoreKind::Function(name) => name.clone(),
+                _ => continue,
+            };
+            open.remove(r);
+            regs.insert(*r, StoreLoc::Constant(constant_str));
+        }
+    }
     let mut reg_counter = 0;
     while let Some(reg) = open.pop_first() {
         let store_loc = if reg_counter < NUM_REGISTERS {
@@ -103,14 +120,14 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
             // stack_size += 4;
             // x
         };
-        regs.insert(reg, store_loc);
+        regs.insert(reg, store_loc.clone());
         let mut shared: Set<_> = Some(reg).into_iter().collect();
         open.retain(|&fellow_reg| {
             if shared.iter().any(|&r| live_graph.get(r, fellow_reg)) {
                 return true;
             }
             shared.insert(fellow_reg);
-            regs.insert(fellow_reg, store_loc);
+            regs.insert(fellow_reg, store_loc.clone());
             false
         });
     }
@@ -177,10 +194,10 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         liveness,
     } = reg_alloc(f);
     {
-        let locs: Set<_> = regs.values().copied().collect();
+        let locs: Set<_> = regs.values().collect();
         for loc in locs {
             print!("{}:", loc.foo());
-            for (r, &r_loc) in &regs {
+            for (r, r_loc) in &regs {
                 if loc == r_loc {
                     print!(" {r}");
                 }
@@ -204,6 +221,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         for arg in f.parameters.iter() {
             match regs.get(arg).unwrap() {
                 StoreLoc::Register(i) => write_inst!(code, "pop r{i}"),
+                StoreLoc::Constant(_) => unreachable!(),
                 // e @ StoreLoc::Stack(_) => todo!("function argument got assigned {e:?}"),
             }
         }
@@ -223,6 +241,10 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
             match inst {
                 Inst::Store(r, sk) => {
                     let reg = regs.get(r).unwrap();
+                    if matches!(reg, StoreLoc::Constant(_)) {
+                        assert!(matches!(sk, Sk::Int(_) | Sk::Function(_)));
+                        continue;
+                    }
                     match sk {
                         Sk::StackAlloc(_) => {
                             write_inst!(code, "mov {}, rsp", reg.foo());
@@ -230,9 +252,6 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                             if stack_offset != 0 {
                                 write_inst!(code, "add {}, {}", reg.foo(), stack_offset);
                             }
-                        }
-                        Sk::Int(int) => {
-                            write_inst!(code, "mov {}, {int}", reg.foo());
                         }
                         Sk::Copy(src) => {
                             let src_reg = regs.get(src).unwrap();
@@ -267,7 +286,10 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                             }
                             write_inst!(code, "{} {}, {}", op_mnemonic, reg.foo(), rhs_reg.foo());
                         }
-                        Sk::Function(name) => write_inst!(code, "mov {}, {name}", reg.foo()),
+
+                        Sk::Int(_) | Sk::Function(_) => unreachable!(
+                            "register store should have been optimized as a constant literal"
+                        ),
                         Sk::Phi(_) => (),
                     }
                 }
@@ -281,7 +303,6 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                     returns,
                     args,
                 } => {
-                    write_comment!(code, "begin function call");
                     let saved: Set<_> = {
                         let mut saved: Set<_> = liveness.blocks[&i].insts[inst_i]
                             .iter()
@@ -292,31 +313,28 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                         }
                         saved
                     };
-                    write_comment!(code, "save register state");
                     for &r in saved.iter().rev() {
                         match r {
                             StoreLoc::Register(_) => write_inst!(code, "push {}", r.foo()),
+                            StoreLoc::Constant(_) => {}
                         }
                     }
-                    write_comment!(code, "pass arguments");
                     for r in args.iter().rev() {
                         let reg = regs.get(r).unwrap();
                         write_inst!(code, "push {}", reg.foo());
                     }
                     let callee_reg = regs.get(callee).unwrap();
                     write_inst!(code, "call {}", callee_reg.foo());
-                    write_comment!(code, "get return values");
                     for r in returns {
                         let reg = regs.get(r).unwrap();
                         write_inst!(code, "pop {}", reg.foo());
                     }
-                    write_comment!(code, "restore register state");
                     for r in saved {
                         match r {
                             StoreLoc::Register(_) => write_inst!(code, "pop {}", r.foo()),
+                            StoreLoc::Constant(_) => {}
                         }
                     }
-                    write_comment!(code, "end function call");
                 }
                 Inst::Nop => write_inst!(code, "nop"),
             }
