@@ -4,7 +4,7 @@ use crate::ir_liveness::{self, FunctionLiveness};
 
 const NUM_REGISTERS: usize = 32;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum StoreLoc {
     Register(u8),
     // Stack(u32),
@@ -69,10 +69,12 @@ struct RegAllocInfo {
     pub regs: Map<Register, StoreLoc>,
     pub local_locs: Map<Register, u32>,
     pub stack_size: u32,
+    pub liveness: FunctionLiveness,
 }
 
 fn reg_alloc(f: &Function) -> RegAllocInfo {
-    let live = LivenessGraph::from_function_liveness(&ir_liveness::calculate_liveness(f));
+    let liveness = ir_liveness::calculate_liveness(f);
+    let live_graph = LivenessGraph::from_function_liveness(&liveness);
     let mut stack_size = 0;
     let local_locs: Map<Register, u32> = f
         .blocks
@@ -104,7 +106,7 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
         regs.insert(reg, store_loc);
         let mut shared: Set<_> = Some(reg).into_iter().collect();
         open.retain(|&fellow_reg| {
-            if shared.iter().any(|&r| live.get(r, fellow_reg)) {
+            if shared.iter().any(|&r| live_graph.get(r, fellow_reg)) {
                 return true;
             }
             shared.insert(fellow_reg);
@@ -116,6 +118,7 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
         regs,
         local_locs,
         stack_size,
+        liveness,
     }
 }
 
@@ -171,7 +174,20 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         regs,
         local_locs,
         stack_size,
+        liveness,
     } = reg_alloc(f);
+    {
+        let locs: Set<_> = regs.values().copied().collect();
+        for loc in locs {
+            print!("{}:", loc.foo());
+            for (r, &r_loc) in &regs {
+                if loc == r_loc {
+                    print!(" {r}");
+                }
+            }
+            println!();
+        }
+    }
     let write_exit = |code: &mut String, returns: &[Register], prefix: &str| {
         write_inst!(*code, "{prefix}add rsp, {stack_size}");
         for r in returns {
@@ -197,7 +213,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         assert!(indices.remove(&i));
         let block = f.blocks.get(&i).unwrap();
         write_label!(code, "{function_name}_{}", i.0);
-        for inst in &block.insts {
+        for (inst_i, inst) in block.insts.iter().enumerate() {
             match inst {
                 Inst::Store(r, sk) => {
                     let reg = regs.get(r).unwrap();
@@ -251,14 +267,18 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                     args,
                 } => {
                     write_comment!(code, "begin function call");
-                    write_comment!(code, "save register state");
-                    for &r in regs.values().rev() {
-                        if regs
+                    let saved: Set<_> = {
+                        let mut saved: Set<_> = liveness.blocks[&i].insts[inst_i]
                             .iter()
-                            .any(|(&ir_reg, &loc)| returns.contains(&ir_reg) && r == loc)
-                        {
-                            continue;
+                            .map(|r| regs.get(r).unwrap())
+                            .collect();
+                        for r in returns {
+                            saved.remove(regs.get(r).unwrap());
                         }
+                        saved
+                    };
+                    write_comment!(code, "save register state");
+                    for &r in saved.iter().rev() {
                         match r {
                             StoreLoc::Register(_) => write_inst!(code, "push {}", r.foo()),
                         }
@@ -276,13 +296,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                         write_inst!(code, "pop {}", reg.foo());
                     }
                     write_comment!(code, "restore register state");
-                    for &r in regs.values().rev() {
-                        if regs
-                            .iter()
-                            .any(|(&ir_reg, &loc)| returns.contains(&ir_reg) && r == loc)
-                        {
-                            continue;
-                        }
+                    for r in saved {
                         match r {
                             StoreLoc::Register(_) => write_inst!(code, "pop {}", r.foo()),
                         }
