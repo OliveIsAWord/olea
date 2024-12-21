@@ -203,12 +203,30 @@ impl<'a> IrBuilder<'a> {
             E::UnaryOp(op, e) => {
                 use ast::UnaryOpKind as A;
                 use UnaryOp as B;
-                let op_kind = match op.kind {
-                    A::Neg => B::Neg,
-                };
-                let reg = self.build_expr_unvoid(e, span.clone())?;
-                self.push_store(Sk::UnaryOp(op_kind, reg), span)
-                    .some_if(unvoid)
+                match op.kind {
+                    A::Neg => {
+                        let reg = self.build_expr_unvoid(e, span.clone())?;
+                        self.push_store(Sk::UnaryOp(B::Neg, reg), span)
+                            .some_if(unvoid)
+                    }
+                    A::Ref => {
+                        let maybe_var = match &e.kind {
+                            E::Place(kind) => self.build_place(kind, span.clone())?,
+                            _ => MaybeVar::Constant(self.build_expr_unvoid(e, span)?),
+                        };
+                        match maybe_var {
+                            MaybeVar::Variable(v) => Some(v),
+                            MaybeVar::Constant(c) => {
+                                let r = self.push_store(
+                                    Sk::StackAlloc(self.tys.get(&c).unwrap().clone()),
+                                    e.span.clone(),
+                                );
+                                self.push_write(r, c);
+                                Some(r)
+                            }
+                        }
+                    }
+                }
             }
             E::BinOp(op, lhs, rhs) => {
                 use ast::BinOpKind as A;
@@ -306,7 +324,7 @@ impl<'a> IrBuilder<'a> {
                 let callee = self.build_expr_unvoid(callee, span.clone())?;
                 let returns: Vec<_> = match self.tys.get(&callee).unwrap() {
                     Ty::Function(_, returns) => {
-                        assert!(returns.len() == 1);
+                        assert!(matches!(returns.len(), 0 | 1));
                         // somewhat silly clone because we need mutable access to `self` for `new_reg`.
                         returns
                             .clone()

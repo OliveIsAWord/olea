@@ -1,0 +1,25 @@
+extern fn allocate_memory(int) int^
+extern fn free_memory(int^)
+extern fn write(int, int, int^)
+
+fn main(stream int):
+    print_char(stream, 72)
+    print_char(stream, 101)
+    print_char(stream, 108)
+    print_char(stream, 108)
+    print_char(stream, 111)
+    print_char(stream, 44)
+    print_char(stream, 32)
+    print_char(stream, 119)
+    print_char(stream, 111)
+    print_char(stream, 114)
+    print_char(stream, 108)
+    print_char(stream, 100)
+    print_char(stream, 33)
+    print_char(stream, 10)
+
+fn print_char(stream int, c int):
+    let buffer = allocate_memory(4)
+    buffer^ = c
+    write(1, stream, buffer)
+    free_memory(buffer)

@@ -62,7 +62,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // println!("# Source code:\n{src}");
+    // eprintln!("# Source code:\n{src}");
 
     let tokens = lexer::tokenize(&src);
     /*
@@ -72,7 +72,7 @@ fn main() -> ExitCode {
             token,
             span: lexer::Span { start, len },
         } = tokens.get(i).unwrap();
-        println!("{:?} {:?}", &src[start..start + len], token);
+        eprintln!("{:?} {:?}", &src[start..start + len], token);
     }
     */
 
@@ -96,9 +96,9 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    //println!("# Token tree:");
-    //ttree_visualize::visualize(&ttree, &src);
-    //println!();
+    // eprintln!("# Token tree:");
+    // ttree_visualize::visualize(&ttree, &src);
+    // eprintln!();
 
     let ast = match parser::parse(&ttree, &src) {
         Ok(x) => x,
@@ -115,7 +115,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    //println!("#Syntax tree:\n{ast:?}\n");
+    // eprintln!("#Syntax tree:\n{ast:?}\n");
 
     let ir = match ir_builder::build(&ast) {
         Ok(x) => x,
@@ -140,7 +140,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    println!("#IR:\n{ir}\n");
+    eprintln!("#IR:\n{ir}\n");
 
     match typechecker::typecheck(&ir) {
         Ok(()) => {}
@@ -174,19 +174,19 @@ fn main() -> ExitCode {
         }
     }
 
-    // println!("#Optimizer phase");
+    // eprintln!("#Optimizer phase");
     // ir_optimizer::optimize(&mut ir);
-    // println!();
+    // eprintln!();
 
     for (name, f) in &ir.functions {
         let live = ir_liveness::calculate_liveness(f);
-        println!("{name}:");
+        eprintln!("{name}:");
         live.pretty_print();
     }
-    println!();
+    eprintln!();
 
     let asm = codegen_fox32::gen_program(&ir);
-    println!("#Codegen");
+    eprintln!("#Codegen");
     print!("{asm}");
     ExitCode::SUCCESS
 }

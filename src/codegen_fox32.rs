@@ -172,10 +172,6 @@ macro_rules! write_comment {
 pub fn gen_program(ir: &Program) -> String {
     let mut code = String::new();
     write_comment!(code, "Generated source code:");
-    // TODO: this shouldn't be a hardcoded value
-    if ir.functions.contains_key("main") {
-        write_inst!(code, "jmp main");
-    }
     for (i, (name, f)) in ir.functions.iter().enumerate() {
         if i != 0 {
             code.push('\n');
@@ -197,13 +193,13 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
     {
         let locs: Set<_> = regs.values().collect();
         for loc in locs {
-            print!("{}:", loc.foo());
+            eprint!("{}:", loc.foo());
             for (r, r_loc) in &regs {
                 if loc == r_loc {
-                    print!(" {r}");
+                    eprint!(" {r}");
                 }
             }
-            println!();
+            eprintln!();
         }
     }
     let write_exit = |code: &mut String, returns: &[Register], prefix: &str| {
@@ -216,7 +212,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         }
         write_inst!(*code, "{prefix}ret");
     };
-    write_label!(code, "{function_name}_entry");
+    write_label!(code, "{function_name}");
     if !f.parameters.is_empty() {
         write_inst!(code, "pop rfp");
         for arg in &f.parameters {

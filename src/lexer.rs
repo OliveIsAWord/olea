@@ -32,6 +32,7 @@ pub enum PlainToken {
     Asterisk,
     Hat,
     Pipe,
+    At,
     // ThinArrow,
 }
 
@@ -83,6 +84,7 @@ const PUNCTUATION: &[(&str, Token)] = &[
     ("-", Pl(P::Minus)),
     ("*", Pl(P::Asterisk)),
     ("^", Pl(P::Hat)),
+    ("@", Pl(P::At)),
 ];
 
 /// # Invariants

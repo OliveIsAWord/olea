@@ -1,0 +1,7 @@
+extern fn get_current_disk_id() int
+extern fn set_current_disk_id(int)
+
+fn main():
+    let x = get_current_disk_id()
+    x = x + 1
+    set_current_disk_id(x)

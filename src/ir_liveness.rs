@@ -16,18 +16,18 @@ impl FunctionLiveness {
         let print_regs = |regs: &Set<Register>| {
             for (i, r) in regs.iter().enumerate() {
                 if i != 0 {
-                    print!(" ");
+                    eprint!(" ");
                 }
-                print!("{r}");
+                eprint!("{r}");
             }
-            println!();
+            eprintln!();
         };
         for (id, block) in &self.blocks {
-            println!("block_{}:", id.0);
-            print!("    start: ");
+            eprintln!("block_{}:", id.0);
+            eprint!("    start: ");
             print_regs(&block.start);
             for (i, inst) in block.insts.iter().enumerate() {
-                print!("    inst{i}: ");
+                eprint!("    inst{i}: ");
                 print_regs(inst);
             }
         }
