@@ -1,10 +1,5 @@
-extern fn print_char(int) int
-
-extern fn get_char() int
-
 fn foo():
-    let y = 4
-    let x = get_char()
-    y
-    print_char(x)
+    let x = 5
+    let y int^ = x@
+    y^ = 6
     x

@@ -337,6 +337,14 @@ impl<'src> Parser<'src> {
                 let span = e.span.start..deref_span.end;
                 let kind = ExprKind::Place(PlaceKind::Deref(Box::new(e), deref_span));
                 e = Expr { kind, span };
+            } else if let Some(ref_span) = self.just(P::At) {
+                let span = e.span.start..ref_span.end;
+                let op = UnaryOp {
+                    kind: UnaryOpKind::Ref,
+                    span: ref_span,
+                };
+                let kind = ExprKind::UnaryOp(op, Box::new(e));
+                e = Expr { kind, span };
             } else if let Some(Spanned {
                 kind: Tt::Paren(args, _),
                 span,

@@ -3,39 +3,39 @@ use crate::compiler_types::Spanned;
 
 pub fn visualize(block: &Block, src: &str) {
     visualize0(block, src, 0);
-    println!();
+    eprintln!();
 }
 
 fn visualize0(block: &Block, src: &str, level: usize) {
     let indent = || {
         for _ in 0..level {
-            print!("    ");
+            eprint!("    ");
         }
     };
     for (i, item) in block.iter().enumerate() {
         if i != 0 {
-            println!();
+            eprintln!();
         }
         indent();
         for Spanned { kind, span } in item {
             match kind {
-                Tt::Plain(_) => print!("{:?} ", &src[span.clone()]),
+                Tt::Plain(_) => eprint!("{:?} ", &src[span.clone()]),
                 Tt::Paren(b, _) => {
-                    println!("(");
+                    eprintln!("(");
                     visualize0(b, src, level + 1);
-                    println!();
+                    eprintln!();
                     indent();
-                    print!(") ");
+                    eprint!(") ");
                 }
                 Tt::IndentedBlock(b) => {
-                    // println!();
+                    // eprintln!();
                     // indent();
-                    println!(":");
+                    eprintln!(":");
                     visualize0(b, src, level + 1);
                     indent();
                 }
                 Tt::ElseBlock(b) => {
-                    println!("else");
+                    eprintln!("else");
                     visualize0(b, src, level + 1);
                     indent();
                 }
