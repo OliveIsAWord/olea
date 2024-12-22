@@ -1,8 +1,0 @@
-(
-  (ExternMod "vec" "vec.yafl")
-  (ExternMod "vec2" "vec.yafl")
-  (Func Public "seek" (
-      ((qualifiers "vec2") (base . "new"))
-      ((qualifiers "vec") (base . "push"))
-  ))
-)
