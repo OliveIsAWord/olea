@@ -159,7 +159,7 @@ impl Inst {
                 f(*r, true);
                 match sk {
                     &Sk::UnaryOp(_, r) => f(r, false),
-                    &Sk::BinOp(_, r1, r2) => {
+                    &Sk::BinOp(_, r1, r2) | &Sk::PtrOffset(r1, r2) => {
                         f(r1, false);
                         f(r2, false);
                     }
@@ -205,6 +205,8 @@ pub enum StoreKind {
     UnaryOp(UnaryOp, Register),
     /// An operation on the value of two registers.
     BinOp(BinOp, Register, Register),
+    /// A pointer offset from the first register by a number of elements according to the second register. Equivalent to `r1[r2]@`.
+    PtrOffset(Register, Register),
     /// A pointer to a unique allocation for a value of a given type.
     StackAlloc(Ty),
     /// A read access through a pointer to memory.

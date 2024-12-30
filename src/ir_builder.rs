@@ -371,6 +371,13 @@ impl<'a> IrBuilder<'a> {
                     span: name.span.clone(),
                 }),
             Pk::Deref(e, _) => self.build_expr_unvoid(e, span).map(MaybeVar::Variable),
+            Pk::Index(indexee, index, index_span) => {
+                let indexee_reg = self.build_expr_unvoid(indexee, span.clone())?;
+                let index_reg = self.build_expr_unvoid(index, index_span.clone())?;
+                let indexed_reg =
+                    self.push_store(StoreKind::PtrOffset(indexee_reg, index_reg), span);
+                Ok(MaybeVar::Variable(indexed_reg))
+            }
         }
     }
 
@@ -409,8 +416,9 @@ impl<'a> IrBuilder<'a> {
         let t = |r| self.tys.get(r).unwrap().clone();
         match sk {
             &Sk::Int(_) => Ty::Int,
-            Sk::Phi(regs) => t(regs.iter().min().expect("empty phi").1),
+            Sk::Phi(regs) => t(regs.first_key_value().expect("empty phi").1),
             Sk::BinOp(_, lhs, _rhs) => t(lhs),
+            Sk::PtrOffset(ptr, _) => t(ptr),
             Sk::StackAlloc(ty) => Ty::Pointer(Box::new(ty.clone())),
             Sk::Copy(r) | Sk::UnaryOp(UnaryOp::Neg, r) => t(r),
             Sk::Read(r) => match self.tys.get(r).unwrap() {

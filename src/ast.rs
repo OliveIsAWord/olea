@@ -115,6 +115,8 @@ pub enum PlaceKind {
     Var(Name),
     /// An access of a value from an expression which yields a pointer. The second field contains the source span of the deref operator `^` itself.
     Deref(Box<Expr>, Span),
+    /// An index operation, consisting of the indexee, the index, and the span of the index (including square brackets).
+    Index(Box<Expr>, Box<Expr>, Span),
 }
 
 /// See [`UnaryOpKind`].

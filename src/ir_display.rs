@@ -169,6 +169,7 @@ impl DisplayWithName for Function {
                                     BinOp::Mul => "*",
                                 }
                             ),
+                            Sk::PtrOffset(lhs, rhs) => write!(f, "{lhs}[{rhs}]@"),
                             Sk::Phi(regs) => write!(
                                 f,
                                 "Phi({})",

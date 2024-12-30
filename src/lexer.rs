@@ -9,6 +9,8 @@ pub enum ControlToken {
     Else,
     ParenOpen,
     ParenClose,
+    SquareOpen,
+    SquareClose,
     Colon,
     Comma,
 }
@@ -76,6 +78,8 @@ const PUNCTUATION: &[(&str, Token)] = &[
     // ("->", Pl(P::ThinArrow)),
     ("(", Co(C::ParenOpen)),
     (")", Co(C::ParenClose)),
+    ("[", Co(C::SquareOpen)),
+    ("]", Co(C::SquareClose)),
     (":", Co(C::Colon)),
     (",", Co(C::Comma)),
     // (".", Pl(P::Dot)),

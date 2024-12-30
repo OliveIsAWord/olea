@@ -10,6 +10,7 @@ use Token::Control as Co;
 pub enum TokenTree {
     Plain(PlainToken),
     Paren(Block, bool),
+    Square(Block, bool),
     IndentedBlock(Block),
     ElseBlock(Block),
 }
@@ -133,10 +134,21 @@ impl Arborizer<'_> {
                         span: span_start..span_end,
                     });
                 }
+                Co(C::SquareOpen) => {
+                    // TODO: handle closing paren appearing before newline and dedent
+                    let span_start = span.start;
+                    let (inner, multi) = self.inner_block(false, Some(C::Comma))?;
+                    self.expect(C::SquareClose)?;
+                    let span_end = self.get_previous_span().end;
+                    item.push(Spanned {
+                        kind: Tt::Square(inner, multi),
+                        span: span_start..span_end,
+                    });
+                }
                 Co(C::Colon) => break true,
 
                 Co(t @ C::Indent) => self.unexpected(t)?,
-                Co(C::Else | C::ParenClose | C::Dedent | C::Comma) => {
+                Co(C::Else | C::ParenClose | C::SquareClose | C::Dedent | C::Comma) => {
                     self.i -= 1;
                     break false;
                 }

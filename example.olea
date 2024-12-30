@@ -1,5 +1,4 @@
+extern fn bar() int^
+
 fn foo():
-    let x = 5
-    let y int^ = x@
-    y^ = 6
-    x
+    bar()[2] = 42

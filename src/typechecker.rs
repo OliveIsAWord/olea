@@ -72,6 +72,11 @@ impl<'a> TypeChecker<'a> {
                 self.expect(rhs, &Ty::Int)?;
                 Ty::Int
             }
+            &Sk::PtrOffset(lhs, rhs) => {
+                self.pointer(lhs)?;
+                self.expect(rhs, &Ty::Int)?;
+                self.t(lhs).clone()
+            }
             &Sk::UnaryOp(UnaryOp::Neg, rhs) => {
                 self.expect(rhs, &Ty::Int)?;
                 Ty::Int

@@ -27,6 +27,13 @@ fn visualize0(block: &Block, src: &str, level: usize) {
                     indent();
                     eprint!(") ");
                 }
+                Tt::Square(b, _) => {
+                    eprintln!("[");
+                    visualize0(b, src, level + 1);
+                    eprintln!();
+                    indent();
+                    eprint!("] ");
+                }
                 Tt::IndentedBlock(b) => {
                     // eprintln!();
                     // indent();

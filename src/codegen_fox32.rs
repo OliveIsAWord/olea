@@ -2,7 +2,8 @@ use crate::compiler_types::{Map, Set, Str};
 use crate::ir::*;
 use crate::ir_liveness::{self, FunctionLiveness};
 
-const NUM_REGISTERS: usize = 32;
+const NUM_REGISTERS: usize = 31;
+const TEMP_REG: StoreLoc = StoreLoc::Register(31);
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum StoreLoc {
@@ -159,6 +160,7 @@ macro_rules! write_inst {
     }}
 }
 
+#[allow(unused_macros)]
 macro_rules! write_comment {
     ($dst:expr, $($arg:tt)*) => {{
         use ::std::fmt::Write;
@@ -171,7 +173,6 @@ macro_rules! write_comment {
 
 pub fn gen_program(ir: &Program) -> String {
     let mut code = String::new();
-    write_comment!(code, "Generated source code:");
     for (i, (name, f)) in ir.functions.iter().enumerate() {
         if i != 0 {
             code.push('\n');
@@ -202,6 +203,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
             eprintln!();
         }
     }
+    let size_of_ir_value = |_| 4;
     let write_exit = |code: &mut String, returns: &[Register], prefix: &str| {
         if stack_size != 0 {
             write_inst!(*code, "{prefix}add rsp, {stack_size}");
@@ -283,11 +285,21 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                             }
                             write_inst!(code, "{} {}, {}", op_mnemonic, reg.foo(), rhs_reg.foo());
                         }
-
+                        Sk::PtrOffset(lhs, rhs) => {
+                            let lhs_reg = regs.get(lhs).unwrap();
+                            let rhs_reg = regs.get(rhs).unwrap();
+                            if reg != lhs_reg {
+                                write_inst!(code, "mov {}, {}", reg.foo(), lhs_reg.foo());
+                            }
+                            write_inst!(code, "mov {}, {}", TEMP_REG.foo(), size_of_ir_value(lhs));
+                            write_inst!(code, "mul {}, {}", TEMP_REG.foo(), rhs_reg.foo());
+                            write_inst!(code, "add {}, {}", reg.foo(), TEMP_REG.foo());
+                        }
                         Sk::Int(_) | Sk::Function(_) => unreachable!(
                             "register store should have been optimized as a constant literal"
                         ),
                         Sk::Phi(_) => (),
+                        // _ => write_comment!(code, "TODO: {inst:?}"),
                     }
                 }
                 Inst::Write(dst, src) => {

@@ -361,6 +361,23 @@ impl<'src> Parser<'src> {
                     span: e.span.start..span.end,
                     kind: ExprKind::Call(Box::new(e), args),
                 };
+            } else if let Some(Spanned {
+                kind: Tt::Square(block, multi),
+                span,
+            }) = self.peek()
+            {
+                if *multi {
+                    return Err(self.err("indexing cannot have multiple arguments"));
+                }
+                assert_eq!(block.len(), 1);
+                self.next().unwrap();
+                let start_span = span.start + 1..span.start + 1;
+                let end_span = span.end - 1..span.end - 1;
+                let expr = self.item(Self::expr, &block[0], start_span, end_span)?;
+                e = Expr {
+                    span: e.span.start..span.end,
+                    kind: ExprKind::Place(PlaceKind::Index(Box::new(e), Box::new(expr), span)),
+                };
             } else {
                 break;
             }
