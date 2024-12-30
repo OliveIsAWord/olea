@@ -1,4 +1,3 @@
-; Generated source code:
 main:
     pop rfp
     pop r0
@@ -97,36 +96,17 @@ print_char:
     pop r0
     pop r2
     push rfp
-    sub rsp, 12
+    sub rsp, 8
 print_char_0:
     mov r1, rsp
     mov [r1], r0
     mov r0, rsp
     add r0, 4
     mov [r0], r2
-    push r1
+    mov r1, [r1]
     push r0
-    push 4
-    call allocate_memory
-    pop r2
-    pop r0
-    pop r1
-    mov r3, rsp
-    add r3, 8
-    mov [r3], r2
-    mov r2, [r3]
-    mov r0, [r0]
-    mov [r2], r0
-    mov r0, [r1]
-    mov r1, [r3]
-    push r3
     push r1
-    push r0
     push 1
     call write
-    pop r3
-    mov r0, [r3]
-    push r0
-    call free_memory
-    add rsp, 12
+    add rsp, 8
     ret
