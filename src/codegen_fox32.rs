@@ -208,11 +208,16 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         if stack_size != 0 {
             write_inst!(*code, "{prefix}add rsp, {stack_size}");
         }
+        if !returns.is_empty() {
+        write_inst!(*code, "{prefix}pop rfp");
         for r in returns {
             let r_reg = regs.get(r).unwrap().foo();
             write_inst!(*code, "{prefix}push {r_reg}");
         }
+        write_inst!(*code, "{prefix}jmp rfp");
+        } else {
         write_inst!(*code, "{prefix}ret");
+        }
     };
     write_label!(code, "{function_name}");
     if !f.parameters.is_empty() {
