@@ -1,0 +1,62 @@
+extern fn yield_task()
+extern fn end_current_task()
+
+extern fn allocate_memory(int) int^
+extern fn free_memory(int^)
+
+extern fn new_window(int^, int^, int, int, int, int, int, int)
+extern fn destroy_window(int^)
+extern fn get_next_window_event(int^, int^, int^) int
+extern fn get_window_overlay_number(int^) int
+extern fn start_dragging_window(int^)
+
+extern fn draw_str_to_overlay(int^, int, int, int, int, int)
+
+extern fn break()
+
+fn main(stream int):
+    let title = allocate_memory(12)
+    title[0] = 1684957527
+    title[1] = 1142978415
+    title[2] = 7302501
+    
+    let string = allocate_memory(16)
+    string[0] = 1819043144
+    string[1] = 1998597231
+    string[2] = 1684828783
+    string[3] = 33
+
+    let window = allocate_memory(40)
+    new_window(window, title, 256, 256, 64, 64, 0, 0)
+
+    let color_black = 16777216
+    let color_gray = 2155905152
+    let color_white = 0 - 1
+    draw_str_to_overlay(string, 16, 32, color_black, color_white, get_window_overlay_number(window))
+
+    let running = 1
+    while running:
+        yield_task()
+        let x = 0
+        let y = 0
+        let event = 0
+        while event + 1:
+            event = get_next_window_event(window, x@, y@)
+            if event: 0
+            else:
+                if ge_16(y): 0
+                else:
+                    if ge_8(x):
+                        start_dragging_window(window)
+                    else:
+                        running = 0
+    destroy_window(window)
+    free_memory(window)
+    free_memory(string)
+    free_memory(title)
+
+fn ge_8(n int) int:
+    (n - 0) * (n - 1) * (n - 2) * (n - 3) * (n - 4) * (n - 5) * (n - 6) * (n - 7)
+
+fn ge_16(n int) int:
+    ge_8(n) * (n - 8) * (n - 9) * (n - 10) * (n - 11) * (n - 12) * (n - 13) * (n - 14) * (n - 15)
