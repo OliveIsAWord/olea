@@ -1,5 +1,5 @@
     opton
-    call main_entry
+    call main
     jmp [0x00000A18]
 get_current_disk_id:
     pop rfp
