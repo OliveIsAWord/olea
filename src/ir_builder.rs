@@ -211,7 +211,7 @@ impl<'a> IrBuilder<'a> {
                     }
                     A::Ref => {
                         let maybe_var = match &e.kind {
-                            E::Place(kind) => self.build_place(kind, span.clone())?,
+                            E::Place(kind) => self.build_place(kind, span)?,
                             _ => MaybeVar::Constant(self.build_expr_unvoid(e, span)?),
                         };
                         match maybe_var {
