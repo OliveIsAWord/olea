@@ -36,7 +36,7 @@ pub struct Cfg {
 
 /// Information about the control flow graph.
 impl Cfg {
-    /// build a Cfg out of a set of blocks.
+    /// build a CFG out of a set of blocks.
     pub fn new(blocks: &Map<BlockId, Block>) -> Self {
 
         let mut cfg = Cfg { map: Map::<BlockId, CfgNode>::new() };
@@ -48,6 +48,7 @@ impl Cfg {
 
         // build edges
         for (id, block) in blocks {
+            // we have to do this in separate loops cause mutable borrowing and shit
             for succ in block.successors() {
                 let succ_node = cfg.map.get_mut(&succ).unwrap();
                 succ_node.predecessors.insert(*id);
@@ -59,7 +60,7 @@ impl Cfg {
         }
 
         // build dominator tree
-        // todo!();
+        // i dont want to figure out domtrees atm, most of the examples only have one block anyway
         assert!(blocks.len() == 1);
 
         cfg
@@ -78,7 +79,7 @@ impl Cfg {
     }
     /// Get the block IDs of this dominator tree in visiting order.
     pub fn dom_iter(&self) -> impl Iterator<Item = BlockId> + '_ {
-        // note from sandwich: this is pretty much lifted from og DominatorTree
+        // (sandwich): this is pretty much lifted from og DominatorTree
 
         // obviously it's bad to allocate a vec for this, but it's our little secret.
         // the lifetime bound (i think) lets us change this to something better if need be

@@ -31,7 +31,6 @@ mod typechecker;
 
 use annotate_snippets::{renderer::Style, Level, Message, Renderer, Snippet};
 use compiler_types::Spanned;
-use ir::BlockId;
 use std::process::ExitCode;
 
 fn error(message: &str) {
@@ -177,8 +176,7 @@ fn main() -> ExitCode {
     }
 
     eprintln!("#Optimizer phase");
-    // ir_optimizer::optimize(&mut ir);
-    ir_opt::Pass::STACKPROM.run_program(&mut ir);
+    ir_opt::STACK2REG.run_program(&mut ir);
     eprintln!();
 
     for (name, f) in &ir.functions {
