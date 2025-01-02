@@ -66,7 +66,7 @@ impl<'a> TypeChecker<'a> {
             &Sk::Copy(r) => self.t(r).clone(),
             &Sk::BinOp(op, lhs, rhs) => {
                 match op {
-                    BinOp::Add | BinOp::Sub | BinOp::Mul => (),
+                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::CmpLe => (),
                 }
                 self.expect(lhs, &Ty::Int)?;
                 self.expect(rhs, &Ty::Int)?;

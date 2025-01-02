@@ -229,8 +229,10 @@ pub enum BinOp {
     Add,
     /// Subtraction.
     Sub,
-    /// Multiplication.
+    /// Unsigned multiplication.
     Mul,
+    /// Less-than-or-equal-to comparison.
+    CmpLe,
 }
 
 /// The direction of control flow after all instructions of a block have been executed.

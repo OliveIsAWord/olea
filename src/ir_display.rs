@@ -167,6 +167,7 @@ impl DisplayWithName for Function {
                                     BinOp::Add => "+",
                                     BinOp::Sub => "-",
                                     BinOp::Mul => "*",
+                                    BinOp::CmpLe => "<=",
                                 }
                             ),
                             Sk::PtrOffset(lhs, rhs) => write!(f, "{lhs}[{rhs}]@"),

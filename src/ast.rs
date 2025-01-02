@@ -141,8 +141,10 @@ pub enum BinOpKind {
     Add,
     /// Two's complement subtration.
     Sub,
-    /// Two's complement multiplication.
+    /// Two's complement unsigned multiplication.
     Mul,
+    /// Unsigned less-than-or-equal-to comparison.
+    CmpLe,
 }
 
 /// A block, a list of statements that are executed in order. The block may yield the value of its last statement.

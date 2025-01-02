@@ -1,4 +1,2 @@
-extern fn bar() int^
-
-fn foo():
-    bar()[2] = 42
+fn le_8(x int) int:
+    x <= 8

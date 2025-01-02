@@ -235,6 +235,7 @@ impl<'a> IrBuilder<'a> {
                     A::Add => B::Add,
                     A::Sub => B::Sub,
                     A::Mul => B::Mul,
+                    A::CmpLe => B::CmpLe,
                 };
                 let lhs_reg = self.build_expr_unvoid(lhs, span.clone())?;
                 let rhs_reg = self.build_expr_unvoid(rhs, span.clone())?;
