@@ -22,10 +22,99 @@ pub struct Function {
     pub tys: Map<Register, Ty>,
     /// The corresponding source location of each register.
     pub spans: Map<Register, Span>,
-    /// The blocks that can directly jump to a given block.
-    pub predecessors: Map<BlockId, Set<BlockId>>,
-    /// The dominator tree of this function. See [`DominatorTree`].
-    pub dominator_tree: DominatorTree,
+    /// Information about the control flow graph.
+    pub cfg: Cfg,
+}
+
+#[derive(Clone, Debug)]
+/// Information about the control flow graph, 
+/// including successors, predecessors, and dominance
+pub struct Cfg {
+    /// Map directly from BlockId to CfgNodes
+    pub map: Map<BlockId, CfgNode>
+}
+
+/// Information about the control flow graph.
+impl Cfg {
+    /// build a Cfg out of a set of blocks.
+    pub fn new(blocks: &Map<BlockId, Block>) -> Self {
+
+        let mut cfg = Cfg { map: Map::<BlockId, CfgNode>::new() };
+
+        // build nodes
+        for (id, _) in blocks {
+            cfg.map.insert(*id, CfgNode::new(*id));
+        }
+
+        // build edges
+        for (id, block) in blocks {
+            for succ in block.successors() {
+                let succ_node = cfg.map.get_mut(&succ).unwrap();
+                succ_node.predecessors.insert(*id);
+            }
+            let block_node = cfg.map.get_mut(id).unwrap();
+            for succ in block.successors() {
+                block_node.successors.insert(succ);
+            }
+        }
+
+        // build dominator tree
+        // todo!();
+        assert!(blocks.len() == 1);
+
+        cfg
+    }
+
+    /// Access every block ID in the dominator tree such that a given block is visited before any of the blocks it strictly dominates.
+    pub fn dom_visit(&self, mut f: impl FnMut(BlockId)) {
+        self.dom_visit_inner(BlockId::ENTRY, &mut f);
+    }
+    fn dom_visit_inner(&self, id: BlockId, f: &mut impl FnMut(BlockId)) {
+        f(id);
+        let children = &self.map.get(&id).unwrap().dominates; 
+        for child in children {
+            self.dom_visit_inner(*child, f);
+        }
+    }
+    /// Get the block IDs of this dominator tree in visiting order.
+    pub fn dom_iter(&self) -> impl Iterator<Item = BlockId> + '_ {
+        // note from sandwich: this is pretty much lifted from og DominatorTree
+
+        // obviously it's bad to allocate a vec for this, but it's our little secret.
+        // the lifetime bound (i think) lets us change this to something better if need be
+        let mut ids = vec![];
+        self.dom_visit(|id| ids.push(id));
+        ids.into_iter()
+    }
+}
+
+#[derive(Clone, Debug)]
+/// A node in the CFG
+pub struct CfgNode {
+    /// Associated block id.
+    pub id: BlockId,
+    /// Dominance tree parent
+    pub immediate_dominator: Option<BlockId>,
+    /// Dominance tree children
+    pub dominates: Set<BlockId>,
+
+    /// Blocks that can jump here
+    pub predecessors: Set<BlockId>,
+    /// Blocks that this block can jump to
+    pub successors: Set<BlockId>,
+}
+
+impl CfgNode {
+    /// Construct a CFG node.
+    pub fn new(id: BlockId) -> Self {
+        Self {
+            id,
+            immediate_dominator: None,
+            dominates: Set::new(),
+            predecessors: Set::new(),
+            successors: Set::new(),
+        }
+    }
 }
 
 impl Function {
@@ -37,32 +126,20 @@ impl Function {
         tys: Map<Register, Ty>,
         spans: Map<Register, Span>,
     ) -> Self {
-        let dominator_tree = DominatorTree::new(&blocks);
-        let mut this = Self {
+        let cfg = Cfg::new(&blocks);
+        let this = Self {
             parameters,
             blocks,
             tys,
             spans,
-            predecessors: Map::new(),
-            dominator_tree,
+            cfg,
         };
-        this.gen_predecessors();
         this
     }
     /// Returns an iterator over the blocks and their IDs of the function. The first item is always the entry block.
     pub fn iter(&self) -> impl Iterator<Item = (BlockId, &Block)> {
         // NOTE: This relies on block 0 being first because of BTreeSet and the sort order of blocks
         self.blocks.iter().map(|(&id, block)| (id, block))
-    }
-    /// Traverse the control flow graph to update the mapping of immediate predecessors for each block.
-    pub fn gen_predecessors(&mut self) {
-        let mut p: Map<_, _> = self.blocks.keys().map(|&id| (id, Set::new())).collect();
-        for (&id, block) in &self.blocks {
-            for succ_id in block.successors() {
-                p.get_mut(&succ_id).unwrap().insert(id);
-            }
-        }
-        self.predecessors = p;
     }
 }
 
@@ -330,84 +407,85 @@ impl BlockId {
     }
 }
 
-/// A [dominator tree](https://en.wikipedia.org/wiki/Dominator_(graph_theory)), a tree of blocks where a block's ancestors are all the blocks that must execute before it.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct DominatorTree {
-    /// The tree of blocks.
-    pub children: Map<BlockId, Self>,
-}
+// /// A [dominator tree](https://en.wikipedia.org/wiki/Dominator_(graph_theory)), a tree of blocks where a block's ancestors are all the blocks that must execute before it.
+// #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+// pub struct DominatorTree {
+//     /// The tree of blocks.
+//     pub children: Map<BlockId, Self>,
+// }
 
-impl DominatorTree {
-    /// Construct a dominator tree.
-    #[must_use]
-    pub fn new(blocks: &Map<BlockId, Block>) -> Self {
-        let mut this = Self {
-            children: blocks
-                .keys()
-                .map(|&id| {
-                    (
-                        id,
-                        Self {
-                            children: Map::new(),
-                        },
-                    )
-                })
-                .collect(),
-        };
-        this.make_immediate(blocks);
-        this
-    }
-    fn make_immediate(&mut self, blocks: &Map<BlockId, Block>) {
-        fn traverse_except(blocks: &Map<BlockId, Block>, except: BlockId) -> Set<BlockId> {
-            let mut unreachable: Set<_> =
-                blocks.keys().copied().filter(|&id| id != except).collect();
-            let mut open = vec![BlockId::ENTRY];
-            while let Some(id) = open.pop() {
-                if unreachable.remove(&id) {
-                    open.extend(blocks.get(&id).unwrap().successors());
-                }
-            }
-            unreachable
-        }
-        let mut closed = Set::new();
-        // TODO: this is an unlovely quadratic loop. if this is a problem, fix it or change algorithms
-        while let Some(child_id) = self
-            .children
-            .keys()
-            .copied()
-            .find(|child_id| !closed.contains(child_id))
-        {
-            closed.insert(child_id);
-            let mut new_children = traverse_except(blocks, child_id)
-                .into_iter()
-                .filter_map(|dommed_id| self.children.remove_entry(&dommed_id))
-                .collect();
-            self.children
-                .get_mut(&child_id)
-                .unwrap()
-                .children
-                .append(&mut new_children);
-        }
-        for child in self.children.values_mut() {
-            child.make_immediate(blocks);
-        }
-    }
-    /// Access every block ID in the dominator tree such that a given block is visited before any of the blocks it strictly dominates.
-    pub fn visit(&self, mut f: impl FnMut(BlockId)) {
-        self.visit_inner(&mut f);
-    }
-    fn visit_inner(&self, f: &mut impl FnMut(BlockId)) {
-        for (&id, children) in &self.children {
-            f(id);
-            children.visit_inner(f);
-        }
-    }
-    /// Get the block IDs of this dominator tree in visiting order.
-    pub fn iter(&self) -> impl Iterator<Item = BlockId> + '_ {
-        // obviously it's bad to allocate a vec for this, but it's our little secret.
-        // the lifetime bound (i think) lets us change this to something better if need be
-        let mut ids = vec![];
-        self.visit(|id| ids.push(id));
-        ids.into_iter()
-    }
-}
+// impl DominatorTree {
+//     /// Construct a dominator tree.
+//     #[must_use]
+//     pub fn new(blocks: &Map<BlockId, Block>) -> Self {
+//         let mut this = Self {
+//             children: blocks
+//                 .keys()
+//                 .map(|&id| {
+//                     (
+//                         id,
+//                         Self {
+//                             children: Map::new(),
+//                         },
+//                     )
+//                 })
+//                 .collect(),
+//         };
+//         this.make_immediate(blocks);
+//         this
+//     }
+//     fn make_immediate(&mut self, blocks: &Map<BlockId, Block>) {
+//         fn traverse_except(blocks: &Map<BlockId, Block>, except: BlockId) -> Set<BlockId> {
+//             let mut unreachable: Set<_> =
+//                 blocks.keys().copied().filter(|&id| id != except).collect();
+//             let mut open = vec![BlockId::ENTRY];
+//             while let Some(id) = open.pop() {
+//                 if unreachable.remove(&id) {
+//                     open.extend(blocks.get(&id).unwrap().successors());
+//                 }
+//             }
+//             unreachable
+//         }
+//         let mut closed = Set::new();
+//         // TODO: this is an unlovely quadratic loop. if this is a problem, fix it or change algorithms
+//         while let Some(child_id) = self
+//             .children
+//             .keys()
+//             .copied()
+//             .find(|child_id| !closed.contains(child_id))
+//         {
+//             closed.insert(child_id);
+//             let mut new_children = traverse_except(blocks, child_id)
+//                 .into_iter()
+//                 .filter_map(|dommed_id| self.children.remove_entry(&dommed_id))
+//                 .collect();
+//             self.children
+//                 .get_mut(&child_id)
+//                 .unwrap()
+//                 .children
+//                 .append(&mut new_children);
+//         }
+//         for child in self.children.values_mut() {
+//             child.make_immediate(blocks);
+//         }
+//     }
+//     /// Access every block ID in the dominator tree such that a given block is visited before any of the blocks it strictly dominates.
+//     pub fn visit(&self, mut f: impl FnMut(BlockId)) {
+//         self.visit_inner(&mut f);
+//     }
+//     fn visit_inner(&self, f: &mut impl FnMut(BlockId)) {
+//         for (&id, children) in &self.children {
+//             f(id);
+//             children.visit_inner(f);
+//         }
+//     }
+//     /// Get the block IDs of this dominator tree in visiting order.
+//     pub fn iter(&self) -> impl Iterator<Item = BlockId> + '_ {
+//         // obviously it's bad to allocate a vec for this, but it's our little secret.
+//         // the lifetime bound (i think) lets us change this to something better if need be
+//         let mut ids = vec![];
+//         self.visit(|id| ids.push(id));
+//         ids.into_iter()
+//     }
+
+// }

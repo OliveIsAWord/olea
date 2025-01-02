@@ -113,7 +113,8 @@ fn calculate_start(f: &Function) -> Start {
         if f.blocks[&id].defined_regs.contains(&r) || !map.get_mut(&id).unwrap().insert(r) {
             return;
         }
-        for &pred in &f.predecessors[&id] {
+        // for &pred in &f.predecessors[&id] {
+        for &pred in &f.cfg.map[&id].predecessors {
             add(pred, r, f, map);
         }
     }

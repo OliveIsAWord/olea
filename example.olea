@@ -1,4 +1,5 @@
-extern fn bar() int^
-
-fn foo():
-    bar()[2] = 42
+fn foo() int:
+    let y = 1
+    y = y + 2
+    y = y - 3
+    y

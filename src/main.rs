@@ -22,6 +22,7 @@ mod ir_display;
 pub mod ir_liveness;
 // TODO: rewrite to account for `used_regs` not including phi arguments.
 // mod ir_optimizer;
+mod ir_opt;
 mod lexer;
 mod parser;
 #[allow(dead_code)]
@@ -30,6 +31,7 @@ mod typechecker;
 
 use annotate_snippets::{renderer::Style, Level, Message, Renderer, Snippet};
 use compiler_types::Spanned;
+use ir::BlockId;
 use std::process::ExitCode;
 
 fn error(message: &str) {
@@ -117,7 +119,7 @@ fn main() -> ExitCode {
     };
     // eprintln!("#Syntax tree:\n{ast:?}\n");
 
-    let ir = match ir_builder::build(&ast) {
+    let mut ir = match ir_builder::build(&ast) {
         Ok(x) => x,
         Err(Spanned { kind, span }) => {
             use ir_builder::ErrorKind as E;
@@ -174,9 +176,10 @@ fn main() -> ExitCode {
         }
     }
 
-    // eprintln!("#Optimizer phase");
+    eprintln!("#Optimizer phase");
     // ir_optimizer::optimize(&mut ir);
-    // eprintln!();
+    ir_opt::Pass::STACKPROM.run_program(&mut ir);
+    eprintln!();
 
     for (name, f) in &ir.functions {
         let live = ir_liveness::calculate_liveness(f);

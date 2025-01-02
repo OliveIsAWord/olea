@@ -169,7 +169,7 @@ impl<'a> TypeChecker<'a> {
             tys: &f.tys,
             name,
         };
-        for i in f.dominator_tree.iter() {
+        for i in f.cfg.dom_iter() {
             let block = f.blocks.get(&i).unwrap();
             this.visit_block(block)?;
         }
