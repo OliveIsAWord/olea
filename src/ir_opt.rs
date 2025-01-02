@@ -30,6 +30,11 @@ pub const STACK2REG: Pass = Pass {
     on_function: stack2reg_function,
 };
 
-fn stack2reg_function(f: &mut Function) {
+// return a vector of all uses of register
+fn collect_uses(f: &Function, reg: Register) -> Vec<&Inst> {
+    todo!();
+}
 
+fn stack2reg_function(f: &mut Function) {
+    // identify
 }
