@@ -1,8 +1,6 @@
 use crate::compiler_types::{Map, Set};
 use crate::ir::*;
 
-// (sandwich): some shit
-
 pub struct Pass {
     name: &'static str,
     on_function: fn(&mut Function),
@@ -95,19 +93,18 @@ fn is_valid_candidate(f: &Function, reg: Register) -> bool {
 }
 
 /// promote stack allocations to registers
-pub const STACK2REG: Pass = Pass {
-    name: "stack2reg",
-    on_function: stack2reg_function,
+pub const STACK_TO_REGISTER: Pass = Pass {
+    name: "stack_to_register",
+    on_function: stack_to_register_impl,
 };
 
-fn stack2reg_function(f: &mut Function) {
+fn stack_to_register_impl(f: &mut Function) {
     assert!(f.blocks.len() == 1);
     
     let block = f.blocks.get(&BlockId::ENTRY).unwrap();
     // find stackallocs
-    let candidates = block.insts.iter();
 
-    let candidate_pairs: Vec<Register> = candidates.filter_map(
+    let candidates: Vec<Register> = block.insts.iter().filter_map(
         |inst| match inst {
             Inst::Store(ptr, StoreKind::StackAlloc(_)) => Some(*ptr),
             _ => None,
@@ -116,16 +113,16 @@ fn stack2reg_function(f: &mut Function) {
         |reg| is_valid_candidate(f, *reg)
     ).collect();
 
-    println!("promotion candidates: {:?}\n", candidate_pairs);
+    println!("promotion candidates: {:?}\n", candidates);
 
     // Write turns into Store(Copy)
     // Store(Read) turns into Store(Copy)
 
     let block = f.blocks.get_mut(&BlockId::ENTRY).unwrap();
 
-    for candidate in candidate_pairs {
+    for candidate in candidates {
 
-        let mut current_value = Register(0);
+        let mut current_value = Register(u128::MAX);
 
         for inst in block.insts.iter_mut() {
             match inst {
@@ -134,6 +131,7 @@ fn stack2reg_function(f: &mut Function) {
                     *inst = Inst::Nop;
                 }
                 Inst::Store(def, StoreKind::Read(ptr)) if *ptr == candidate => {
+                    assert!(current_value.0 != u128::MAX, "stack variable read before written");
                     *inst = Inst::Store(*def, StoreKind::Copy(current_value));
                 }
                 Inst::Store(def, StoreKind::StackAlloc(_)) if *def == candidate => {
@@ -147,34 +145,28 @@ fn stack2reg_function(f: &mut Function) {
 }
 
 /// remove Nop instructions completely
-pub const NOPELIM: Pass = Pass {
-    name: "nopelim",
-    on_function: nopelim_function,
+pub const NOP_ELIMINATION: Pass = Pass {
+    name: "nop_elimination",
+    on_function: nop_elimination_impl,
 };
 
-fn nopelim_function(f: &mut Function) {
+fn nop_elimination_impl(f: &mut Function) {
     for (_, block) in f.blocks.iter_mut() {
         block.insts.retain(|i| !matches!(i, Inst::Nop));
     }
 }
 
-pub const CONSTPROP: Pass = Pass {
-    name: "constprop",
-    on_function: constprop_function,
+pub const CONSTANT_PROPAGATION: Pass = Pass {
+    name: "constant_propagation",
+    on_function: constant_propagation_impl,
 };
 
-fn constprop_function(f: &mut Function) {
+fn constant_propagation_impl(f: &mut Function) {
     // let mut worklist: Set<Register> = Set::new();
 
-    // for (blockid, block) in f.blocks.iter_mut() {
-    //     for inst in block.insts.iter_mut() {
-    //         match inst {
-    //             Inst::Store(_, sk) => match sk {
-    //                 StoreKind::Copy(input) => {
-                        
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
+    for (blockid, block) in f.blocks.iter_mut() {
+        for inst in block.insts.iter_mut() {
+            
+        }
+    }
 }

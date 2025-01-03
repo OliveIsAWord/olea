@@ -204,21 +204,6 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         }
     }
     let size_of_ir_value = |_| 4;
-    let write_exit = |code: &mut String, returns: &[Register], prefix: &str| {
-        if stack_size != 0 {
-            write_inst!(*code, "{prefix}add rsp, {stack_size}");
-        }
-        if returns.is_empty() {
-            write_inst!(*code, "{prefix}ret");
-        } else {
-            write_inst!(*code, "{prefix}pop rfp");
-            for r in returns {
-                let r_reg = regs.get(r).unwrap().foo();
-                write_inst!(*code, "{prefix}push {r_reg}");
-            }
-            write_inst!(*code, "{prefix}jmp rfp");
-        }
-    };
     write_label!(code, "{function_name}");
     if !f.parameters.is_empty() {
         write_inst!(code, "pop rfp");
@@ -421,8 +406,20 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                 };
                 next_true.or(next_false)
             },
-            Exit::Return(regs) => {
-                write_exit(&mut code, regs, "");
+            Exit::Return(returns) => {
+                if stack_size != 0 {
+                    write_inst!(code, "add rsp, {stack_size}");
+                }
+                if returns.is_empty() {
+                    write_inst!(code, "ret");
+                } else {
+                    write_inst!(code, "pop rfp");
+                    for r in returns {
+                        let r_reg = regs.get(r).unwrap().foo();
+                        write_inst!(code, "push {r_reg}");
+                    }
+                    write_inst!(code, "jmp rfp");
+                }
                 None
             }
         };

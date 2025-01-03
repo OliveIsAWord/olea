@@ -176,8 +176,8 @@ fn main() -> ExitCode {
     }
 
     eprintln!("#Optimizer phase");
-    ir_opt::STACK2REG.run_program(&mut ir);
-    ir_opt::NOPELIM.run_program(&mut ir);
+    ir_opt::STACK_TO_REGISTER.run_program(&mut ir);
+    ir_opt::NOP_ELIMINATION.run_program(&mut ir);
     eprintln!("{ir}\n");
 
     for (name, f) in &ir.functions {

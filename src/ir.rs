@@ -50,7 +50,7 @@ impl Cfg {
 
         // build edges
         for (id, block) in blocks {
-            // we have to do this in separate loops cause mutable borrowing and shit
+            // we have to do this in separate loops unfortunately cause mutable borrowing
             for succ in block.successors() {
                 let succ_node = cfg.map.get_mut(&succ).unwrap();
                 succ_node.predecessors.insert(*id);
@@ -427,20 +427,6 @@ pub enum Condition {
     /// - A function whose address is not equal to zero (so all of them?).
     NonZero(Register),
 }
-
-// impl JumpLocation {
-//     /// Access every register this jump location uses.
-//     pub fn visit_regs<F: FnMut(Register)>(&self, mut f: F) {
-//         match self {
-//             Self::Block(_) => {}
-//             Self::Return(regs) => {
-//                 for &r in regs {
-//                     f(r);
-//                 }
-//             }
-//         }
-//     }
-// }
 
 /// A named location which stores a value.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
