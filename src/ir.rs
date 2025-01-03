@@ -360,41 +360,40 @@ pub enum BinOp {
 #[derive(Clone, Debug)]
 pub enum Exit {
     /// Direct control flow to a single, static location.
-    Jump(JumpLocation),
+    Jump(BlockId),
     /// Direct control flow to one of two locations based on some runtime condition.
-    CondJump(Condition, JumpLocation, JumpLocation),
+    CondJump(Condition, BlockId, BlockId),
+    /// Execution terminates, yielding a list of values.
+    Return(Vec<Register>)
 }
 
 impl Exit {
+    /// Does this exit use a certain register?
+    pub fn is_use(&self, reg: Register) -> bool {
+        false
+    }
     /// Get all the blocks this exit can jump to.
     pub fn successors(&self) -> impl Iterator<Item = BlockId> {
         let mut ids = vec![];
-        let mut add = |loc: &JumpLocation| match loc {
-            JumpLocation::Return(_) => {}
-            &JumpLocation::Block(succ_id) => {
-                ids.push(succ_id);
-            }
-        };
         match self {
-            Self::Jump(loc) => add(loc),
+            Self::Jump(loc) => ids.push(*loc),
             Self::CondJump(_, loc1, loc2) => {
-                add(loc1);
-                add(loc2);
+                ids.push(*loc1);
+                ids.push(*loc2);
             }
+            _ => {}
         }
         ids.into_iter()
     }
     /// Access every register usage of this block exit.
     pub fn visit_regs<F: FnMut(Register)>(&self, mut f: F) {
         match self {
-            Self::Jump(branch) => branch.visit_regs(f),
-            Self::CondJump(cond, branch1, branch2) => {
-                match *cond {
-                    Condition::NonZero(r) => f(r),
+            Self::Return(regs) => {
+                for &r in regs {
+                    f(r);
                 }
-                branch1.visit_regs(&mut f);
-                branch2.visit_regs(f);
             }
+            _ => {}
         }
     }
 }
@@ -409,28 +408,19 @@ pub enum Condition {
     NonZero(Register),
 }
 
-/// The behavior of a branch of execution.
-#[derive(Clone, Debug)]
-pub enum JumpLocation {
-    /// Execution continues to another block.
-    Block(BlockId),
-    /// Execution terminates, yielding a list of values.
-    Return(Vec<Register>),
-}
-
-impl JumpLocation {
-    /// Access every register this jump location uses.
-    pub fn visit_regs<F: FnMut(Register)>(&self, mut f: F) {
-        match self {
-            Self::Block(_) => {}
-            Self::Return(regs) => {
-                for &r in regs {
-                    f(r);
-                }
-            }
-        }
-    }
-}
+// impl JumpLocation {
+//     /// Access every register this jump location uses.
+//     pub fn visit_regs<F: FnMut(Register)>(&self, mut f: F) {
+//         match self {
+//             Self::Block(_) => {}
+//             Self::Return(regs) => {
+//                 for &r in regs {
+//                     f(r);
+//                 }
+//             }
+//         }
+//     }
+// }
 
 /// A named location which stores a value.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -452,86 +442,3 @@ impl BlockId {
         self.0 == 0
     }
 }
-
-// /// A [dominator tree](https://en.wikipedia.org/wiki/Dominator_(graph_theory)), a tree of blocks where a block's ancestors are all the blocks that must execute before it.
-// #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-// pub struct DominatorTree {
-//     /// The tree of blocks.
-//     pub children: Map<BlockId, Self>,
-// }
-
-// impl DominatorTree {
-//     /// Construct a dominator tree.
-//     #[must_use]
-//     pub fn new(blocks: &Map<BlockId, Block>) -> Self {
-//         let mut this = Self {
-//             children: blocks
-//                 .keys()
-//                 .map(|&id| {
-//                     (
-//                         id,
-//                         Self {
-//                             children: Map::new(),
-//                         },
-//                     )
-//                 })
-//                 .collect(),
-//         };
-//         this.make_immediate(blocks);
-//         this
-//     }
-//     fn make_immediate(&mut self, blocks: &Map<BlockId, Block>) {
-//         fn traverse_except(blocks: &Map<BlockId, Block>, except: BlockId) -> Set<BlockId> {
-//             let mut unreachable: Set<_> =
-//                 blocks.keys().copied().filter(|&id| id != except).collect();
-//             let mut open = vec![BlockId::ENTRY];
-//             while let Some(id) = open.pop() {
-//                 if unreachable.remove(&id) {
-//                     open.extend(blocks.get(&id).unwrap().successors());
-//                 }
-//             }
-//             unreachable
-//         }
-//         let mut closed = Set::new();
-//         // TODO: this is an unlovely quadratic loop. if this is a problem, fix it or change algorithms
-//         while let Some(child_id) = self
-//             .children
-//             .keys()
-//             .copied()
-//             .find(|child_id| !closed.contains(child_id))
-//         {
-//             closed.insert(child_id);
-//             let mut new_children = traverse_except(blocks, child_id)
-//                 .into_iter()
-//                 .filter_map(|dommed_id| self.children.remove_entry(&dommed_id))
-//                 .collect();
-//             self.children
-//                 .get_mut(&child_id)
-//                 .unwrap()
-//                 .children
-//                 .append(&mut new_children);
-//         }
-//         for child in self.children.values_mut() {
-//             child.make_immediate(blocks);
-//         }
-//     }
-//     /// Access every block ID in the dominator tree such that a given block is visited before any of the blocks it strictly dominates.
-//     pub fn visit(&self, mut f: impl FnMut(BlockId)) {
-//         self.visit_inner(&mut f);
-//     }
-//     fn visit_inner(&self, f: &mut impl FnMut(BlockId)) {
-//         for (&id, children) in &self.children {
-//             f(id);
-//             children.visit_inner(f);
-//         }
-//     }
-//     /// Get the block IDs of this dominator tree in visiting order.
-//     pub fn iter(&self) -> impl Iterator<Item = BlockId> + '_ {
-//         // obviously it's bad to allocate a vec for this, but it's our little secret.
-//         // the lifetime bound (i think) lets us change this to something better if need be
-//         let mut ids = vec![];
-//         self.visit(|id| ids.push(id));
-//         ids.into_iter()
-//     }
-
-// }

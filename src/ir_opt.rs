@@ -30,26 +30,39 @@ pub const STACK2REG: Pass = Pass {
     on_function: stack2reg_function,
 };
 
+enum Use<'a> {
+    Inst(&'a Inst),
+    Exit(&'a Exit),
+}
+
 /// return a vector of all uses of register
-fn collect_uses(f: &Function, reg: Register) -> Vec<&Inst> {
+fn collect_uses(f: &Function, reg: Register) -> Vec<Use> {
     let mut uses = vec![];
     for (_, block) in f.blocks.iter() {
         for inst in block.insts.iter() {
             if inst.is_use(reg, true) {
-                uses.push(inst);
+                uses.push(Use::Inst(inst));
             }
+        }
+        if block.exit.is_use(reg) {
+            uses.push(Use::Exit(&block.exit));
         }
     }
     uses
 }
 
+enum UseMut<'a> {
+    Inst(&'a mut Inst),
+    Exit(&'a mut Exit),
+}
+
 /// return a vector of all uses of register
-fn collect_uses_mut(f: &mut Function, reg: Register) -> Vec<&mut Inst> {
+fn collect_uses_mut(f: &mut Function, reg: Register) -> Vec<UseMut> {
     let mut uses = vec![];
     for (_, block) in f.blocks.iter_mut() {
         for inst in block.insts.iter_mut() {
             if inst.is_use(reg, true) {
-                uses.push(inst);
+                uses.push(UseMut::Inst(inst));
             }
         }
     }
@@ -64,17 +77,20 @@ fn is_valid_candidate(f: &Function, reg: Register) -> bool {
 
     for u in uses {
         match u {
-            // allowed to write to the pointer
-            Inst::Write(loc, val) => {
-                if *loc != reg || *val == reg {
-                    return false;
+            Use::Inst(u) => match u {
+                // allowed to write to the pointer
+                Inst::Write(loc, val) => {
+                    if *loc != reg || *val == reg {
+                        return false;
+                    }
                 }
+                // allowed to read from the pointer
+                Inst::Store(_, StoreKind::Read(_)) => {}
+                // nothing else is allowed, since that would require using the
+                // pointer as a value, so we cant take it out
+                _ => return false
             }
-            // allowed to read from the pointer
-            Inst::Store(_, StoreKind::Read(_)) => {}
-            // nothing else is allowed, since that would require using the
-            // pointer as a value, so we cant take it out
-            _ => return false
+            Use::Exit(_) => return false,
         }
     }
     true
@@ -82,6 +98,7 @@ fn is_valid_candidate(f: &Function, reg: Register) -> bool {
 
 fn stack2reg_function(f: &mut Function) {
     assert!(f.blocks.len() == 1);
+    
     let block = f.blocks.get(&BlockId::ENTRY).unwrap();
     // find stackallocs
     let candidates = block.insts.iter();
@@ -99,5 +116,5 @@ fn stack2reg_function(f: &mut Function) {
 
     let x: Vec<&Register> = candidate_regs.collect();
 
-    println!("{:?}", x);
+    println!("candidate registers: {:?}", x);
 }

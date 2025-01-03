@@ -132,10 +132,33 @@ impl<'a> TypeChecker<'a> {
             }
         }
     }
-    fn visit_jump_loc(&self, loc: &JumpLocation) -> Result {
-        match loc {
-            JumpLocation::Block(_) => Ok(()),
-            JumpLocation::Return(regs) => {
+    // fn visit_jump_loc(&self, loc: &JumpLocation) -> Result {
+    //     match loc {
+    //         JumpLocation::Block(_) => Ok(()),
+    //         JumpLocation::Return(regs) => {
+    //             if regs.len() != self.return_tys.len() {
+    //                 // The IR lowering phase will always produce functions with 0 or 1 returns, and it checks that all paths return the appropriate number of values. This code path will only run when typechecking transformed IR, namely after lowering IR types to machine-friendly types.
+    //                 todo!("proper error diagnostic for wrong number of returns");
+    //             }
+    //             regs.iter()
+    //                 .zip(self.return_tys)
+    //                 .try_for_each(|(&r, ty)| self.expect(r, ty))
+    //         }
+    //     }
+    // }
+    fn visit_block(&self, block: &Block) -> Result {
+        for inst in &block.insts {
+            self.visit_inst(inst)?;
+        }
+        match &block.exit {
+            Exit::Jump(_) => Ok(()),
+            Exit::CondJump(cond, _, _) => {
+                match cond {
+                    Condition::NonZero(_) => {}
+                }
+                Ok(())
+            }
+            Exit::Return(regs) => {
                 if regs.len() != self.return_tys.len() {
                     // The IR lowering phase will always produce functions with 0 or 1 returns, and it checks that all paths return the appropriate number of values. This code path will only run when typechecking transformed IR, namely after lowering IR types to machine-friendly types.
                     todo!("proper error diagnostic for wrong number of returns");
@@ -143,21 +166,6 @@ impl<'a> TypeChecker<'a> {
                 regs.iter()
                     .zip(self.return_tys)
                     .try_for_each(|(&r, ty)| self.expect(r, ty))
-            }
-        }
-    }
-    fn visit_block(&self, block: &Block) -> Result {
-        for inst in &block.insts {
-            self.visit_inst(inst)?;
-        }
-        match &block.exit {
-            Exit::Jump(loc) => self.visit_jump_loc(loc),
-            Exit::CondJump(cond, loc1, loc2) => {
-                match cond {
-                    Condition::NonZero(_) => {}
-                }
-                self.visit_jump_loc(loc1)?;
-                self.visit_jump_loc(loc2)
             }
         }
     }
