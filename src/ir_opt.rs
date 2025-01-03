@@ -65,6 +65,9 @@ fn collect_uses_mut(f: &mut Function, reg: Register) -> Vec<UseMut> {
                 uses.push(UseMut::Inst(inst));
             }
         }
+        if block.exit.is_use(reg) {
+            uses.push(UseMut::Exit(&mut block.exit));
+        }
     }
     uses
 }
@@ -90,7 +93,7 @@ fn is_valid_candidate(f: &Function, reg: Register) -> bool {
                 // pointer as a value, so we cant take it out
                 _ => return false
             }
-            Use::Exit(_) => return false,
+            Use::Exit(_) => return false
         }
     }
     true

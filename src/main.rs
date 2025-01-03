@@ -177,7 +177,7 @@ fn main() -> ExitCode {
 
     eprintln!("#Optimizer phase");
     ir_opt::STACK2REG.run_program(&mut ir);
-    eprintln!("\n{ir}\n");
+    eprintln!("{ir}\n");
 
     for (name, f) in &ir.functions {
         let live = ir_liveness::calculate_liveness(f);

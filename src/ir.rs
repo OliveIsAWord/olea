@@ -370,7 +370,15 @@ pub enum Exit {
 impl Exit {
     /// Does this exit use a certain register?
     pub fn is_use(&self, reg: Register) -> bool {
-        false
+        match self {
+            Self::CondJump(Condition::NonZero(r), _, _) => {
+                *r == reg
+            }
+            Self::Return(regs) => {
+                regs.iter().any(|r| *r == reg)
+            }
+            _ => false
+        }
     }
     /// Get all the blocks this exit can jump to.
     pub fn successors(&self) -> impl Iterator<Item = BlockId> {
