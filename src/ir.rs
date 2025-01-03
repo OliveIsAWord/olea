@@ -26,9 +26,9 @@ pub struct Function {
     pub cfg: Cfg,
 }
 
-#[derive(Clone, Debug)]
 /// Information about the control flow graph, 
 /// including successors, predecessors, and dominance
+#[derive(Clone, Debug)]
 pub struct Cfg {
     /// Map directly from BlockId to CfgNodes
     pub map: Map<BlockId, CfgNode>
@@ -89,8 +89,8 @@ impl Cfg {
     }
 }
 
-#[derive(Clone, Debug)]
 /// A node in the CFG
+#[derive(Clone, Debug)]
 pub struct CfgNode {
     /// Associated block id.
     pub id: BlockId,
@@ -245,7 +245,7 @@ impl Inst {
                         f(r, false);
                     }
                     Sk::Phi(_) => (), // Don't visit phi node arguments because they conceptually live in the predecessor block.
-                    Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => {}
+                    Sk::Int(_) | Sk::StackAlloc(_) | Sk::Function(_) => {}
                 }
             }
             &Self::Write(r1, r2) => {
@@ -266,6 +266,51 @@ impl Inst {
                 }
             }
             Self::Nop => {}
+        }
+    }
+    
+    /// Does this instruction define a certain register?
+    pub fn is_def(&self, reg: Register) -> bool {
+        match self {
+            Self::Store(r, _) => {
+                *r == reg
+            }
+            Self::Call { callee: _, returns, args: _} => {
+                returns.iter().any(|r| *r == reg)
+            }
+            _ => false
+        }
+    }
+
+    /// Does this instruction use a certain register?
+    pub fn is_use(&self, reg: Register, count_phi: bool) -> bool {
+        use StoreKind as Sk;
+        match self {
+            Self::Store(_, sk) => {
+                match sk {
+                    &Sk::BinOp(_, r1, r2) | &Sk::PtrOffset(r1, r2) => {
+                        r1 == reg || r2 == reg
+                    }
+                    &Sk::UnaryOp(_, r) | &Sk::Read(r) | &Sk::Copy(r) => {
+                        r == reg
+                    }
+                    Sk::Phi(srcs) => {
+                        count_phi && srcs.iter().any(|(_, r)| *r == reg)
+                    }
+                    Sk::Int(_) | Sk::StackAlloc(_) | Sk::Function(_) => false,
+                }
+            }
+            &Self::Write(r1, r2) => {
+                r1 == reg || r2 == reg
+            }
+            Self::Call {
+                callee: _,
+                returns: _,
+                args,
+            } => {
+                args.iter().any(|r| *r == reg)
+            }
+            Self::Nop => false
         }
     }
 }
