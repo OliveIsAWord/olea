@@ -115,6 +115,7 @@ impl<'a> IrBuilder<'a> {
             self.blocks,
             self.tys,
             self.spans,
+            self.next_reg_id,
         ))
     }
 

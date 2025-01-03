@@ -24,18 +24,12 @@ impl Pass {
 
 }
 
-/// promote stack allocations to registers
-pub const STACK2REG: Pass = Pass {
-    name: "stack2reg",
-    on_function: stack2reg_function,
-};
-
 enum Use<'a> {
     Inst(&'a Inst),
     Exit(&'a Exit),
 }
 
-/// return a vector of all uses of register
+// / return a vector of all uses of register
 fn collect_uses(f: &Function, reg: Register) -> Vec<Use> {
     let mut uses = vec![];
     for (_, block) in f.blocks.iter() {
@@ -51,26 +45,26 @@ fn collect_uses(f: &Function, reg: Register) -> Vec<Use> {
     uses
 }
 
-enum UseMut<'a> {
-    Inst(&'a mut Inst),
-    Exit(&'a mut Exit),
-}
+// enum UseMut<'a> {
+//     Inst(&'a mut Inst),
+//     Exit(&'a mut Exit),
+// }
 
-/// return a vector of all uses of register
-fn collect_uses_mut(f: &mut Function, reg: Register) -> Vec<UseMut> {
-    let mut uses = vec![];
-    for (_, block) in f.blocks.iter_mut() {
-        for inst in block.insts.iter_mut() {
-            if inst.is_use(reg, true) {
-                uses.push(UseMut::Inst(inst));
-            }
-        }
-        if block.exit.is_use(reg) {
-            uses.push(UseMut::Exit(&mut block.exit));
-        }
-    }
-    uses
-}
+// /// return a vector of all uses of register
+// fn collect_uses_mut(f: &mut Function, reg: Register) -> Vec<UseMut> {
+//     let mut uses = vec![];
+//     for (_, block) in f.blocks.iter_mut() {
+//         for inst in block.insts.iter_mut() {
+//             if inst.is_use(reg, true) {
+//                 uses.push(UseMut::Inst(inst));
+//             }
+//         }
+//         if block.exit.is_use(reg) {
+//             uses.push(UseMut::Exit(&mut block.exit));
+//         }
+//     }
+//     uses
+// }
 
 fn is_valid_candidate(f: &Function, reg: Register) -> bool {
     assert!(matches!(*f.tys.get(&reg).unwrap(), Ty::Pointer(_)));
@@ -83,9 +77,10 @@ fn is_valid_candidate(f: &Function, reg: Register) -> bool {
             Use::Inst(u) => match u {
                 // allowed to write to the pointer
                 Inst::Write(loc, val) => {
-                    if *loc != reg || *val == reg {
-                        return false;
-                    }
+                    // if *loc != reg || *val == reg {
+                    //     return false;
+                    // }
+                    return *loc == reg && *val != reg
                 }
                 // allowed to read from the pointer
                 Inst::Store(_, StoreKind::Read(_)) => {}
@@ -99,6 +94,12 @@ fn is_valid_candidate(f: &Function, reg: Register) -> bool {
     true
 }
 
+/// promote stack allocations to registers
+pub const STACK2REG: Pass = Pass {
+    name: "stack2reg",
+    on_function: stack2reg_function,
+};
+
 fn stack2reg_function(f: &mut Function) {
     assert!(f.blocks.len() == 1);
     
@@ -106,18 +107,74 @@ fn stack2reg_function(f: &mut Function) {
     // find stackallocs
     let candidates = block.insts.iter();
 
-    let candidate_regs = candidates.filter_map(
+    let candidate_pairs: Vec<Register> = candidates.filter_map(
         |inst| match inst {
-            Inst::Store(ptr, StoreKind::StackAlloc(_)) => Some(ptr),
+            Inst::Store(ptr, StoreKind::StackAlloc(_)) => Some(*ptr),
             _ => None,
         }
-    );
+    ).filter(
+        |reg| is_valid_candidate(f, *reg)
+    ).collect();
 
-    let candidate_regs = candidate_regs.filter(
-        |reg| is_valid_candidate(f, **reg)
-    );
+    println!("promotion candidates: {:?}\n", candidate_pairs);
 
-    let x: Vec<&Register> = candidate_regs.collect();
+    // Write turns into Store(Copy)
+    // Store(Read) turns into Store(Copy)
 
-    println!("candidate registers: {:?}", x);
+    let block = f.blocks.get_mut(&BlockId::ENTRY).unwrap();
+
+    for candidate in candidate_pairs {
+
+        let mut current_value = Register(0);
+
+        for inst in block.insts.iter_mut() {
+            match inst {
+                Inst::Write(ptr, val) if *ptr == candidate => {
+                    current_value = *val;
+                    *inst = Inst::Nop;
+                }
+                Inst::Store(def, StoreKind::Read(ptr)) if *ptr == candidate => {
+                    *inst = Inst::Store(*def, StoreKind::Copy(current_value));
+                }
+                Inst::Store(def, StoreKind::StackAlloc(_)) if *def == candidate => {
+                    *inst = Inst::Nop;
+                }
+                _ => {}
+            }
+        }
+    }
+    block.gen_def_use();
+}
+
+/// remove Nop instructions completely
+pub const NOPELIM: Pass = Pass {
+    name: "nopelim",
+    on_function: nopelim_function,
+};
+
+fn nopelim_function(f: &mut Function) {
+    for (_, block) in f.blocks.iter_mut() {
+        block.insts.retain(|i| !matches!(i, Inst::Nop));
+    }
+}
+
+pub const CONSTPROP: Pass = Pass {
+    name: "constprop",
+    on_function: constprop_function,
+};
+
+fn constprop_function(f: &mut Function) {
+    // let mut worklist: Set<Register> = Set::new();
+
+    // for (blockid, block) in f.blocks.iter_mut() {
+    //     for inst in block.insts.iter_mut() {
+    //         match inst {
+    //             Inst::Store(_, sk) => match sk {
+    //                 StoreKind::Copy(input) => {
+                        
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 }

@@ -24,6 +24,8 @@ pub struct Function {
     pub spans: Map<Register, Span>,
     /// Information about the control flow graph.
     pub cfg: Cfg,
+    /// Next register ID.
+    pub next_register: u128,
 }
 
 /// Information about the control flow graph, 
@@ -126,6 +128,7 @@ impl Function {
         blocks: Map<BlockId, Block>,
         tys: Map<Register, Ty>,
         spans: Map<Register, Span>,
+        next_register: u128,
     ) -> Self {
         let cfg = Cfg::new(&blocks);
         let this = Self {
@@ -134,6 +137,7 @@ impl Function {
             tys,
             spans,
             cfg,
+            next_register,
         };
         this
     }
@@ -141,6 +145,12 @@ impl Function {
     pub fn iter(&self) -> impl Iterator<Item = (BlockId, &Block)> {
         // NOTE: This relies on block 0 being first because of BTreeSet and the sort order of blocks
         self.blocks.iter().map(|(&id, block)| (id, block))
+    }
+
+    /// create a new register.
+    pub fn new_reg(&mut self) -> Register {
+        self.next_register += 1;
+        Register(self.next_register - 1)
     }
 }
 
