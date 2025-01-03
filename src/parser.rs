@@ -254,6 +254,7 @@ impl<'src> Parser<'src> {
     }
     fn expr_at(&mut self, level: Level) -> Result<Expr> {
         const BIN_OPS: &[(P, Level, BinOpKind)] = &[
+            (P::LessThanEqual, Level::Equal, BinOpKind::CmpLe),
             (P::Plus, Level::Add, BinOpKind::Add),
             (P::Minus, Level::Add, BinOpKind::Sub),
             (P::Asterisk, Level::Mul, BinOpKind::Mul),

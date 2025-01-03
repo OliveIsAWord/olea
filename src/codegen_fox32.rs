@@ -208,15 +208,15 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         if stack_size != 0 {
             write_inst!(*code, "{prefix}add rsp, {stack_size}");
         }
-        if !returns.is_empty() {
-        write_inst!(*code, "{prefix}pop rfp");
-        for r in returns {
-            let r_reg = regs.get(r).unwrap().foo();
-            write_inst!(*code, "{prefix}push {r_reg}");
-        }
-        write_inst!(*code, "{prefix}jmp rfp");
+        if returns.is_empty() {
+            write_inst!(*code, "{prefix}ret");
         } else {
-        write_inst!(*code, "{prefix}ret");
+            write_inst!(*code, "{prefix}pop rfp");
+            for r in returns {
+                let r_reg = regs.get(r).unwrap().foo();
+                write_inst!(*code, "{prefix}push {r_reg}");
+            }
+            write_inst!(*code, "{prefix}jmp rfp");
         }
     };
     write_label!(code, "{function_name}");
@@ -280,15 +280,34 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                         Sk::BinOp(op, lhs, rhs) => {
                             let lhs_reg = regs.get(lhs).unwrap();
                             let rhs_reg = regs.get(rhs).unwrap();
-                            let op_mnemonic = match op {
-                                BinOp::Add => "add",
-                                BinOp::Sub => "sub",
-                                BinOp::Mul => "mul",
+                            let arithmetic = |mnemonic| {
+                                Box::new(move |code: &mut String| {
+                                    if reg != lhs_reg {
+                                        write_inst!(*code, "mov {}, {}", reg.foo(), lhs_reg.foo());
+                                    }
+                                    write_inst!(
+                                        *code,
+                                        "{mnemonic} {}, {}",
+                                        reg.foo(),
+                                        rhs_reg.foo(),
+                                    );
+                                }) as Box<dyn Fn(&mut String)>
                             };
-                            if reg != lhs_reg {
-                                write_inst!(code, "mov {}, {}", reg.foo(), lhs_reg.foo());
-                            }
-                            write_inst!(code, "{} {}, {}", op_mnemonic, reg.foo(), rhs_reg.foo());
+                            let comparison = |condition| {
+                                Box::new(move |code: &mut String| {
+                                    write_inst!(*code, "cmp {}, {}", lhs_reg.foo(), rhs_reg.foo());
+                                    // NOTE: This `mov` comes after the comparison because `reg` might be the same as `lhs_reg` or `rhs_reg` and we don't want to overwrite the value before the comparison.
+                                    write_inst!(*code, "mov {}, 0", reg.foo());
+                                    write_inst!(*code, "{condition} mov {}, 1", reg.foo());
+                                })
+                            };
+                            let compile = match op {
+                                BinOp::Add => arithmetic("add"),
+                                BinOp::Sub => arithmetic("sub"),
+                                BinOp::Mul => arithmetic("mul"),
+                                BinOp::CmpLe => comparison("ifle"),
+                            };
+                            compile(&mut code);
                         }
                         Sk::PtrOffset(lhs, rhs) => {
                             let lhs_reg = regs.get(lhs).unwrap();
