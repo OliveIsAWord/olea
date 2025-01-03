@@ -229,7 +229,7 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                 src.skip_while(|c| c.is_ascii_digit() || c == '_');
                 Pl(P::Int)
             }
-            '\n' => {
+            '\n' | '\r' => {
                 was_newline = true;
                 Co(C::Newline)
             }

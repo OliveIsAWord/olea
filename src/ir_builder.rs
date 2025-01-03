@@ -106,7 +106,7 @@ impl<'a> IrBuilder<'a> {
             vec![]
         };
         self.switch_to_new_block(
-            Exit::Jump(JumpLocation::Return(return_regs)),
+            Exit::Return(return_regs),
             BlockId::DUMMY,
         );
         assert_eq!(self.scopes.len(), 1);
@@ -115,6 +115,7 @@ impl<'a> IrBuilder<'a> {
             self.blocks,
             self.tys,
             self.spans,
+            self.next_reg_id,
         ))
     }
 
@@ -260,8 +261,8 @@ impl<'a> IrBuilder<'a> {
                 self.switch_to_new_block(
                     Exit::CondJump(
                         Condition::NonZero(cond_reg),
-                        JumpLocation::Block(then_id),
-                        JumpLocation::Block(else_id),
+                        then_id,
+                        else_id,
                     ),
                     then_id,
                 );
@@ -270,7 +271,7 @@ impl<'a> IrBuilder<'a> {
                 let then_yield = self.build_block(then_body, unvoid)?;
                 self.exit_scope();
                 let then_id = self.current_block_id;
-                self.switch_to_new_block(Exit::Jump(JumpLocation::Block(end_id)), else_id);
+                self.switch_to_new_block(Exit::Jump(end_id), else_id);
 
                 // evaluate false branch, jump to end
                 let else_yield = else_body
@@ -280,7 +281,7 @@ impl<'a> IrBuilder<'a> {
                         let else_yield = self.build_block(e, unvoid)?;
                         self.exit_scope();
                         let else_id = self.current_block_id;
-                        self.switch_to_new_block(Exit::Jump(JumpLocation::Block(end_id)), end_id);
+                        self.switch_to_new_block(Exit::Jump(end_id), end_id);
                         Ok(else_yield.map(|e| (e, else_id)))
                     })
                     .transpose()?
@@ -299,7 +300,7 @@ impl<'a> IrBuilder<'a> {
                 let cond_id = self.reserve_block_id();
                 let body_id = self.reserve_block_id();
                 let end_id = self.reserve_block_id();
-                self.switch_to_new_block(Exit::Jump(JumpLocation::Block(cond_id)), cond_id);
+                self.switch_to_new_block(Exit::Jump(cond_id), cond_id);
 
                 // condition evaluation, jump to either inner body or end of expression
                 self.enter_scope(); // with code like `while x is Some(y): ...`, `y` should be accessible from the body
@@ -307,8 +308,8 @@ impl<'a> IrBuilder<'a> {
                 self.switch_to_new_block(
                     Exit::CondJump(
                         Condition::NonZero(cond_reg),
-                        JumpLocation::Block(body_id),
-                        JumpLocation::Block(end_id),
+                        body_id,
+                        end_id,
                     ),
                     body_id,
                 );
@@ -316,7 +317,7 @@ impl<'a> IrBuilder<'a> {
                 // body evaluation, jump back to condition
                 self.build_block(body, true)?;
                 self.exit_scope();
-                self.switch_to_new_block(Exit::Jump(JumpLocation::Block(cond_id)), end_id);
+                self.switch_to_new_block(Exit::Jump(cond_id), end_id);
 
                 // continue evaluation after while loop
                 None

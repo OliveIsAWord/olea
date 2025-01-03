@@ -112,22 +112,14 @@ impl DisplayWithName for BlockId {
 impl DisplayWithName for Exit {
     fn fmt_with_name(&self, f: F, name: &str) -> Result {
         match self {
-            Self::Jump(loc) => write!(f, "{}", loc.with_name(name)),
+            Self::Jump(loc) => write!(f, "goto {}", loc.with_name(name)),
             Self::CondJump(cond, loc_true, loc_false) => write!(
                 f,
-                "if {cond}: {} else {}",
+                "if {cond}: goto {} else goto {}",
                 loc_true.with_name(name),
                 loc_false.with_name(name)
             ),
-        }
-    }
-}
-
-impl DisplayWithName for JumpLocation {
-    fn fmt_with_name(&self, f: F, name: &str) -> Result {
-        match self {
-            Self::Block(b) => write!(f, "goto {}", b.with_name(name)),
-            Self::Return(regs) => write!(f, "return{}", ReturnsSpace(regs)),
+            Self::Return(regs) => write!(f, "return{}", ReturnsSpace(regs))
         }
     }
 }

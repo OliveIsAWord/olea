@@ -22,6 +22,7 @@ mod ir_display;
 pub mod ir_liveness;
 // TODO: rewrite to account for `used_regs` not including phi arguments.
 // mod ir_optimizer;
+mod ir_opt;
 mod lexer;
 mod parser;
 #[allow(dead_code)]
@@ -117,7 +118,7 @@ fn main() -> ExitCode {
     };
     // eprintln!("#Syntax tree:\n{ast:?}\n");
 
-    let ir = match ir_builder::build(&ast) {
+    let mut ir = match ir_builder::build(&ast) {
         Ok(x) => x,
         Err(Spanned { kind, span }) => {
             use ir_builder::ErrorKind as E;
@@ -174,9 +175,10 @@ fn main() -> ExitCode {
         }
     }
 
-    // eprintln!("#Optimizer phase");
-    // ir_optimizer::optimize(&mut ir);
-    // eprintln!();
+    eprintln!("#Optimizer phase");
+    ir_opt::STACK_TO_REGISTER.run_program(&mut ir);
+    ir_opt::NOP_ELIMINATION.run_program(&mut ir);
+    eprintln!("{ir}\n");
 
     for (name, f) in &ir.functions {
         let live = ir_liveness::calculate_liveness(f);

@@ -1,0 +1,3 @@
+fn foo(y int) int:
+    let x = 2
+    y + x

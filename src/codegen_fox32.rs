@@ -204,21 +204,6 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         }
     }
     let size_of_ir_value = |_| 4;
-    let write_exit = |code: &mut String, returns: &[Register], prefix: &str| {
-        if stack_size != 0 {
-            write_inst!(*code, "{prefix}add rsp, {stack_size}");
-        }
-        if returns.is_empty() {
-            write_inst!(*code, "{prefix}ret");
-        } else {
-            write_inst!(*code, "{prefix}pop rfp");
-            for r in returns {
-                let r_reg = regs.get(r).unwrap().foo();
-                write_inst!(*code, "{prefix}push {r_reg}");
-            }
-            write_inst!(*code, "{prefix}jmp rfp");
-        }
-    };
     write_label!(code, "{function_name}");
     if !f.parameters.is_empty() {
         write_inst!(code, "pop rfp");
@@ -385,18 +370,12 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
             }
         };
         let next_i = match &block.exit {
-            Exit::Jump(loc) => match loc {
-                &JumpLocation::Block(jump_index) => {
-                    merge_phis(&mut code, jump_index, "");
-                    if indices.contains(&jump_index) {
-                        Some(jump_index)
-                    } else {
-                        write_inst!(code, "jmp {function_name}_{}", jump_index.0);
-                        None
-                    }
-                }
-                JumpLocation::Return(regs) => {
-                    write_exit(&mut code, regs, "");
+            Exit::Jump(loc) => {
+                merge_phis(&mut code, *loc, "");
+                if indices.contains(&loc) {
+                    Some(loc)
+                } else {
+                    write_inst!(code, "jmp {function_name}_{}", loc.0);
                     None
                 }
             },
@@ -407,42 +386,46 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                         write_inst!(code, "cmp {}, 0", reg.foo());
                     }
                 }
-                let next_true = match branch_true {
-                    &JumpLocation::Block(jump_index) => {
-                        merge_phis(&mut code, jump_index, "ifnz ");
-                        if indices.contains(&jump_index) {
-                            Some(jump_index)
-                        } else {
-                            write_inst!(code, "ifnz jmp {function_name}_{}", jump_index.0);
-                            None
-                        }
-                    }
-                    JumpLocation::Return(regs) => {
-                        write_exit(&mut code, regs, "ifnz ");
+                let next_true = {
+                    merge_phis(&mut code, *branch_true, "ifnz ");
+                    if indices.contains(&branch_true) {
+                        Some(branch_true)
+                    } else {
+                        write_inst!(code, "ifnz jmp {function_name}_{}", branch_true.0);
                         None
                     }
                 };
-                let next_false = match branch_false {
-                    &JumpLocation::Block(jump_index) => {
-                        merge_phis(&mut code, jump_index, "ifz ");
-                        if next_true.is_none() && indices.contains(&jump_index) {
-                            Some(jump_index)
-                        } else {
-                            write_inst!(code, "ifz jmp {function_name}_{}", jump_index.0);
-                            None
-                        }
-                    }
-                    JumpLocation::Return(regs) => {
-                        write_exit(&mut code, regs, "ifz ");
+                let next_false = {
+                    merge_phis(&mut code, *branch_false, "ifz ");
+                    if next_true.is_none() && indices.contains(&branch_false) {
+                        Some(branch_false)
+                    } else {
+                        write_inst!(code, "ifz jmp {function_name}_{}", branch_false.0);
                         None
                     }
                 };
                 next_true.or(next_false)
+            },
+            Exit::Return(returns) => {
+                if stack_size != 0 {
+                    write_inst!(code, "add rsp, {stack_size}");
+                }
+                if returns.is_empty() {
+                    write_inst!(code, "ret");
+                } else {
+                    write_inst!(code, "pop rfp");
+                    for r in returns {
+                        let r_reg = regs.get(r).unwrap().foo();
+                        write_inst!(code, "push {r_reg}");
+                    }
+                    write_inst!(code, "jmp rfp");
+                }
+                None
             }
         };
         // obviously bad 2 lines of code
         if next_i.is_some() && indices.contains(&next_i.unwrap()) {
-            i = next_i.unwrap();
+            i = *next_i.unwrap();
         } else {
             match indices.iter().next() {
                 Some(&next_i) => i = next_i,
