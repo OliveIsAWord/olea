@@ -180,7 +180,7 @@ fn constant_propagation_impl(f: &mut Function) {
                 BinOp::Add => Some(const_list.get(&lhs)? + const_list.get(&rhs)?),
                 BinOp::Sub => Some(const_list.get(&lhs)? - const_list.get(&rhs)?),
                 BinOp::Mul => Some(const_list.get(&lhs)? * const_list.get(&rhs)?),
-                BinOp::CmpLe => Some(if const_list.get(&lhs)? < const_list.get(&rhs)? {0} else {1}),
+                BinOp::CmpLe => Some(if const_list.get(&lhs)? <= const_list.get(&rhs)? {1} else {0}),
             }
             _ => None
         }

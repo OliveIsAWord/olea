@@ -1,4 +1,2 @@
 fn foo() int:
-    let x = 2
-    let y = 3
-    x * 2 + y
+    1 <= 10
