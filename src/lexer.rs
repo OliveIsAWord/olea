@@ -131,8 +131,12 @@ impl<'a> View<'a> {
         Self { src, index: 0 }
     }
 
+    fn normalize_cr(c: char) -> char {
+        if c == '\r' { '\n' } else { c }
+    }
+
     fn peek(&self) -> Option<char> {
-        self.src[self.index..self.src.len()].chars().next()
+        self.src[self.index..self.src.len()].chars().next().map(Self::normalize_cr)
     }
 
     fn consume(&mut self) -> Option<char> {
@@ -229,7 +233,7 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                 src.skip_while(|c| c.is_ascii_digit() || c == '_');
                 Pl(P::Int)
             }
-            '\n' | '\r' => {
+            '\n' => {
                 was_newline = true;
                 Co(C::Newline)
             }
