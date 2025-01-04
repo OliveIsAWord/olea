@@ -131,12 +131,19 @@ impl<'a> View<'a> {
         Self { src, index: 0 }
     }
 
-    fn normalize_cr(c: char) -> char {
-        if c == '\r' { '\n' } else { c }
+    const fn normalize_cr(c: char) -> char {
+        if c == '\r' {
+            '\n'
+        } else {
+            c
+        }
     }
 
     fn peek(&self) -> Option<char> {
-        self.src[self.index..self.src.len()].chars().next().map(Self::normalize_cr)
+        self.src[self.index..self.src.len()]
+            .chars()
+            .next()
+            .map(Self::normalize_cr)
     }
 
     fn consume(&mut self) -> Option<char> {

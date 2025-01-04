@@ -102,6 +102,7 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
             };
             let constant_str = match sk {
                 // cast from i128 to u32 because fox32asm doesn't support negative int literals
+                #[allow(clippy::cast_sign_loss)]
                 &StoreKind::Int(i) => (i as u32).to_string().into(),
                 StoreKind::Function(name) => name.clone(),
                 _ => continue,
@@ -373,7 +374,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         let next_i = match &block.exit {
             Exit::Jump(loc) => {
                 merge_phis(&mut code, *loc, "");
-                if indices.contains(&loc) {
+                if indices.contains(loc) {
                     Some(loc)
                 } else {
                     write_inst!(code, "jmp {function_name}_{}", loc.0);
@@ -389,7 +390,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                 }
                 let next_true = {
                     merge_phis(&mut code, *branch_true, "ifnz ");
-                    if indices.contains(&branch_true) {
+                    if indices.contains(branch_true) {
                         Some(branch_true)
                     } else {
                         write_inst!(code, "ifnz jmp {function_name}_{}", branch_true.0);
@@ -398,7 +399,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                 };
                 let next_false = {
                     merge_phis(&mut code, *branch_false, "ifz ");
-                    if next_true.is_none() && indices.contains(&branch_false) {
+                    if next_true.is_none() && indices.contains(branch_false) {
                         Some(branch_false)
                     } else {
                         write_inst!(code, "ifz jmp {function_name}_{}", branch_false.0);
@@ -425,7 +426,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
             }
         };
         // obviously bad 2 lines of code
-        if next_i.is_some() && indices.contains(&next_i.unwrap()) {
+        if next_i.is_some() && indices.contains(next_i.unwrap()) {
             i = *next_i.unwrap();
         } else {
             match indices.iter().next() {

@@ -15,7 +15,7 @@ impl Pass {
 
     /// Run a pass on all functions in a program
     pub fn run_program(&self, p: &mut Program) {
-        for (_, f) in &mut p.functions {
+        for f in p.functions.values_mut() {
             self.run(f);
         }
     }
@@ -31,8 +31,8 @@ enum Use<'a> {
 // / return a vector of all uses of register
 fn collect_uses(f: &Function, reg: Register) -> Vec<Use> {
     let mut uses = vec![];
-    for (_, block) in f.blocks.iter() {
-        for inst in block.insts.iter() {
+    for block in f.blocks.values() {
+        for inst in &block.insts {
             if inst.is_use(reg, true) {
                 uses.push(Use::Inst(inst));
             }
@@ -131,7 +131,7 @@ fn stack_to_register_impl(f: &mut Function) {
     for candidate in candidates {
         let mut current_value = Register(u128::MAX);
 
-        for inst in block.insts.iter_mut() {
+        for inst in &mut block.insts {
             match inst {
                 Inst::Write(ptr, val) if *ptr == candidate => {
                     current_value = *val;
@@ -161,7 +161,7 @@ pub const NOP_ELIMINATION: Pass = Pass {
 };
 
 fn nop_elimination_impl(f: &mut Function) {
-    for (_, block) in f.blocks.iter_mut() {
+    for block in f.blocks.values_mut() {
         block.insts.retain(|i| !matches!(i, Inst::Nop));
     }
 }
@@ -177,22 +177,18 @@ fn constant_propagation_impl(f: &mut Function) {
 
     // if a constant eval can be done, do it, otherwise return None.
     let evaluate = |const_list: &mut Map<Register, i128>, sk: &StoreKind| -> Option<i128> {
-        match sk {
-            &StoreKind::Int(constant) => Some(constant),
-            &StoreKind::Copy(reg) => const_list.get(&reg).map(ToOwned::to_owned),
-            &StoreKind::UnaryOp(op, reg) => match op {
+        match *sk {
+            StoreKind::Int(constant) => Some(constant),
+            StoreKind::Copy(reg) => const_list.get(&reg).map(ToOwned::to_owned),
+            StoreKind::UnaryOp(op, reg) => match op {
                 // because for some reason, negation doesnt autoderef like subtraction does
                 UnaryOp::Neg => Some(0 - const_list.get(&reg)?),
             },
-            &StoreKind::BinOp(op, lhs, rhs) => match op {
+            StoreKind::BinOp(op, lhs, rhs) => match op {
                 BinOp::Add => Some(const_list.get(&lhs)? + const_list.get(&rhs)?),
                 BinOp::Sub => Some(const_list.get(&lhs)? - const_list.get(&rhs)?),
                 BinOp::Mul => Some(const_list.get(&lhs)? * const_list.get(&rhs)?),
-                BinOp::CmpLe => Some(if const_list.get(&lhs)? <= const_list.get(&rhs)? {
-                    1
-                } else {
-                    0
-                }),
+                BinOp::CmpLe => Some(i128::from(const_list.get(&lhs)? <= const_list.get(&rhs)?)),
             },
             _ => None,
         }
@@ -204,8 +200,8 @@ fn constant_propagation_impl(f: &mut Function) {
     let mut keep_going = true;
     while keep_going {
         keep_going = false;
-        for (_, block) in f.blocks.iter() {
-            for inst in block.insts.iter() {
+        for block in f.blocks.values() {
+            for inst in &block.insts {
                 if let Inst::Store(reg, sk) = inst {
                     if const_vals.contains_key(reg) {
                         continue;
@@ -221,8 +217,8 @@ fn constant_propagation_impl(f: &mut Function) {
     }
 
     // replace StoreKinds of all const-eval'd things
-    for (_, block) in f.blocks.iter_mut() {
-        for inst in block.insts.iter_mut() {
+    for block in f.blocks.values_mut() {
+        for inst in &mut block.insts {
             if let Inst::Store(reg, sk) = inst {
                 if let StoreKind::Int(_) = sk {
                     continue;
