@@ -1,5 +1,5 @@
-fn bar(x int) int:
-    if x:
-        0
+fn bar() int:
+    if 42 - 42:
+        1337
     else:
-        1
+        11037

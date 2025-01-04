@@ -176,22 +176,29 @@ fn constant_propagation_impl(f: &mut Function) {
     let mut const_vals: Map<Register, i128> = Map::new();
 
     // if a constant eval can be done, do it, otherwise return None.
-    let evaluate = |const_list: &mut Map<Register, i128>, sk: &StoreKind| -> Option<i128> {
-        match *sk {
-            StoreKind::Int(constant) => Some(constant),
-            StoreKind::Copy(reg) => const_list.get(&reg).map(ToOwned::to_owned),
-            StoreKind::UnaryOp(op, reg) => match op {
-                // because for some reason, negation doesnt autoderef like subtraction does
-                UnaryOp::Neg => Some(0 - const_list.get(&reg)?),
-            },
-            StoreKind::BinOp(op, lhs, rhs) => match op {
-                BinOp::Add => Some(const_list.get(&lhs)? + const_list.get(&rhs)?),
-                BinOp::Sub => Some(const_list.get(&lhs)? - const_list.get(&rhs)?),
-                BinOp::Mul => Some(const_list.get(&lhs)? * const_list.get(&rhs)?),
-                BinOp::CmpLe => Some(i128::from(const_list.get(&lhs)? <= const_list.get(&rhs)?)),
-            },
-            _ => None,
-        }
+    let evaluate = |const_list: &Map<Register, i128>, sk: &StoreKind| -> Option<i128> {
+        let val = match *sk {
+            StoreKind::Int(constant) => constant,
+            StoreKind::Copy(reg) => *const_list.get(&reg)?,
+            StoreKind::UnaryOp(op, reg) => {
+                let x = const_list.get(&reg)?;
+                match op {
+                    UnaryOp::Neg => x.wrapping_neg(),
+                }
+            }
+            StoreKind::BinOp(op, lhs, rhs) => {
+                let lhs = *const_list.get(&lhs)?;
+                let rhs = *const_list.get(&rhs)?;
+                match op {
+                    BinOp::Add => lhs.wrapping_add(rhs),
+                    BinOp::Sub => lhs.wrapping_sub(rhs),
+                    BinOp::Mul => lhs.wrapping_mul(rhs),
+                    BinOp::CmpLe => i128::from(lhs <= rhs),
+                }
+            }
+            _ => return None,
+        };
+        Some(val)
     };
 
     // map possible registers to their constant evaluations
@@ -200,32 +207,35 @@ fn constant_propagation_impl(f: &mut Function) {
     let mut keep_going = true;
     while keep_going {
         keep_going = false;
-        for block in f.blocks.values() {
-            for inst in &block.insts {
-                if let Inst::Store(reg, sk) = inst {
-                    if const_vals.contains_key(reg) {
-                        continue;
-                    }
-                    if let Some(const_val) = evaluate(&mut const_vals, sk) {
-                        // eprintln!("map {} to constant {}", reg, const_val);
+        for block in f.blocks.values_mut() {
+            for inst in &mut block.insts {
+                let Inst::Store(reg, sk) = inst else {
+                    continue;
+                };
+                if const_vals.contains_key(reg) {
+                    continue;
+                }
+                if let Some(const_val) = evaluate(&const_vals, sk) {
+                    // eprintln!("map {} to constant {}", reg, const_val);
+                    const_vals.insert(reg.to_owned(), const_val);
+                    if !matches!(sk, StoreKind::Int(_)) {
                         keep_going = true;
-                        const_vals.insert(reg.to_owned(), const_val);
+                        *sk = StoreKind::Int(const_val);
                     }
                 }
             }
         }
     }
-
-    // replace StoreKinds of all const-eval'd things
+    // after we've done all the const evaluation we can, resolve any conditional jumps we can
     for block in f.blocks.values_mut() {
-        for inst in &mut block.insts {
-            if let Inst::Store(reg, sk) = inst {
-                if let StoreKind::Int(_) = sk {
+        match block.exit {
+            Exit::Jump(_) | Exit::Return(_) => {}
+            Exit::CondJump(Condition::NonZero(cond), if_true, if_false) => {
+                let Some(&cond) = const_vals.get(&cond) else {
                     continue;
-                }
-                if const_vals.contains_key(reg) {
-                    *inst = Inst::Store(*reg, StoreKind::Int(const_vals[reg]));
-                }
+                };
+                let jump_to = if cond != 0 { if_true } else { if_false };
+                block.exit = Exit::Jump(jump_to);
             }
         }
     }
