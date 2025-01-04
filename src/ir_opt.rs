@@ -73,17 +73,21 @@ fn is_valid_candidate(f: &Function, reg: Register) -> bool {
     // TODO: recognize returning the pointer as an invalid use
 
     for u in uses {
+        
         match u {
             Use::Inst(u) => match u {
                 // allowed to write to the pointer
-                Inst::Write(loc, val) => {
-                    // if *loc != reg || *val == reg {
-                    //     return false;
-                    // }
-                    return *loc == reg && *val != reg
+                Inst::Write(ptr, val) => {
+                    if *ptr != reg || *val == reg {
+                        return false;
+                    }
                 }
                 // allowed to read from the pointer
-                Inst::Store(_, StoreKind::Read(_)) => {}
+                Inst::Store(dst, StoreKind::Read(ptr)) => {
+                    if *ptr != reg || *dst == reg {
+                        return false;
+                    }
+                }
                 // nothing else is allowed, since that would require using the
                 // pointer as a value, so we cant take it out
                 _ => return false

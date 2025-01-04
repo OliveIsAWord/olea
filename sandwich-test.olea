@@ -1,2 +1,3 @@
-fn foo() int:
-    1 <= 10
+extern fn foo(int^)
+fn bar(x int):
+    foo(x@)
