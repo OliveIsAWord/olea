@@ -329,7 +329,7 @@ impl Inst {
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum StoreKind {
     /// An integer constant.
-    Int(u128),
+    Int(i128),
     /// A copy of another register's value.
     Copy(Register),
     /// A choice of values based on the immediately preceding block.

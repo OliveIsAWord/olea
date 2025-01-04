@@ -1,3 +1,4 @@
-fn foo(y int) int:
+fn foo() int:
     let x = 2
-    y + x
+    let y = 3
+    x * 2 + y

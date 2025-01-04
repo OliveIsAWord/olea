@@ -1,4 +1,4 @@
-use crate::compiler_types::{Map, Set};
+use crate::compiler_types::Map;
 use crate::ir::*;
 
 pub struct Pass {
@@ -22,6 +22,8 @@ impl Pass {
 
 }
 
+#[allow(dead_code)]
+// get rust to stop complaining about Exit never being read
 enum Use<'a> {
     Inst(&'a Inst),
     Exit(&'a Exit),
@@ -113,7 +115,7 @@ fn stack_to_register_impl(f: &mut Function) {
         |reg| is_valid_candidate(f, *reg)
     ).collect();
 
-    println!("promotion candidates: {:?}\n", candidates);
+    // println!("promotion candidates: {:?}", candidates);
 
     // Write turns into Store(Copy)
     // Store(Read) turns into Store(Copy)
@@ -156,17 +158,67 @@ fn nop_elimination_impl(f: &mut Function) {
     }
 }
 
+/// evaluate constant expressions at compile-time.
 pub const CONSTANT_PROPAGATION: Pass = Pass {
     name: "constant_propagation",
     on_function: constant_propagation_impl,
 };
 
 fn constant_propagation_impl(f: &mut Function) {
-    // let mut worklist: Set<Register> = Set::new();
+    let mut const_vals: Map<Register, i128> = Map::new();
 
-    for (blockid, block) in f.blocks.iter_mut() {
+    // if a constant eval can be done, do it, otherwise return None.
+    let evaluate = |const_list: &mut Map<Register, i128>, sk: &StoreKind| -> Option<i128> {
+        match sk {
+            &StoreKind::Int(constant) => Some(constant),
+            &StoreKind::Copy(reg) => const_list.get(&reg).map(ToOwned::to_owned),
+            &StoreKind::UnaryOp(op, reg) => match op {
+                // because for some reason, negation doesnt autoderef like subtraction does
+                UnaryOp::Neg => Some(0 - const_list.get(&reg)?),
+            }
+            &StoreKind::BinOp(op, lhs, rhs) => match op {
+                BinOp::Add => Some(const_list.get(&lhs)? + const_list.get(&rhs)?),
+                BinOp::Sub => Some(const_list.get(&lhs)? - const_list.get(&rhs)?),
+                BinOp::Mul => Some(const_list.get(&lhs)? * const_list.get(&rhs)?),
+                BinOp::CmpLe => Some(if const_list.get(&lhs)? < const_list.get(&rhs)? {0} else {1}),
+            }
+            _ => None
+        }
+    };
+
+    // map possible registers to their constant evaluations
+    // i dont like this, theres probably a better way to do this
+    // works for now tho
+    let mut keep_going = true;
+    while keep_going {
+        keep_going = false;
+        for (_, block) in f.blocks.iter() {
+            for inst in block.insts.iter() {
+                if let Inst::Store(reg, sk) = inst {
+                    if const_vals.contains_key(reg) {
+                        continue;
+                    }
+                    if let Some(const_val) = evaluate(&mut const_vals, sk) {
+                        // eprintln!("map {} to constant {}", reg, const_val);
+                        keep_going = true;
+                        const_vals.insert(reg.to_owned(), const_val);
+                    }
+                }
+            }
+        }
+    }
+
+    // replace StoreKinds of all const-eval'd things
+    for (_, block) in f.blocks.iter_mut() {
         for inst in block.insts.iter_mut() {
-            
+            if let Inst::Store(reg, sk) = inst {
+                if let StoreKind::Int(_) = sk {
+                    continue;
+                }
+                if const_vals.contains_key(reg) {
+                    *inst = Inst::Store(*reg, StoreKind::Int(const_vals[reg]));
+                }
+            }
         }
     }
 }

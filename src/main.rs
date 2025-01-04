@@ -177,6 +177,7 @@ fn main() -> ExitCode {
 
     eprintln!("#Optimizer phase");
     ir_opt::STACK_TO_REGISTER.run_program(&mut ir);
+    ir_opt::CONSTANT_PROPAGATION.run_program(&mut ir);
     ir_opt::NOP_ELIMINATION.run_program(&mut ir);
     eprintln!("{ir}\n");
 
