@@ -101,7 +101,8 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
                 continue;
             };
             let constant_str = match sk {
-                StoreKind::Int(i) => i.to_string().into(),
+                // cast from i128 to u32 because fox32asm doesn't support negative int literals
+                &StoreKind::Int(i) => (i as u32).to_string().into(),
                 StoreKind::Function(name) => name.clone(),
                 _ => continue,
             };
@@ -290,7 +291,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                                 BinOp::Add => arithmetic("add"),
                                 BinOp::Sub => arithmetic("sub"),
                                 BinOp::Mul => arithmetic("mul"),
-                                BinOp::CmpLe => comparison("ifle"),
+                                BinOp::CmpLe => comparison("iflteq"),
                             };
                             compile(&mut code);
                         }

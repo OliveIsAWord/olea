@@ -42,21 +42,15 @@ fn main(stream int):
         let event = 0
         while event + 1:
             event = get_next_window_event(window, x@, y@)
-            if event: 0
+            if event:
+                0
             else:
-                if ge_16(y): 0
-                else:
-                    if ge_8(x):
-                        start_dragging_window(window)
-                    else:
+                if y <= 15:
+                    if x <= 7:
                         running = 0
+                    else:
+                        start_dragging_window(window)
     destroy_window(window)
     free_memory(window)
     free_memory(string)
     free_memory(title)
-
-fn ge_8(n int) int:
-    (n - 0) * (n - 1) * (n - 2) * (n - 3) * (n - 4) * (n - 5) * (n - 6) * (n - 7)
-
-fn ge_16(n int) int:
-    ge_8(n) * (n - 8) * (n - 9) * (n - 10) * (n - 11) * (n - 12) * (n - 13) * (n - 14) * (n - 15)

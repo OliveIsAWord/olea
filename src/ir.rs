@@ -405,12 +405,15 @@ impl Exit {
     /// Access every register usage of this block exit.
     pub fn visit_regs<F: FnMut(Register)>(&self, mut f: F) {
         match self {
+            Self::Jump(_) => {}
+            Self::CondJump(cond, _, _) => match cond {
+                &Condition::NonZero(r) => f(r),
+            },
             Self::Return(regs) => {
                 for &r in regs {
                     f(r);
                 }
             }
-            _ => {}
         }
     }
 }
