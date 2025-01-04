@@ -1,2 +1,5 @@
-fn le_8(x int) int:
-    x <= 8
+fn bar(x int) int:
+    if x:
+        0
+    else:
+        1

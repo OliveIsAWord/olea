@@ -19,7 +19,6 @@ impl Pass {
             self.run(f);
         }
     }
-
 }
 
 #[allow(dead_code)]
@@ -73,7 +72,6 @@ fn is_valid_candidate(f: &Function, reg: Register) -> bool {
     // TODO: recognize returning the pointer as an invalid use
 
     for u in uses {
-        
         match u {
             Use::Inst(u) => match u {
                 // allowed to write to the pointer
@@ -90,9 +88,9 @@ fn is_valid_candidate(f: &Function, reg: Register) -> bool {
                 }
                 // nothing else is allowed, since that would require using the
                 // pointer as a value, so we cant take it out
-                _ => return false
-            }
-            Use::Exit(_) => return false
+                _ => return false,
+            },
+            Use::Exit(_) => return false,
         }
     }
     true
@@ -105,19 +103,23 @@ pub const STACK_TO_REGISTER: Pass = Pass {
 };
 
 fn stack_to_register_impl(f: &mut Function) {
-    assert!(f.blocks.len() == 1);
-    
+    // TODO: handle multiple blocks
+    if f.blocks.len() != 1 {
+        return;
+    }
+
     let block = f.blocks.get(&BlockId::ENTRY).unwrap();
     // find stackallocs
 
-    let candidates: Vec<Register> = block.insts.iter().filter_map(
-        |inst| match inst {
+    let candidates: Vec<Register> = block
+        .insts
+        .iter()
+        .filter_map(|inst| match inst {
             Inst::Store(ptr, StoreKind::StackAlloc(_)) => Some(*ptr),
             _ => None,
-        }
-    ).filter(
-        |reg| is_valid_candidate(f, *reg)
-    ).collect();
+        })
+        .filter(|reg| is_valid_candidate(f, *reg))
+        .collect();
 
     // println!("promotion candidates: {:?}", candidates);
 
@@ -127,7 +129,6 @@ fn stack_to_register_impl(f: &mut Function) {
     let block = f.blocks.get_mut(&BlockId::ENTRY).unwrap();
 
     for candidate in candidates {
-
         let mut current_value = Register(u128::MAX);
 
         for inst in block.insts.iter_mut() {
@@ -137,7 +138,10 @@ fn stack_to_register_impl(f: &mut Function) {
                     *inst = Inst::Nop;
                 }
                 Inst::Store(def, StoreKind::Read(ptr)) if *ptr == candidate => {
-                    assert!(current_value.0 != u128::MAX, "stack variable read before written");
+                    assert!(
+                        current_value.0 != u128::MAX,
+                        "stack variable read before written"
+                    );
                     *inst = Inst::Store(*def, StoreKind::Copy(current_value));
                 }
                 Inst::Store(def, StoreKind::StackAlloc(_)) if *def == candidate => {
@@ -179,14 +183,18 @@ fn constant_propagation_impl(f: &mut Function) {
             &StoreKind::UnaryOp(op, reg) => match op {
                 // because for some reason, negation doesnt autoderef like subtraction does
                 UnaryOp::Neg => Some(0 - const_list.get(&reg)?),
-            }
+            },
             &StoreKind::BinOp(op, lhs, rhs) => match op {
                 BinOp::Add => Some(const_list.get(&lhs)? + const_list.get(&rhs)?),
                 BinOp::Sub => Some(const_list.get(&lhs)? - const_list.get(&rhs)?),
                 BinOp::Mul => Some(const_list.get(&lhs)? * const_list.get(&rhs)?),
-                BinOp::CmpLe => Some(if const_list.get(&lhs)? <= const_list.get(&rhs)? {1} else {0}),
-            }
-            _ => None
+                BinOp::CmpLe => Some(if const_list.get(&lhs)? <= const_list.get(&rhs)? {
+                    1
+                } else {
+                    0
+                }),
+            },
+            _ => None,
         }
     };
 

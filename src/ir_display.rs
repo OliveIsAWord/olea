@@ -119,7 +119,7 @@ impl DisplayWithName for Exit {
                 loc_true.with_name(name),
                 loc_false.with_name(name)
             ),
-            Self::Return(regs) => write!(f, "return{}", ReturnsSpace(regs))
+            Self::Return(regs) => write!(f, "return{}", ReturnsSpace(regs)),
         }
     }
 }

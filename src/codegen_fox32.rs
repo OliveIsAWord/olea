@@ -378,7 +378,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                     write_inst!(code, "jmp {function_name}_{}", loc.0);
                     None
                 }
-            },
+            }
             Exit::CondJump(cond, branch_true, branch_false) => {
                 match cond {
                     Condition::NonZero(r) => {
@@ -405,7 +405,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                     }
                 };
                 next_true.or(next_false)
-            },
+            }
             Exit::Return(returns) => {
                 if stack_size != 0 {
                     write_inst!(code, "add rsp, {stack_size}");

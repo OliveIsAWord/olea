@@ -28,20 +28,21 @@ pub struct Function {
     pub next_register: u128,
 }
 
-/// Information about the control flow graph, 
+/// Information about the control flow graph,
 /// including successors, predecessors, and dominance
 #[derive(Clone, Debug)]
 pub struct Cfg {
     /// Map directly from BlockId to CfgNodes
-    pub map: Map<BlockId, CfgNode>
+    pub map: Map<BlockId, CfgNode>,
 }
 
 /// Information about the control flow graph.
 impl Cfg {
     /// build a CFG out of a set of blocks.
     pub fn new(blocks: &Map<BlockId, Block>) -> Self {
-
-        let mut cfg = Cfg { map: Map::<BlockId, CfgNode>::new() };
+        let mut cfg = Cfg {
+            map: Map::<BlockId, CfgNode>::new(),
+        };
 
         // build nodes
         for (id, _) in blocks {
@@ -62,9 +63,21 @@ impl Cfg {
         }
 
         // build dominator tree
-        // i dont want to figure out domtrees atm, most of the examples only have one block anyway
-        assert!(blocks.len() == 1);
-
+        // TODO: actually build a reasonable dominator tree rather than this sad, totally naive approximation where every other block is a child of the entry block.
+        // build edges
+        for id in blocks.keys() {
+            let parent = if id.is_entry() {
+                None
+            } else {
+                Some(BlockId::ENTRY)
+            };
+            cfg.map.get_mut(id).unwrap().immediate_dominator = parent;
+        }
+        cfg.map
+            .get_mut(&BlockId::ENTRY)
+            .unwrap()
+            .dominates
+            .extend(blocks.keys().copied().filter(|id| !id.is_entry()));
         cfg
     }
 
@@ -74,7 +87,7 @@ impl Cfg {
     }
     fn dom_visit_inner(&self, id: BlockId, f: &mut impl FnMut(BlockId)) {
         f(id);
-        let children = &self.map.get(&id).unwrap().dominates; 
+        let children = &self.map.get(&id).unwrap().dominates;
         for child in children {
             self.dom_visit_inner(*child, f);
         }
@@ -278,17 +291,17 @@ impl Inst {
             Self::Nop => {}
         }
     }
-    
+
     /// Does this instruction define a certain register?
     pub fn is_def(&self, reg: Register) -> bool {
         match self {
-            Self::Store(r, _) => {
-                *r == reg
-            }
-            Self::Call { callee: _, returns, args: _} => {
-                returns.iter().any(|r| *r == reg)
-            }
-            _ => false
+            Self::Store(r, _) => *r == reg,
+            Self::Call {
+                callee: _,
+                returns,
+                args: _,
+            } => returns.iter().any(|r| *r == reg),
+            _ => false,
         }
     }
 
@@ -296,31 +309,19 @@ impl Inst {
     pub fn is_use(&self, reg: Register, count_phi: bool) -> bool {
         use StoreKind as Sk;
         match self {
-            Self::Store(_, sk) => {
-                match sk {
-                    &Sk::BinOp(_, r1, r2) | &Sk::PtrOffset(r1, r2) => {
-                        r1 == reg || r2 == reg
-                    }
-                    &Sk::UnaryOp(_, r) | &Sk::Read(r) | &Sk::Copy(r) => {
-                        r == reg
-                    }
-                    Sk::Phi(srcs) => {
-                        count_phi && srcs.iter().any(|(_, r)| *r == reg)
-                    }
-                    Sk::Int(_) | Sk::StackAlloc(_) | Sk::Function(_) => false,
-                }
-            }
-            &Self::Write(r1, r2) => {
-                r1 == reg || r2 == reg
-            }
+            Self::Store(_, sk) => match sk {
+                &Sk::BinOp(_, r1, r2) | &Sk::PtrOffset(r1, r2) => r1 == reg || r2 == reg,
+                &Sk::UnaryOp(_, r) | &Sk::Read(r) | &Sk::Copy(r) => r == reg,
+                Sk::Phi(srcs) => count_phi && srcs.iter().any(|(_, r)| *r == reg),
+                Sk::Int(_) | Sk::StackAlloc(_) | Sk::Function(_) => false,
+            },
+            &Self::Write(r1, r2) => r1 == reg || r2 == reg,
             Self::Call {
                 callee: _,
                 returns: _,
                 args,
-            } => {
-                args.iter().any(|r| *r == reg)
-            }
-            Self::Nop => false
+            } => args.iter().any(|r| *r == reg),
+            Self::Nop => false,
         }
     }
 }
@@ -376,20 +377,16 @@ pub enum Exit {
     /// Direct control flow to one of two locations based on some runtime condition.
     CondJump(Condition, BlockId, BlockId),
     /// Execution terminates, yielding a list of values.
-    Return(Vec<Register>)
+    Return(Vec<Register>),
 }
 
 impl Exit {
     /// Does this exit use a certain register?
     pub fn is_use(&self, reg: Register) -> bool {
         match self {
-            Self::CondJump(Condition::NonZero(r), _, _) => {
-                *r == reg
-            }
-            Self::Return(regs) => {
-                regs.iter().any(|r| *r == reg)
-            }
-            _ => false
+            Self::CondJump(Condition::NonZero(r), _, _) => *r == reg,
+            Self::Return(regs) => regs.iter().any(|r| *r == reg),
+            _ => false,
         }
     }
     /// Get all the blocks this exit can jump to.

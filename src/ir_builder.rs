@@ -105,10 +105,7 @@ impl<'a> IrBuilder<'a> {
             self.build_block(body, false)?;
             vec![]
         };
-        self.switch_to_new_block(
-            Exit::Return(return_regs),
-            BlockId::DUMMY,
-        );
+        self.switch_to_new_block(Exit::Return(return_regs), BlockId::DUMMY);
         assert_eq!(self.scopes.len(), 1);
         Ok(Function::new(
             self.parameters,
@@ -259,11 +256,7 @@ impl<'a> IrBuilder<'a> {
                 self.enter_scope();
                 let cond_reg = self.build_expr_unvoid(cond, span.clone())?;
                 self.switch_to_new_block(
-                    Exit::CondJump(
-                        Condition::NonZero(cond_reg),
-                        then_id,
-                        else_id,
-                    ),
+                    Exit::CondJump(Condition::NonZero(cond_reg), then_id, else_id),
                     then_id,
                 );
 
@@ -306,11 +299,7 @@ impl<'a> IrBuilder<'a> {
                 self.enter_scope(); // with code like `while x is Some(y): ...`, `y` should be accessible from the body
                 let cond_reg = self.build_expr_unvoid(cond, span)?;
                 self.switch_to_new_block(
-                    Exit::CondJump(
-                        Condition::NonZero(cond_reg),
-                        body_id,
-                        end_id,
-                    ),
+                    Exit::CondJump(Condition::NonZero(cond_reg), body_id, end_id),
                     body_id,
                 );
 
