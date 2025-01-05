@@ -1,4 +1,4 @@
-fn bar(x int) int:
+fn bar(x usize) usize:
     if x:
         if x:
             if x:

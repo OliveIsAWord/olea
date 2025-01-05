@@ -73,12 +73,12 @@ impl Cfg {
         // the original algorithm calls for computing predecessors too, but we do that already.
         #[derive(Debug, Default)]
         struct LtInfo {
-            parent: Map<BlockId, BlockId>, // pre-order parent
-            semi: Map<BlockId, usize>, // semidominator helper
-            vertex: Map<usize, BlockId>, // block id from pre-order index
-            bucket: Map<BlockId, Set<BlockId>>, // set of blocks whos semidominator is the key
+            parent: Map<BlockId, BlockId>,        // pre-order parent
+            semi: Map<BlockId, usize>,            // semidominator helper
+            vertex: Map<usize, BlockId>,          // block id from pre-order index
+            bucket: Map<BlockId, Set<BlockId>>,   // set of blocks whos semidominator is the key
             forest_parent: Map<BlockId, BlockId>, // intermediate forest used in steps 2 and 3
-            n: usize, // number of blocks
+            n: usize,                             // number of blocks
         }
         // initialize lengauer-tarjan info
         let mut lt = LtInfo::default();
@@ -94,7 +94,7 @@ impl Cfg {
             lt.vertex.insert(lt.n, v);
             let x = &cfg.map.get(&v).unwrap().successors;
             for w in x {
-                if lt.semi.get(w).is_none() {
+                if !lt.semi.contains_key(w) {
                     lt.parent.insert(*w, v);
                     dfs(lt, cfg, *w);
                 }
@@ -107,13 +107,13 @@ impl Cfg {
         }
 
         fn eval(lt: &LtInfo, v: BlockId) -> BlockId {
-            if lt.forest_parent.get(&v).is_none() {
+            if !lt.forest_parent.contains_key(&v) {
                 return v;
             }
 
             let mut u = v;
             let mut candidate = u;
-            while lt.forest_parent.get(&candidate).is_some() {
+            while lt.forest_parent.contains_key(&candidate) {
                 if lt.semi[&candidate] < lt.semi[&u] {
                     u = candidate;
                 }
@@ -136,7 +136,7 @@ impl Cfg {
             bucket_semi_w.insert(w);
             let parent_w = lt.parent[&w];
             link(&mut lt, parent_w, w);
-            
+
             // step 3
             for v in &lt.bucket[&lt.parent[&w]] {
                 let u = eval(&lt, *v);
@@ -153,7 +153,12 @@ impl Cfg {
             let w: BlockId = lt.vertex[&i];
             let dom_w = self.map[&w].immediate_dominator.unwrap(); // if this unwrap fails, something bad has happened
             if dom_w != lt.vertex[&lt.semi[&w]] {
-                let dom_dom_w = self.map.get_mut(&dom_w).unwrap().immediate_dominator.unwrap();
+                let dom_dom_w = self
+                    .map
+                    .get_mut(&dom_w)
+                    .unwrap()
+                    .immediate_dominator
+                    .unwrap();
                 self.map.get_mut(&w).unwrap().immediate_dominator = Some(dom_dom_w);
             }
         }
