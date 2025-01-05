@@ -38,6 +38,7 @@ pub struct Cfg {
 
 /// Information about the control flow graph.
 impl Cfg {
+
     /// build a CFG out of a set of blocks.
     pub fn new(blocks: &Map<BlockId, Block>) -> Self {
         let mut cfg = Cfg {
@@ -63,22 +64,128 @@ impl Cfg {
         }
 
         // build dominator tree
-        // TODO: actually build a reasonable dominator tree rather than this sad, totally naive approximation where every other block is a child of the entry block.
-        // build edges
-        for id in blocks.keys() {
-            let parent = if id.is_entry() {
-                None
-            } else {
-                Some(BlockId::ENTRY)
-            };
-            cfg.map.get_mut(id).unwrap().immediate_dominator = parent;
-        }
-        cfg.map
-            .get_mut(&BlockId::ENTRY)
-            .unwrap()
-            .dominates
-            .extend(blocks.keys().copied().filter(|id| !id.is_entry()));
+        cfg.build_domtree();
+
+
         cfg
+    }
+
+    /// use the Lengauer-Tarjan algorithm to create a dominator tree
+    pub fn build_domtree(&mut self) {
+        // TODO: add a special case that skips all of this when a single-block function is found
+
+        // these can be turned into arrays, but they can be maps for now.
+        // the original algorithm calls for computing predecessors too, but we do that already.
+        #[derive(Debug)]
+        struct LtInfo {
+            parent: Map<BlockId, BlockId>, // pre-order parent
+            semi: Map<BlockId, usize>, // semidominator helper
+            vertex: Map<usize, BlockId>, // inverse of pre_order
+            bucket: Map<BlockId, Set<BlockId>>, // set of blocks whos semidominator is the key
+            forest_parent: Map<BlockId, BlockId>, // intermediate forest used in steps 2 and 3
+            n: usize, // number of blocks
+        }
+        // initialize lengauer-tarjan info
+        let mut lt = LtInfo {
+            parent:        Map::new(),
+            semi:          Map::new(),
+            vertex:        Map::new(),
+            bucket:        Map::new(),
+            forest_parent: Map::new(),
+            n: 0,
+        };
+        for v in self.map.keys() {
+            lt.bucket.insert(*v, Set::new());
+        }
+
+        // step 1: run pre-order traversal
+        // let mut n = 0;
+        fn dfs(lt: &mut LtInfo, cfg: &Cfg, v: BlockId) {
+            lt.n += 1;
+            lt.semi.insert(v, lt.n);
+            lt.vertex.insert(lt.n, v);
+            let x = &cfg.map.get(&v).unwrap().successors;
+            for w in x {
+                if lt.semi.get(w).is_none() {
+                    lt.parent.insert(*w, v);
+                    dfs(lt, cfg, *w);
+                }
+            }
+        }
+        dfs(&mut lt, self, BlockId::ENTRY);
+
+        fn link(lt: &mut LtInfo, parent: BlockId, child: BlockId) {
+            lt.forest_parent.insert(child, parent);
+        }
+
+        fn eval(lt: &LtInfo, v: BlockId) -> BlockId {
+            if lt.forest_parent.get(&v).is_none() {
+                return v;
+            }
+
+            let mut u = v;
+            let mut candidate = u;
+            while lt.forest_parent.get(&candidate).is_some() {
+                if lt.semi[&candidate] < lt.semi[&u] {
+                    u = candidate;
+                }
+                candidate = lt.forest_parent[&candidate];
+            }
+            u
+        }
+
+        for i in (2usize..=lt.n).rev() {
+            let w = lt.vertex[&i];
+            // step 2
+            for v in &self.map[&w].predecessors {
+                let u = eval(&lt, *v);
+                if lt.semi[&u] < lt.semi[&w] {
+                    lt.semi.insert(w, lt.semi[&u]);
+                }
+            }
+            // add w to bucket(vertex(semi(w)))
+            let bucket_semi_w = lt.bucket.get_mut(&lt.vertex[&lt.semi[&w]]).unwrap();
+            bucket_semi_w.insert(w);
+            let parent_w = lt.parent[&w];
+            link(&mut lt, parent_w, w);
+            
+            // step 3
+            for v in &lt.bucket[&lt.parent[&w]] {
+                let u = eval(&lt, *v);
+                let dom = if lt.semi[&u] < lt.semi[&w] {
+                    u
+                } else {
+                    lt.parent[&w]
+                };
+                self.map.get_mut(&u).unwrap().immediate_dominator = Some(dom);
+            }
+        }
+        // step 4
+        for i in 2..=lt.n {
+            let w: BlockId = lt.vertex[&i];
+            let dom_w = self.map[&w].immediate_dominator.unwrap(); // if this unwrap fails, something bad has happened
+            if dom_w != lt.vertex[&lt.semi[&w]] {
+                let dom_dom_w = self.map.get_mut(&dom_w).unwrap().immediate_dominator.unwrap();
+                self.map.get_mut(&w).unwrap().immediate_dominator = Some(dom_dom_w);
+            }
+        }
+
+        println!("digraph CFG {{");
+        for (index, node) in &self.map {
+            for succ in &node.successors {
+                println!("    \"n{}\" -> \"n{}\"", index.0, succ.0);
+            }
+        }
+        println!("}}");
+
+        println!("digraph DomTree {{");
+        for (index, node) in &self.map {
+            let Some(parent) = &node.immediate_dominator else {
+                continue;
+            };
+            println!("    \"n{}\" -> \"n{}\"", parent.0, index.0);
+        }
+        println!("}}");
     }
 
     /// Access every block ID in the dominator tree such that a given block is visited before any of the blocks it strictly dominates.
