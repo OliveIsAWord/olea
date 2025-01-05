@@ -99,15 +99,30 @@ impl<'src> Parser<'src> {
             span,
         })
     }
-    fn int(&mut self) -> Parsed<u64> {
-        let Some(span) = self.just(P::Int) else {
-            return Ok(None);
+    fn int(&mut self) -> Option<(u64, Option<Name>)> {
+        let span = self.just(P::Int)?;
+        let mut src_str = &self.source[span.clone()];
+        let original_len = src_str.len();
+        let mut int: u64 = 0;
+        while let Some(c) = src_str.chars().next() {
+            match c {
+                '_' => {}
+                '0'..='9' => {
+                    let digit = u64::from(c as u8 - b'0');
+                    int = int.wrapping_mul(10).wrapping_add(digit);
+                }
+                _ => break,
+            }
+            src_str = &src_str[c.len_utf8()..];
+        }
+        let suffix = if src_str.is_empty() {
+            None
+        } else {
+            let kind = src_str.into();
+            let span = span.start + (original_len - src_str.len())..span.end;
+            Some(Name { kind, span })
         };
-        let int_str = &self.source[span];
-        int_str
-            .parse()
-            .map(Some)
-            .map_err(|_| self.err_previous("int too big"))
+        Some((int, suffix))
     }
     fn spanned<O>(&mut self, f: impl FnOnce(&mut Self) -> Result<O>) -> Result<Spanned<O>> {
         let span_start = self.get_span().start;
@@ -221,14 +236,21 @@ impl<'src> Parser<'src> {
         let Some(name) = self.name() else {
             return Ok(None);
         };
-        let mut ty = if name.kind.as_ref() == "int" {
-            Spanned {
-                kind: TyKind::Int,
+        let mut ty = if name.kind.as_ref() == "usize" {
+            Ty {
+                kind: TyKind::Int(IntKind::Usize),
                 span: name.span,
             }
+        } else if name.kind.as_ref() == "u8" {
+            Ty {
+                kind: TyKind::Int(IntKind::U8),
+                span: name.span,
+            }
+        } else if name.kind.as_ref() == "int" {
+            // simple error for legacy integer type name
+            return Err(self.err_previous("unknown type `int`. Did you mean `usize`?"));
         } else {
-            self.i -= 1;
-            return Ok(None);
+            return Err(self.err_previous("unknown type"));
         };
         while let Some(deref_span) = self.just(P::Hat) {
             let span = ty.span.start..deref_span.end;
@@ -284,8 +306,8 @@ impl<'src> Parser<'src> {
             ExprKind::Block(block)
         } else if let Some(name) = self.name() {
             ExprKind::Place(PlaceKind::Var(name))
-        } else if let Some(int) = self.int()? {
-            ExprKind::Int(int)
+        } else if let Some((int, suffix)) = self.int() {
+            ExprKind::Int(int, suffix)
         } else if self.just(P::If).is_some() {
             let condition = self.expr()?;
             let then_block = self.colon_block()?;

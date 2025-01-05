@@ -56,11 +56,20 @@ pub type Ty = Spanned<TyKind>;
 #[derive(Clone, Debug)]
 pub enum TyKind {
     /// An integer.
-    Int,
+    Int(IntKind),
     /// A pointer to a value of a given type.
     Pointer(Box<Ty>),
     /// A function accepting and returning values of given types.
     Function(Vec<Ty>, Option<Box<Ty>>),
+}
+
+/// The builtin integer types.
+#[derive(Clone, Copy, Debug)]
+pub enum IntKind {
+    /// A machine word-sized unsigned integer.
+    Usize,
+    /// An 8-bit unsigned integer.
+    U8,
 }
 
 /// See [`StmtKind`].
@@ -82,8 +91,8 @@ pub type Expr = Spanned<ExprKind>;
 /// An expression, a piece of code which may yield a value when executed.
 #[derive(Clone, Debug)]
 pub enum ExprKind {
-    /// An integer constant.
-    Int(u64),
+    /// An integer constant with an optional suffix, such as `42usize`.
+    Int(u64, Option<Name>),
     /// A calculation taking the value of one expression to yield another.
     UnaryOp(UnaryOp, Box<Expr>),
     /// A calculation taking the values of two expressions to yield another.

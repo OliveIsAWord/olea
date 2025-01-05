@@ -128,7 +128,8 @@ fn main() -> ExitCode {
                     "this expression needs to yield a value but doesn't".to_string(),
                     Some(("required by this outer context".to_owned(), span)),
                 ),
-                E::CantAssignToConstant => ("Can't assign to constant".to_owned(), None),
+                E::CantAssignToConstant => ("can't assign to constant".to_owned(), None),
+                E::UnknownIntLiteralSuffix => ("unknown int literal suffix".to_owned(), None),
             };
             let mut e = Snippet::source(&src)
                 .origin(file_path)
@@ -159,6 +160,10 @@ fn main() -> ExitCode {
                 ),
                 E::NotFunction(reg) => (
                     format!("expected function, got {}", fun.tys.get(&reg).unwrap()),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
+                E::NotInt(reg) => (
+                    format!("expected integer, got {}", fun.tys.get(&reg).unwrap()),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
                 E::Expected(reg, given_ty) => {

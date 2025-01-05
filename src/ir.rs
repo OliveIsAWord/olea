@@ -11,7 +11,7 @@ pub struct Program {
     pub function_tys: Map<Str, (Vec<Ty>, Vec<Ty>)>,
 }
 
-/// A body of code accepts and yields some registers.
+/// A body of code that accepts and yields some registers.
 #[derive(Clone, Debug)]
 pub struct Function {
     /// A list of registers containing the input values in order at the start of the function's execution.
@@ -28,26 +28,23 @@ pub struct Function {
     pub next_register: u128,
 }
 
-/// Information about the control flow graph,
-/// including successors, predecessors, and dominance
+/// Information about the control flow graph, including successors, predecessors, and dominance.
 #[derive(Clone, Debug)]
 pub struct Cfg {
-    /// Map directly from BlockId to CfgNodes
+    /// Map directly from [`BlockId`] to [`CfgNodes`].
     pub map: Map<BlockId, CfgNode>,
 }
 
 /// Information about the control flow graph.
 impl Cfg {
-
-    /// build a CFG out of a set of blocks.
+    /// Build a control flow graph out of a set of blocks.
+    #[must_use]
     pub fn new(blocks: &Map<BlockId, Block>) -> Self {
-        let mut cfg = Cfg {
-            map: Map::<BlockId, CfgNode>::new(),
-        };
+        let mut cfg = Self { map: Map::new() };
 
         // build nodes
-        for (id, _) in blocks {
-            cfg.map.insert(*id, CfgNode::new(*id));
+        for &id in blocks.keys() {
+            cfg.map.insert(id, CfgNode::new(id));
         }
 
         // build edges
@@ -65,7 +62,6 @@ impl Cfg {
 
         // build dominator tree
         cfg.build_domtree();
-
         cfg
     }
 
@@ -174,7 +170,7 @@ impl Cfg {
             self.dom_visit_inner(*child, f);
         }
     }
-    /// Get the block IDs of this dominator tree in visiting order.
+    /// Get the [`BlockId`]s of this dominator tree in visiting order.
     pub fn dom_iter(&self) -> impl Iterator<Item = BlockId> + '_ {
         // (sandwich): this is pretty much lifted from og DominatorTree
 
@@ -186,24 +182,24 @@ impl Cfg {
     }
 }
 
-/// A node in the CFG
+/// A node in the [`Cfg`].
 #[derive(Clone, Debug)]
 pub struct CfgNode {
-    /// Associated block id.
+    /// Associated block ID.
     pub id: BlockId,
-    /// Dominance tree parent
+    /// Dominator tree parent (or `None` if this is the entry block).
     pub immediate_dominator: Option<BlockId>,
-    /// Dominance tree children
+    /// Dominator tree children.
     pub dominates: Set<BlockId>,
-
-    /// Blocks that can jump here
+    /// Blocks that can jump to this block.
     pub predecessors: Set<BlockId>,
-    /// Blocks that this block can jump to
+    /// Blocks that this block can jump to.
     pub successors: Set<BlockId>,
 }
 
 impl CfgNode {
     /// Construct a CFG node.
+    #[must_use]
     pub fn new(id: BlockId) -> Self {
         Self {
             id,
@@ -226,15 +222,14 @@ impl Function {
         next_register: u128,
     ) -> Self {
         let cfg = Cfg::new(&blocks);
-        let this = Self {
+        Self {
             parameters,
             blocks,
             tys,
             spans,
             cfg,
             next_register,
-        };
-        this
+        }
     }
     /// Returns an iterator over the blocks and their IDs of the function. The first item is always the entry block.
     pub fn iter(&self) -> impl Iterator<Item = (BlockId, &Block)> {
@@ -253,11 +248,20 @@ impl Function {
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Ty {
     /// An integer.
-    Int,
+    Int(IntKind),
     /// A pointer into memory storing a value of a given type.
     Pointer(Box<Self>),
     /// A function pointer accepting and returning some values.
     Function(Vec<Self>, Vec<Self>),
+}
+
+/// The sizes an integer type can be.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum IntKind {
+    /// Machine word-sized.
+    Usize,
+    /// 8 bits.
+    U8,
 }
 
 /// A basic block, as in a block of code with one entrance and one exit where each instruction is executed in sequence exactly once before another block executes or the function returns.
@@ -350,7 +354,7 @@ impl Inst {
                         f(r, false);
                     }
                     Sk::Phi(_) => (), // Don't visit phi node arguments because they conceptually live in the predecessor block.
-                    Sk::Int(_) | Sk::StackAlloc(_) | Sk::Function(_) => {}
+                    Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => {}
                 }
             }
             &Self::Write(r1, r2) => {
@@ -375,6 +379,7 @@ impl Inst {
     }
 
     /// Does this instruction define a certain register?
+    #[must_use]
     pub fn is_def(&self, reg: Register) -> bool {
         match self {
             Self::Store(r, _) => *r == reg,
@@ -388,6 +393,7 @@ impl Inst {
     }
 
     /// Does this instruction use a certain register?
+    #[must_use]
     pub fn is_use(&self, reg: Register, count_phi: bool) -> bool {
         use StoreKind as Sk;
         match self {
@@ -395,7 +401,7 @@ impl Inst {
                 &Sk::BinOp(_, r1, r2) | &Sk::PtrOffset(r1, r2) => r1 == reg || r2 == reg,
                 &Sk::UnaryOp(_, r) | &Sk::Read(r) | &Sk::Copy(r) => r == reg,
                 Sk::Phi(srcs) => count_phi && srcs.iter().any(|(_, r)| *r == reg),
-                Sk::Int(_) | Sk::StackAlloc(_) | Sk::Function(_) => false,
+                Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => false,
             },
             &Self::Write(r1, r2) => r1 == reg || r2 == reg,
             Self::Call {
@@ -412,7 +418,7 @@ impl Inst {
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum StoreKind {
     /// An integer constant.
-    Int(i128),
+    Int(i128, IntKind),
     /// A copy of another register's value.
     Copy(Register),
     /// A choice of values based on the immediately preceding block.
@@ -464,6 +470,7 @@ pub enum Exit {
 
 impl Exit {
     /// Does this exit use a certain register?
+    #[must_use]
     pub fn is_use(&self, reg: Register) -> bool {
         match self {
             Self::CondJump(Condition::NonZero(r), _, _) => *r == reg,
@@ -480,7 +487,7 @@ impl Exit {
                 ids.push(*loc1);
                 ids.push(*loc2);
             }
-            _ => {}
+            Self::Return(_) => {}
         }
         ids.into_iter()
     }

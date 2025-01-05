@@ -2,6 +2,45 @@ use crate::compiler_types::{Map, Set, Str};
 use crate::ir::*;
 use crate::ir_liveness::{self, FunctionLiveness};
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Size {
+    /// 8 bits
+    Byte,
+    /// 32 bits
+    Word,
+}
+
+impl Size {
+    const fn of_ty(ty: &Ty) -> Self {
+        match ty {
+            Ty::Int(IntKind::U8) => Self::Byte,
+            Ty::Int(IntKind::Usize) | Ty::Pointer(_) | Ty::Function(..) => Self::Word,
+        }
+    }
+    fn of_inner(ty: &Ty) -> Self {
+        match ty {
+            Ty::Pointer(inner) => Self::of_ty(inner),
+            _ => unreachable!("accessing inner type of non-pointer type `{ty}`"),
+        }
+    }
+    const fn in_bytes(self) -> usize {
+        match self {
+            Self::Byte => 1,
+            Self::Word => 4,
+        }
+    }
+}
+
+impl std::fmt::Display for Size {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let dot_size = match self {
+            Self::Byte => ".8",
+            Self::Word => "", // implicitly ".32" to the assembler
+        };
+        write!(f, "{dot_size}")
+    }
+}
+
 const NUM_REGISTERS: usize = 31;
 const TEMP_REG: StoreLoc = StoreLoc::Register(31);
 
@@ -102,7 +141,11 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
             };
             let constant_str = match sk {
                 // cast from i128 to u32 because fox32asm doesn't support negative int literals
-                &StoreKind::Int(i) => (i as u32).to_string().into(),
+                #[allow(clippy::cast_sign_loss)]
+                &StoreKind::Int(i, kind) => match kind {
+                    IntKind::Usize => (i as u32).to_string().into(),
+                    IntKind::U8 => (i as u8).to_string().into(),
+                },
                 StoreKind::Function(name) => name.clone(),
                 _ => continue,
             };
@@ -204,7 +247,6 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
             eprintln!();
         }
     }
-    let size_of_ir_value = |_| 4;
     write_label!(code, "{function_name}");
     if !f.parameters.is_empty() {
         write_inst!(code, "pop rfp");
@@ -230,9 +272,9 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         for (inst_i, inst) in block.insts.iter().enumerate() {
             match inst {
                 Inst::Store(r, sk) => {
+                    let size = Size::of_ty(&f.tys[r]);
                     let reg = regs.get(r).unwrap();
                     if matches!(reg, StoreLoc::Constant(_)) {
-                        assert!(matches!(sk, Sk::Int(_) | Sk::Function(_)));
                         continue;
                     }
                     match sk {
@@ -246,12 +288,18 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                         Sk::Copy(src) => {
                             let src_reg = regs.get(src).unwrap();
                             if reg != src_reg {
-                                write_inst!(code, "mov {}, {}", reg.foo(), src_reg.foo());
+                                write_inst!(code, "movz{size} {}, {}", reg.foo(), src_reg.foo());
                             }
                         }
                         Sk::Read(src) => {
+                            let inner_size = Size::of_inner(&f.tys[src]);
                             let src_reg = regs.get(src).unwrap();
-                            write_inst!(code, "mov {}, [{}]", reg.foo(), src_reg.bar());
+                            write_inst!(
+                                code,
+                                "movz{inner_size} {}, [{}]",
+                                reg.foo(),
+                                src_reg.bar()
+                            );
                         }
                         Sk::UnaryOp(op, inner) => {
                             let inner_reg = regs.get(inner).unwrap();
@@ -261,7 +309,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                             if reg != inner_reg {
                                 write_inst!(code, "mov {}, {}", reg.foo(), inner_reg.foo());
                             }
-                            write_inst!(code, "{} {}", op_mnemonic, reg.foo());
+                            write_inst!(code, "{}{size} {}", op_mnemonic, reg.foo());
                         }
                         Sk::BinOp(op, lhs, rhs) => {
                             let lhs_reg = regs.get(lhs).unwrap();
@@ -273,7 +321,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                                     }
                                     write_inst!(
                                         *code,
-                                        "{mnemonic} {}, {}",
+                                        "{mnemonic}{size} {}, {}",
                                         reg.foo(),
                                         rhs_reg.foo(),
                                     );
@@ -281,7 +329,12 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                             };
                             let comparison = |condition| {
                                 Box::new(move |code: &mut String| {
-                                    write_inst!(*code, "cmp {}, {}", lhs_reg.foo(), rhs_reg.foo());
+                                    write_inst!(
+                                        *code,
+                                        "cmp{size} {}, {}",
+                                        lhs_reg.foo(),
+                                        rhs_reg.foo()
+                                    );
                                     // NOTE: This `mov` comes after the comparison because `reg` might be the same as `lhs_reg` or `rhs_reg` and we don't want to overwrite the value before the comparison.
                                     write_inst!(*code, "mov {}, 0", reg.foo());
                                     write_inst!(*code, "{condition} mov {}, 1", reg.foo());
@@ -296,16 +349,17 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                             compile(&mut code);
                         }
                         Sk::PtrOffset(lhs, rhs) => {
+                            let stride = Size::of_inner(&f.tys[lhs]).in_bytes();
                             let lhs_reg = regs.get(lhs).unwrap();
                             let rhs_reg = regs.get(rhs).unwrap();
                             if reg != lhs_reg {
                                 write_inst!(code, "mov {}, {}", reg.foo(), lhs_reg.foo());
                             }
-                            write_inst!(code, "mov {}, {}", TEMP_REG.foo(), size_of_ir_value(lhs));
+                            write_inst!(code, "mov {}, {stride}", TEMP_REG.foo());
                             write_inst!(code, "mul {}, {}", TEMP_REG.foo(), rhs_reg.foo());
                             write_inst!(code, "add {}, {}", reg.foo(), TEMP_REG.foo());
                         }
-                        Sk::Int(_) | Sk::Function(_) => unreachable!(
+                        Sk::Int(..) | Sk::Function(_) => unreachable!(
                             "register store should have been optimized as a constant literal"
                         ),
                         Sk::Phi(_) => (),
@@ -313,9 +367,15 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                     }
                 }
                 Inst::Write(dst, src) => {
+                    let inner_size = Size::of_inner(&f.tys[dst]);
                     let dst_reg = regs.get(dst).unwrap();
                     let src_reg = regs.get(src).unwrap();
-                    write_inst!(code, "mov [{}], {}", dst_reg.bar(), src_reg.foo());
+                    write_inst!(
+                        code,
+                        "movz{inner_size} [{}], {}",
+                        dst_reg.bar(),
+                        src_reg.foo()
+                    );
                 }
                 Inst::Call {
                     callee,
@@ -373,7 +433,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         let next_i = match &block.exit {
             Exit::Jump(loc) => {
                 merge_phis(&mut code, *loc, "");
-                if indices.contains(&loc) {
+                if indices.contains(loc) {
                     Some(loc)
                 } else {
                     write_inst!(code, "jmp {function_name}_{}", loc.0);
@@ -389,7 +449,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                 }
                 let next_true = {
                     merge_phis(&mut code, *branch_true, "ifnz ");
-                    if indices.contains(&branch_true) {
+                    if indices.contains(branch_true) {
                         Some(branch_true)
                     } else {
                         write_inst!(code, "ifnz jmp {function_name}_{}", branch_true.0);
@@ -398,7 +458,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                 };
                 let next_false = {
                     merge_phis(&mut code, *branch_false, "ifz ");
-                    if next_true.is_none() && indices.contains(&branch_false) {
+                    if next_true.is_none() && indices.contains(branch_false) {
                         Some(branch_false)
                     } else {
                         write_inst!(code, "ifz jmp {function_name}_{}", branch_false.0);
@@ -425,7 +485,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
             }
         };
         // obviously bad 2 lines of code
-        if next_i.is_some() && indices.contains(&next_i.unwrap()) {
+        if next_i.is_some() && indices.contains(next_i.unwrap()) {
             i = *next_i.unwrap();
         } else {
             match indices.iter().next() {

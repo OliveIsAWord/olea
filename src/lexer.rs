@@ -131,12 +131,19 @@ impl<'a> View<'a> {
         Self { src, index: 0 }
     }
 
-    fn normalize_cr(c: char) -> char {
-        if c == '\r' { '\n' } else { c }
+    const fn normalize_cr(c: char) -> char {
+        if c == '\r' {
+            '\n'
+        } else {
+            c
+        }
     }
 
     fn peek(&self) -> Option<char> {
-        self.src[self.index..self.src.len()].chars().next().map(Self::normalize_cr)
+        self.src[self.index..self.src.len()]
+            .chars()
+            .next()
+            .map(Self::normalize_cr)
     }
 
     fn consume(&mut self) -> Option<char> {
@@ -216,9 +223,11 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
         }
         let start = src.index;
         let Some(c) = src.consume() else { break };
+        // if a character can continue an identifier or integer literal
+        let is_continued = |c: char| c.is_ascii_alphabetic() || c.is_ascii_digit() || c == '_';
         let token = match c {
             c if c.is_ascii_alphabetic() => {
-                src.skip_while(|c| c.is_ascii_alphabetic() || c.is_ascii_digit() || c == '_');
+                src.skip_while(is_continued);
                 let name = &src.src[start..src.index];
                 let mut token = Pl(P::Name);
                 for &(string, t) in KEYWORDS {
@@ -230,7 +239,7 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                 token
             }
             c if c.is_ascii_digit() => {
-                src.skip_while(|c| c.is_ascii_digit() || c == '_');
+                src.skip_while(is_continued);
                 Pl(P::Int)
             }
             '\n' => {

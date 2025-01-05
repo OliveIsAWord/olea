@@ -1,5 +1,6 @@
-fn bar(x int) int:
-    if x:
-        0
-    else:
-        1
+extern fn foo(u8^)
+
+fn bar(x u8) u8:
+    let y = 42u8
+    foo(y@[37]@)
+    bar(y) + bar(x)

@@ -3,11 +3,13 @@ use crate::ir::*;
 
 #[derive(Clone, Debug)]
 pub enum ErrorKind {
-    // We dereferenced a register of a non-pointer type.
+    /// We dereferenced a register of a non-pointer type.
     NotPointer(Register),
-    // We called a register of a non-function type.
+    /// We called a register of a non-function type.
     NotFunction(Register),
-    // The register has one type but we expected another.
+    /// We performed an integer operation on a non-integer.
+    NotInt(Register),
+    /// The register has one type but we expected another.
     Expected(Register, Ty),
 }
 
@@ -53,33 +55,42 @@ impl<'a> TypeChecker<'a> {
             self.err(r, ty.clone())
         }
     }
+    fn int(&self, r: Register) -> Result<IntKind> {
+        match self.t(r) {
+            &Ty::Int(k) => Ok(k),
+            Ty::Pointer(_) | Ty::Function(..) => Err((self.name.into(), ErrorKind::NotInt(r))),
+        }
+    }
     fn pointer(&self, r: Register) -> Result<&'a Ty> {
         match self.t(r) {
             Ty::Pointer(inner) => Ok(inner.as_ref()),
-            Ty::Int | Ty::Function(..) => Err((self.name.into(), ErrorKind::NotPointer(r))),
+            Ty::Int(_) | Ty::Function(..) => Err((self.name.into(), ErrorKind::NotPointer(r))),
         }
     }
     fn infer_storekind(&self, sk: &StoreKind) -> Result<Ty> {
         use StoreKind as Sk;
         let ty = match sk {
-            Sk::Int(_) => Ty::Int,
+            &Sk::Int(_, kind) => Ty::Int(kind),
             &Sk::Copy(r) => self.t(r).clone(),
             &Sk::BinOp(op, lhs, rhs) => {
                 match op {
                     BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::CmpLe => (),
                 }
-                self.expect(lhs, &Ty::Int)?;
-                self.expect(rhs, &Ty::Int)?;
-                Ty::Int
+                let lhs_int = self.int(lhs)?;
+                let rhs_int = self.int(rhs)?;
+                if lhs_int != rhs_int {
+                    self.err(rhs, Ty::Int(lhs_int))?;
+                }
+                Ty::Int(lhs_int)
             }
             &Sk::PtrOffset(lhs, rhs) => {
                 self.pointer(lhs)?;
-                self.expect(rhs, &Ty::Int)?;
+                self.expect(rhs, &Ty::Int(IntKind::Usize))?;
                 self.t(lhs).clone()
             }
             &Sk::UnaryOp(UnaryOp::Neg, rhs) => {
-                self.expect(rhs, &Ty::Int)?;
-                Ty::Int
+                let kind = self.int(rhs)?;
+                Ty::Int(kind)
             }
             Sk::StackAlloc(inner) => Ty::Pointer(Box::new(inner.clone())),
             &Sk::Read(src) => self.pointer(src)?.clone(),
@@ -121,7 +132,7 @@ impl<'a> TypeChecker<'a> {
             } => {
                 match self.t(*callee) {
                     Ty::Function(..) => {}
-                    Ty::Int | Ty::Pointer(_) => {
+                    Ty::Int(_) | Ty::Pointer(_) => {
                         return Err((self.name.into(), ErrorKind::NotFunction(*callee)))
                     }
                 }

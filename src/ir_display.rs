@@ -142,7 +142,7 @@ impl DisplayWithName for Function {
                         write!(f, "{} = ", reg_def(r))?;
                         match sk {
                             Sk::StackAlloc(ty) => write!(f, "StackAlloc({ty})"),
-                            Sk::Int(i) => write!(f, "{i}"),
+                            Sk::Int(i, kind) => write!(f, "{i}_{kind}"),
                             Sk::Copy(r) => write!(f, "{r}"),
                             Sk::Read(r) => write!(f, "{r}^"),
                             Sk::UnaryOp(op, inner) => write!(
@@ -224,12 +224,22 @@ impl Display for Program {
 impl Display for Ty {
     fn fmt(&self, f: F) -> Result {
         match self {
-            Self::Int => write!(f, "int"),
+            Self::Int(kind) => write!(f, "{kind}"),
             Self::Pointer(inner) => write!(f, "{inner}^"),
             Self::Function(params, returns) => {
                 write!(f, "fn({}){}", Commas(params), ReturnsSpace(returns))
             }
         }
+    }
+}
+
+impl Display for IntKind {
+    fn fmt(&self, f: F) -> Result {
+        let name = match self {
+            Self::Usize => "usize",
+            Self::U8 => "u8",
+        };
+        write!(f, "{name}")
     }
 }
 
