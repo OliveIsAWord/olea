@@ -1,5 +1,7 @@
 //! The Olea intermediate representation, a low level language that consists of [SSA](https://en.wikipedia.org/wiki/Static_single-assignment_form) registers and [basic blocks](https://en.wikipedia.org/wiki/Basic_block).
 
+use std::fmt;
+
 use crate::compiler_types::{Map, Set, Span, Str};
 
 /// A full or partial program.
@@ -36,6 +38,28 @@ pub struct Cfg {
     pub map: Map<BlockId, CfgNode>,
 }
 
+impl std::fmt::Display for Cfg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "digraph CFG {{")?;
+        for (index, node) in &self.map {
+            for succ in &node.successors {
+                write!(f, "    \"n{}\" -> \"n{}\"", index.0, succ.0)?;
+            }
+        }
+        write!(f, "}}")?;
+
+        write!(f, "digraph DomTree {{")?;
+        for (index, node) in &self.map {
+            let Some(parent) = &node.immediate_dominator else {
+                continue;
+            };
+            write!(f, "    \"n{}\" -> \"n{}\"", parent.0, index.0)?;
+        }
+        write!(f, "}}")?;
+        Ok(())
+    }
+}
+
 /// Information about the control flow graph.
 impl Cfg {
 
@@ -65,7 +89,6 @@ impl Cfg {
 
         // build dominator tree
         cfg.build_domtree();
-
 
         cfg
     }
@@ -169,23 +192,6 @@ impl Cfg {
                 self.map.get_mut(&w).unwrap().immediate_dominator = Some(dom_dom_w);
             }
         }
-
-        println!("digraph CFG {{");
-        for (index, node) in &self.map {
-            for succ in &node.successors {
-                println!("    \"n{}\" -> \"n{}\"", index.0, succ.0);
-            }
-        }
-        println!("}}");
-
-        println!("digraph DomTree {{");
-        for (index, node) in &self.map {
-            let Some(parent) = &node.immediate_dominator else {
-                continue;
-            };
-            println!("    \"n{}\" -> \"n{}\"", parent.0, index.0);
-        }
-        println!("}}");
     }
 
     /// Access every block ID in the dominator tree such that a given block is visited before any of the blocks it strictly dominates.
