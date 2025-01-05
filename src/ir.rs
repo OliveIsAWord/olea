@@ -167,11 +167,20 @@ impl Function {
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Ty {
     /// An integer.
-    Int,
+    Int(IntKind),
     /// A pointer into memory storing a value of a given type.
     Pointer(Box<Self>),
     /// A function pointer accepting and returning some values.
     Function(Vec<Self>, Vec<Self>),
+}
+
+/// The sizes an integer type can be.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum IntKind {
+    /// Machine word-sized.
+    Usize,
+    /// 8 bits.
+    U8,
 }
 
 /// A basic block, as in a block of code with one entrance and one exit where each instruction is executed in sequence exactly once before another block executes or the function returns.
@@ -264,7 +273,7 @@ impl Inst {
                         f(r, false);
                     }
                     Sk::Phi(_) => (), // Don't visit phi node arguments because they conceptually live in the predecessor block.
-                    Sk::Int(_) | Sk::StackAlloc(_) | Sk::Function(_) => {}
+                    Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => {}
                 }
             }
             &Self::Write(r1, r2) => {
@@ -311,7 +320,7 @@ impl Inst {
                 &Sk::BinOp(_, r1, r2) | &Sk::PtrOffset(r1, r2) => r1 == reg || r2 == reg,
                 &Sk::UnaryOp(_, r) | &Sk::Read(r) | &Sk::Copy(r) => r == reg,
                 Sk::Phi(srcs) => count_phi && srcs.iter().any(|(_, r)| *r == reg),
-                Sk::Int(_) | Sk::StackAlloc(_) | Sk::Function(_) => false,
+                Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => false,
             },
             &Self::Write(r1, r2) => r1 == reg || r2 == reg,
             Self::Call {
@@ -328,7 +337,7 @@ impl Inst {
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum StoreKind {
     /// An integer constant.
-    Int(i128),
+    Int(i128, IntKind),
     /// A copy of another register's value.
     Copy(Register),
     /// A choice of values based on the immediately preceding block.

@@ -162,6 +162,10 @@ fn main() -> ExitCode {
                     format!("expected function, got {}", fun.tys.get(&reg).unwrap()),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
+                E::NotInt(reg) => (
+                    format!("expected integer, got {}", fun.tys.get(&reg).unwrap()),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
                 E::Expected(reg, given_ty) => {
                     let span = fun.spans.get(&reg).unwrap().clone();
                     let reg_ty = fun.tys.get(&reg).unwrap();

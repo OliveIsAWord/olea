@@ -34,9 +34,16 @@ type Error = Spanned<ErrorKind>;
 type Result<T> = std::result::Result<T, Error>;
 
 fn to_ir_ty(ty: &ast::TyKind) -> Ty {
+    use ast::IntKind as I;
     use ast::TyKind as T;
     match ty {
-        &T::Int => Ty::Int,
+        &T::Int(kind) => {
+            let kind = match kind {
+                I::Usize => IntKind::Usize,
+                I::U8 => IntKind::U8,
+            };
+            Ty::Int(kind)
+        }
         T::Pointer(inner) => Ty::Pointer(Box::new(to_ir_ty(&inner.kind))),
         T::Function(params, returns) => Ty::Function(
             params.iter().map(|t| to_ir_ty(&t.kind)).collect(),
@@ -201,7 +208,8 @@ impl<'a> IrBuilder<'a> {
             E::Int(int, suffix) => {
                 let int_ty = if let Some(suffix) = suffix {
                     match suffix.kind.as_ref() {
-                        // "u8" => todo!("u8"),
+                        "usize" => IntKind::Usize,
+                        "u8" => IntKind::U8,
                         _ => {
                             return Err(Error {
                                 kind: ErrorKind::UnknownIntLiteralSuffix,
@@ -210,10 +218,9 @@ impl<'a> IrBuilder<'a> {
                         }
                     }
                 } else {
-                    Ty::Int
+                    IntKind::Usize
                 };
-                self.push_store_with_ty(Sk::Int((*int).into()), span, int_ty)
-                    .some()
+                self.push_store(Sk::Int((*int).into(), int_ty), span).some()
             }
             E::UnaryOp(op, e) => {
                 use ast::UnaryOpKind as A;
@@ -340,9 +347,9 @@ impl<'a> IrBuilder<'a> {
                             .map(|ty| self.new_reg(ty, span.clone()))
                             .collect()
                     }
-                    Ty::Int | Ty::Pointer(_) => {
+                    Ty::Int(_) | Ty::Pointer(_) => {
                         // dummy return
-                        vec![self.new_reg(Ty::Int, span.clone())]
+                        vec![self.new_reg(Ty::Int(IntKind::Usize), span.clone())]
                     }
                 };
                 let return_reg = returns.first().copied();
@@ -416,10 +423,6 @@ impl<'a> IrBuilder<'a> {
 
     fn push_store(&mut self, sk: StoreKind, span: Span) -> Register {
         let ty = self.guess_ty(&sk);
-        self.push_store_with_ty(sk, span, ty)
-    }
-
-    fn push_store_with_ty(&mut self, sk: StoreKind, span: Span, ty: Ty) -> Register {
         let reg = self.new_reg(ty, span);
         self.push_inst(Inst::Store(reg, sk));
         reg
@@ -428,7 +431,7 @@ impl<'a> IrBuilder<'a> {
         use StoreKind as Sk;
         let t = |r| self.tys.get(r).unwrap().clone();
         match sk {
-            &Sk::Int(_) => Ty::Int,
+            &Sk::Int(_, kind) => Ty::Int(kind),
             Sk::Phi(regs) => t(regs.first_key_value().expect("empty phi").1),
             Sk::BinOp(_, lhs, _rhs) => t(lhs),
             Sk::PtrOffset(ptr, _) => t(ptr),
@@ -436,7 +439,7 @@ impl<'a> IrBuilder<'a> {
             Sk::Copy(r) | Sk::UnaryOp(UnaryOp::Neg, r) => t(r),
             Sk::Read(r) => match self.tys.get(r).unwrap() {
                 Ty::Pointer(inner) => inner.as_ref().clone(),
-                e @ (Ty::Int | Ty::Function(..)) => e.clone(), // Dummy type
+                e @ (Ty::Int(_) | Ty::Function(..)) => e.clone(), // Dummy type
             },
             Sk::Function(name) => {
                 let (args, returns) = self

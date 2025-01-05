@@ -178,7 +178,7 @@ fn constant_propagation_impl(f: &mut Function) {
     // if a constant eval can be done, do it, otherwise return None.
     let evaluate = |const_list: &Map<Register, i128>, sk: &StoreKind| -> Option<i128> {
         let val = match *sk {
-            StoreKind::Int(constant) => constant,
+            StoreKind::Int(constant, _) => constant,
             StoreKind::Copy(reg) => *const_list.get(&reg)?,
             StoreKind::UnaryOp(op, reg) => {
                 let x = const_list.get(&reg)?;
@@ -218,9 +218,13 @@ fn constant_propagation_impl(f: &mut Function) {
                 if let Some(const_val) = evaluate(&const_vals, sk) {
                     // eprintln!("map {} to constant {}", reg, const_val);
                     const_vals.insert(reg.to_owned(), const_val);
-                    if !matches!(sk, StoreKind::Int(_)) {
+                    if !matches!(sk, StoreKind::Int(_, _)) {
                         keep_going = true;
-                        *sk = StoreKind::Int(const_val);
+                        let int_kind = match &f.tys[reg] {
+                            &Ty::Int(k) => k,
+                            ty => unreachable!("const eval {ty}"),
+                        };
+                        *sk = StoreKind::Int(const_val, int_kind);
                     }
                 }
             }
