@@ -82,8 +82,8 @@ pub type Expr = Spanned<ExprKind>;
 /// An expression, a piece of code which may yield a value when executed.
 #[derive(Clone, Debug)]
 pub enum ExprKind {
-    /// An integer constant.
-    Int(u64),
+    /// An integer constant with an optional suffix, such as `42usize`.
+    Int(u64, Option<Name>),
     /// A calculation taking the value of one expression to yield another.
     UnaryOp(UnaryOp, Box<Expr>),
     /// A calculation taking the values of two expressions to yield another.

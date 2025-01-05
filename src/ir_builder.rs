@@ -27,6 +27,7 @@ pub enum ErrorKind {
     VariableNotFound(Str),
     DoesNotYield(Span),
     CantAssignToConstant,
+    UnknownIntLiteralSuffix,
 }
 
 type Error = Spanned<ErrorKind>;
@@ -197,7 +198,23 @@ impl<'a> IrBuilder<'a> {
                 self.push_write(place_reg, value_reg);
                 None
             }
-            &E::Int(i) => self.push_store(Sk::Int(i.into()), span).some_if(unvoid),
+            E::Int(int, suffix) => {
+                let int_ty = if let Some(suffix) = suffix {
+                    match suffix.kind.as_ref() {
+                        // "u8" => todo!("u8"),
+                        _ => {
+                            return Err(Error {
+                                kind: ErrorKind::UnknownIntLiteralSuffix,
+                                span: suffix.span.clone(),
+                            });
+                        }
+                    }
+                } else {
+                    Ty::Int
+                };
+                self.push_store_with_ty(Sk::Int((*int).into()), span, int_ty)
+                    .some()
+            }
             E::UnaryOp(op, e) => {
                 use ast::UnaryOpKind as A;
                 use UnaryOp as B;
@@ -398,7 +415,12 @@ impl<'a> IrBuilder<'a> {
     }
 
     fn push_store(&mut self, sk: StoreKind, span: Span) -> Register {
-        let reg = self.new_reg(self.guess_ty(&sk), span);
+        let ty = self.guess_ty(&sk);
+        self.push_store_with_ty(sk, span, ty)
+    }
+
+    fn push_store_with_ty(&mut self, sk: StoreKind, span: Span, ty: Ty) -> Register {
+        let reg = self.new_reg(ty, span);
         self.push_inst(Inst::Store(reg, sk));
         reg
     }
