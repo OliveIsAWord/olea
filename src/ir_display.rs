@@ -242,3 +242,25 @@ impl Display for IntKind {
         write!(f, "{name}")
     }
 }
+
+impl Display for Cfg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "digraph CFG {{")?;
+        for (index, node) in &self.map {
+            for succ in &node.successors {
+                write!(f, "    \"n{}\" -> \"n{}\"", index.0, succ.0)?;
+            }
+        }
+        write!(f, "}}")?;
+
+        write!(f, "digraph DomTree {{")?;
+        for (index, node) in &self.map {
+            let Some(parent) = &node.immediate_dominator else {
+                continue;
+            };
+            write!(f, "    \"n{}\" -> \"n{}\"", parent.0, index.0)?;
+        }
+        write!(f, "}}")?;
+        Ok(())
+    }
+}
