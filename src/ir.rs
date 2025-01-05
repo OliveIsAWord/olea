@@ -103,7 +103,7 @@ impl Cfg {
         struct LtInfo {
             parent: Map<BlockId, BlockId>, // pre-order parent
             semi: Map<BlockId, usize>, // semidominator helper
-            vertex: Map<usize, BlockId>, // inverse of pre_order
+            vertex: Map<usize, BlockId>, // block id from pre-order index
             bucket: Map<BlockId, Set<BlockId>>, // set of blocks whos semidominator is the key
             forest_parent: Map<BlockId, BlockId>, // intermediate forest used in steps 2 and 3
             n: usize, // number of blocks
