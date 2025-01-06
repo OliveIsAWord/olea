@@ -1,4 +1,4 @@
-use crate::compiler_types::Map;
+use crate::compiler_types::{Map, Set};
 use crate::ir::*;
 
 pub struct Pass {
@@ -119,17 +119,33 @@ fn collect_stackallocs(f: &mut Function) -> Vec<Register> {
     candidates
 }
 
-fn stack_to_register_impl(f: &mut Function) {
-    // TODO: handle multiple blocks
-    // if f.blocks.len() != 1 {
-    //     return;
-    // }
+fn contains_write_to(block: &Block, var: Register) -> bool {
+    block
+        .insts
+        .iter()
+        .any(|i| matches!(i, Inst::Write(ptr, _) if *ptr == var))
+}
 
-    // let block = f.blocks.get(&BlockId::ENTRY).unwrap();
+fn phi_locations(f: &mut Function, stackallocs: &Vec<Register>) -> Map<Register, Set<BlockId>> {
+    let mut locs = Map::new();
+
+    for var in stackallocs {
+        let written_blocks = f.blocks
+            .iter()
+            .filter(|(_, block)| contains_write_to(block, *var));
+
+        let blocks = written_blocks.clone();
+    }
+
+    locs
+}
+
+fn stack_to_register_impl(f: &mut Function) {
+
     // find stackallocs
     let stackallocs = collect_stackallocs(f);
 
-    println!("promotion candidates: {:?}", stackallocs);
+    eprintln!("promotion candidates: {:?}", stackallocs);
 
     // Write turns into Store(Copy)
     // Store(Read) turns into Store(Copy)

@@ -62,6 +62,10 @@ impl Cfg {
 
         // build dominator tree
         cfg.build_domtree();
+
+        // build dominance frontiers
+        // cfg.build_dom_frontiers();
+
         cfg
     }
 
@@ -186,6 +190,52 @@ impl Cfg {
         self.dom_visit(|id| ids.push(id));
         ids.into_iter()
     }
+
+    // pub fn build_dom_frontiers(&mut self) {
+    //     for n in self.map.values_mut() {
+    //         self.build_dom_frontier(n);
+    //     }
+    // }
+
+    fn build_dom_frontier(&self, n: &mut CfgNode) {
+        for (block_id, block_node) in &self.map {
+            if !self.dom(n.id, *block_id) {
+                continue;
+            }
+
+            for succ in &block_node.successors {
+                if !self.strict_dom(n.id, *succ) {
+                    n.dom_frontier.insert(*succ);
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Is N strictly dominated by D?
+    pub fn strict_dom(&self, d: BlockId, mut n: BlockId) -> bool {
+        while self.map[&n].immediate_dominator.is_some() {
+            n = self.map[&n].immediate_dominator.unwrap();
+            if n == d {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Is N dominated by D?
+    pub fn dom(&self, d: BlockId, mut n: BlockId) -> bool {
+        if n == d {
+            return true;
+        }
+        while self.map[&n].immediate_dominator.is_some() {
+            n = self.map[&n].immediate_dominator.unwrap();
+            if n == d {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 /// A node in the [`Cfg`].
@@ -201,6 +251,8 @@ pub struct CfgNode {
     pub predecessors: Set<BlockId>,
     /// Blocks that this block can jump to.
     pub successors: Set<BlockId>,
+    /// Dominance frontier.
+    pub dom_frontier: Set<BlockId>,
 }
 
 impl CfgNode {
@@ -213,6 +265,7 @@ impl CfgNode {
             dominates: Set::new(),
             predecessors: Set::new(),
             successors: Set::new(),
+            dom_frontier: Set::new(),
         }
     }
 }
