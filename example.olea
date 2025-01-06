@@ -1,5 +1,7 @@
-fn foo(x usize) u8:
-    x as u8
+struct Foo:
+    a u8
+    b usize^
 
-fn bar(x u8) usize:
-    x as usize
+fn id(f Foo) Foo:
+    let x = f
+    x

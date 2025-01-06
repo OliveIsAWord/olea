@@ -27,6 +27,7 @@ pub enum PlainToken {
     Let,
     While,
     Extern,
+    Struct,
     // Block,
     // Dot,
     Equals,
@@ -71,6 +72,7 @@ const KEYWORDS: &[(&str, Token)] = &[
     ("let", Pl(P::Let)),
     ("else", Co(C::Else)),
     ("while", Pl(P::While)),
+    ("struct", Pl(P::Struct)),
     ("extern", Pl(P::Extern)),
     // ("block", Pl(P::Block)),
 ];

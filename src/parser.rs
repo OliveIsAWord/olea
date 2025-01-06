@@ -567,6 +567,24 @@ impl<'src> Parser<'src> {
                     returns,
                 })
             }
+            Tt::Plain(P::Struct) => {
+                let name = self
+                    .name()
+                    .ok_or_else(|| self.err("expected struct name"))?;
+
+                let Some(Spanned {
+                    kind: Tt::IndentedBlock(struct_body),
+                    span,
+                }) = self.peek()
+                else {
+                    return Err(self.err("expected beginning of struct block"));
+                };
+                self.next().unwrap();
+                let start_span = span.start + 1..span.start + 1;
+                let end_span = span.end..span.end;
+                let fields = self.block(Self::param, struct_body, start_span, end_span)?;
+                DeclKind::Struct(Struct { name, fields })
+            }
             _ => {
                 self.i -= 1; // Hacky, I know.
                 return Ok(None);

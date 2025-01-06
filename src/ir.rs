@@ -197,7 +197,7 @@ impl Cfg {
     //     }
     // }
 
-    fn build_dom_frontier(&self, n: &mut CfgNode) {
+    fn _build_dom_frontier(&self, n: &mut CfgNode) {
         for (block_id, block_node) in &self.map {
             if !self.dom(n.id, *block_id) {
                 continue;
