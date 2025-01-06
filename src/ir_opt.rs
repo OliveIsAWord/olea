@@ -102,56 +102,64 @@ pub const STACK_TO_REGISTER: Pass = Pass {
     on_function: stack_to_register_impl,
 };
 
+fn collect_stackallocs(f: &mut Function) -> Vec<Register> {
+    let mut candidates: Vec<Register> = Vec::new();
+    for (_, block) in &f.blocks {
+        let mut subcandidates: Vec<Register> = block
+            .insts
+            .iter()
+            .filter_map(|inst| match inst {
+                Inst::Store(ptr, StoreKind::StackAlloc(_)) => Some(*ptr),
+                _ => None,
+            })
+            .filter(|reg| is_valid_candidate(f, *reg))
+            .collect();
+        candidates.append(&mut subcandidates);
+    }
+    candidates
+}
+
 fn stack_to_register_impl(f: &mut Function) {
     // TODO: handle multiple blocks
-    if f.blocks.len() != 1 {
-        return;
-    }
+    // if f.blocks.len() != 1 {
+    //     return;
+    // }
 
-    let block = f.blocks.get(&BlockId::ENTRY).unwrap();
+    // let block = f.blocks.get(&BlockId::ENTRY).unwrap();
     // find stackallocs
+    let stackallocs = collect_stackallocs(f);
 
-    let candidates: Vec<Register> = block
-        .insts
-        .iter()
-        .filter_map(|inst| match inst {
-            Inst::Store(ptr, StoreKind::StackAlloc(_)) => Some(*ptr),
-            _ => None,
-        })
-        .filter(|reg| is_valid_candidate(f, *reg))
-        .collect();
-
-    // println!("promotion candidates: {:?}", candidates);
+    println!("promotion candidates: {:?}", stackallocs);
 
     // Write turns into Store(Copy)
     // Store(Read) turns into Store(Copy)
 
-    let block = f.blocks.get_mut(&BlockId::ENTRY).unwrap();
+    // let block = f.blocks.get_mut(&BlockId::ENTRY).unwrap();
 
-    for candidate in candidates {
-        let mut current_value = Register(u128::MAX);
+    // for candidate in candidates {
+    //     let mut current_value = Register(u128::MAX);
 
-        for inst in &mut block.insts {
-            match inst {
-                Inst::Write(ptr, val) if *ptr == candidate => {
-                    current_value = *val;
-                    *inst = Inst::Nop;
-                }
-                Inst::Store(def, StoreKind::Read(ptr)) if *ptr == candidate => {
-                    assert!(
-                        current_value.0 != u128::MAX,
-                        "stack variable read before written"
-                    );
-                    *inst = Inst::Store(*def, StoreKind::Copy(current_value));
-                }
-                Inst::Store(def, StoreKind::StackAlloc(_)) if *def == candidate => {
-                    *inst = Inst::Nop;
-                }
-                _ => {}
-            }
-        }
-    }
-    block.gen_def_use();
+    //     for inst in &mut block.insts {
+    //         match inst {
+    //             Inst::Write(ptr, val) if *ptr == candidate => {
+    //                 current_value = *val;
+    //                 *inst = Inst::Nop;
+    //             }
+    //             Inst::Store(def, StoreKind::Read(ptr)) if *ptr == candidate => {
+    //                 assert!(
+    //                     current_value.0 != u128::MAX,
+    //                     "stack variable read before written"
+    //                 );
+    //                 *inst = Inst::Store(*def, StoreKind::Copy(current_value));
+    //             }
+    //             Inst::Store(def, StoreKind::StackAlloc(_)) if *def == candidate => {
+    //                 *inst = Inst::Nop;
+    //             }
+    //             _ => {}
+    //         }
+    //     }
+    // }
+    // block.gen_def_use();
 }
 
 /// remove Nop instructions completely

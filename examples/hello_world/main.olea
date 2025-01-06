@@ -1,6 +1,6 @@
-extern fn write(int, int, int^)
+extern fn write(usize, usize, usize^)
 
-fn main(stream int):
+fn main(stream usize):
     print_char(stream, 72)
     print_char(stream, 101)
     print_char(stream, 108)
@@ -16,5 +16,5 @@ fn main(stream int):
     print_char(stream, 33)
     print_char(stream, 10)
 
-fn print_char(stream int, c int):
+fn print_char(stream usize, c usize):
     write(1, stream, c@)
