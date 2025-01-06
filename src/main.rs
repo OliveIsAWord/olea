@@ -129,6 +129,7 @@ fn main() -> ExitCode {
                     Some(("required by this outer context".to_owned(), span)),
                 ),
                 E::CantAssignToConstant => ("can't assign to constant".to_owned(), None),
+                E::CantCastToTy(ty) => (format!("can't cast a value to type {ty}"), None),
                 E::UnknownIntLiteralSuffix => ("unknown int literal suffix".to_owned(), None),
                 E::Todo(msg) => (format!("not yet implemented: {msg}"), None),
             };

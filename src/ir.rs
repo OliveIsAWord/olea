@@ -403,14 +403,13 @@ impl Inst {
         match self {
             Self::Store(r, sk) => {
                 f(*r, true);
-                match sk {
-                    &Sk::UnaryOp(_, r) => f(r, false),
-                    &Sk::BinOp(_, r1, r2) | &Sk::PtrOffset(r1, r2) => {
+                match *sk {
+                    Sk::UnaryOp(_, r) | Sk::IntCast(r, _) | Sk::Read(r) | Sk::Copy(r) => {
+                        f(r, false)
+                    }
+                    Sk::BinOp(_, r1, r2) | Sk::PtrOffset(r1, r2) => {
                         f(r1, false);
                         f(r2, false);
-                    }
-                    &Sk::Read(r) | &Sk::Copy(r) => {
-                        f(r, false);
                     }
                     Sk::Phi(_) => (), // Don't visit phi node arguments because they conceptually live in the predecessor block.
                     Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => {}
@@ -447,7 +446,7 @@ impl Inst {
                 returns,
                 args: _,
             } => returns.iter().any(|r| *r == reg),
-            _ => false,
+            Self::Write(..) | Self::Nop => false,
         }
     }
 
@@ -456,10 +455,10 @@ impl Inst {
     pub fn is_use(&self, reg: Register, count_phi: bool) -> bool {
         use StoreKind as Sk;
         match self {
-            Self::Store(_, sk) => match sk {
-                &Sk::BinOp(_, r1, r2) | &Sk::PtrOffset(r1, r2) => r1 == reg || r2 == reg,
-                &Sk::UnaryOp(_, r) | &Sk::Read(r) | &Sk::Copy(r) => r == reg,
-                Sk::Phi(srcs) => count_phi && srcs.iter().any(|(_, r)| *r == reg),
+            Self::Store(_, sk) => match *sk {
+                Sk::BinOp(_, r1, r2) | Sk::PtrOffset(r1, r2) => r1 == reg || r2 == reg,
+                Sk::UnaryOp(_, r) | Sk::IntCast(r, _) | Sk::Read(r) | Sk::Copy(r) => r == reg,
+                Sk::Phi(ref srcs) => count_phi && srcs.iter().any(|(_, r)| *r == reg),
                 Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => false,
             },
             &Self::Write(r1, r2) => r1 == reg || r2 == reg,
@@ -486,6 +485,8 @@ pub enum StoreKind {
     UnaryOp(UnaryOp, Register),
     /// An operation on the value of two registers.
     BinOp(BinOp, Register, Register),
+    /// Casting an integer value to another integer type.
+    IntCast(Register, IntKind),
     /// A pointer offset from the first register by a number of elements according to the second register. Equivalent to `r1[r2]@`.
     PtrOffset(Register, Register),
     /// A pointer to a unique allocation for a value of a given type.

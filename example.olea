@@ -2,4 +2,4 @@ fn foo(x usize) u8:
     x as u8
 
 fn bar(x u8) usize:
-    x + x as usize
+    x as usize

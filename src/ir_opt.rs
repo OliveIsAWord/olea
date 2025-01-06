@@ -130,7 +130,8 @@ fn phi_locations(f: &mut Function, stackallocs: &Vec<Register>) -> Map<Register,
     let mut locs = Map::new();
 
     for var in stackallocs {
-        let written_blocks = f.blocks
+        let written_blocks = f
+            .blocks
             .iter()
             .filter(|(_, block)| contains_write_to(block, *var));
 
@@ -141,7 +142,6 @@ fn phi_locations(f: &mut Function, stackallocs: &Vec<Register>) -> Map<Register,
 }
 
 fn stack_to_register_impl(f: &mut Function) {
-
     // find stackallocs
     let stackallocs = collect_stackallocs(f);
 

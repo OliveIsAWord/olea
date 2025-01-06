@@ -162,6 +162,7 @@ impl DisplayWithName for Function {
                                     BinOp::CmpLe => "<=",
                                 }
                             ),
+                            Sk::IntCast(inner, ty) => write!(f, "{inner} as {ty}"),
                             Sk::PtrOffset(lhs, rhs) => write!(f, "{lhs}[{rhs}]@"),
                             Sk::Phi(regs) => write!(
                                 f,

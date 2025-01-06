@@ -28,6 +28,7 @@ pub enum ErrorKind {
     DoesNotYield(Span),
     CantAssignToConstant,
     UnknownIntLiteralSuffix,
+    CantCastToTy(Ty),
     #[allow(dead_code)]
     Todo(&'static str),
 }
@@ -266,11 +267,18 @@ impl<'a> IrBuilder<'a> {
                 self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg), span)
                     .some_if(unvoid)
             }
-            E::As(_value, _ty) => {
-                return Err(Error {
-                    kind: ErrorKind::Todo("casting"),
-                    span,
-                })
+            E::As(value, ty) => {
+                let value_reg = self.build_expr_unvoid(value, span.clone())?;
+                let ir_ty = to_ir_ty(&ty.kind);
+                let kind = match ir_ty {
+                    Ty::Int(k) => k,
+                    t => return Err(Error {
+                        kind: ErrorKind::CantCastToTy(t),
+                        // Should we annotate the span of the type or the entire `as` expression?
+                        span: ty.span.clone(),
+                    }),
+                };
+                self.push_store(Sk::IntCast(value_reg, kind), span).some()
             }
             // NOTE: When building Paren and Block, we forget their spans, which means subsequent error diagnostics will only ever point to the inner expression. Is this good or bad? We could change this by creating a Copy of the inner register, assigning the copy the outer span.
             E::Paren(inner) => self.build_expr(inner.as_ref(), unvoid)?,
@@ -439,7 +447,7 @@ impl<'a> IrBuilder<'a> {
         use StoreKind as Sk;
         let t = |r| self.tys.get(r).unwrap().clone();
         match sk {
-            &Sk::Int(_, kind) => Ty::Int(kind),
+            &Sk::Int(_, kind) | &Sk::IntCast(_, kind) => Ty::Int(kind),
             Sk::Phi(regs) => t(regs.first_key_value().expect("empty phi").1),
             Sk::BinOp(_, lhs, _rhs) => t(lhs),
             Sk::PtrOffset(ptr, _) => t(ptr),

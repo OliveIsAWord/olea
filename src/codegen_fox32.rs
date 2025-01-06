@@ -2,7 +2,7 @@ use crate::compiler_types::{Map, Set, Str};
 use crate::ir::*;
 use crate::ir_liveness::{self, FunctionLiveness};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Size {
     /// 8 bits
     Byte,
@@ -347,6 +347,11 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                                 BinOp::CmpLe => comparison("iflteq"),
                             };
                             compile(&mut code);
+                        }
+                        &Sk::IntCast(inner, _kind) => {
+                            let inner_reg = &regs[&inner];
+                            // this relies on how we store smaller-than-word types in registers
+                            write_inst!(code, "mov {}, {}", reg.foo(), inner_reg.foo());
                         }
                         Sk::PtrOffset(lhs, rhs) => {
                             let stride = Size::of_inner(&f.tys[lhs]).in_bytes();

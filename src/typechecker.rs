@@ -69,10 +69,10 @@ impl<'a> TypeChecker<'a> {
     }
     fn infer_storekind(&self, sk: &StoreKind) -> Result<Ty> {
         use StoreKind as Sk;
-        let ty = match sk {
-            &Sk::Int(_, kind) => Ty::Int(kind),
-            &Sk::Copy(r) => self.t(r).clone(),
-            &Sk::BinOp(op, lhs, rhs) => {
+        let ty = match *sk {
+            Sk::Int(_, kind) | Sk::IntCast(_, kind) => Ty::Int(kind),
+            Sk::Copy(r) => self.t(r).clone(),
+            Sk::BinOp(op, lhs, rhs) => {
                 match op {
                     BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::CmpLe => (),
                 }
@@ -83,18 +83,18 @@ impl<'a> TypeChecker<'a> {
                 }
                 Ty::Int(lhs_int)
             }
-            &Sk::PtrOffset(lhs, rhs) => {
+            Sk::PtrOffset(lhs, rhs) => {
                 self.pointer(lhs)?;
                 self.expect(rhs, &Ty::Int(IntKind::Usize))?;
                 self.t(lhs).clone()
             }
-            &Sk::UnaryOp(UnaryOp::Neg, rhs) => {
+            Sk::UnaryOp(UnaryOp::Neg, rhs) => {
                 let kind = self.int(rhs)?;
                 Ty::Int(kind)
             }
-            Sk::StackAlloc(inner) => Ty::Pointer(Box::new(inner.clone())),
-            &Sk::Read(src) => self.pointer(src)?.clone(),
-            Sk::Phi(rs) => {
+            Sk::StackAlloc(ref inner) => Ty::Pointer(Box::new(inner.clone())),
+            Sk::Read(src) => self.pointer(src)?.clone(),
+            Sk::Phi(ref rs) => {
                 let mut rs = rs.values().copied();
                 let ty = self.t(rs.next().expect("empty phi"));
                 for r in rs {
@@ -102,7 +102,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 ty.clone()
             }
-            Sk::Function(name) => {
+            Sk::Function(ref name) => {
                 let (params, returns) = self.function_tys.get(name.as_ref()).expect("function get");
                 Ty::Function(params.clone(), returns.clone())
             }
