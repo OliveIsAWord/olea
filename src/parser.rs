@@ -409,15 +409,6 @@ impl<'src> Parser<'src> {
             e = Expr { kind, span };
         }
         loop {
-            // `|>` has the lowest precedence, so we have to check the current level.
-            if level <= Level::Min {
-                while let Some(span) = self.just(P::Pipe) {
-                    e = Expr {
-                        span: e.span.start..span.end,
-                        kind: ExprKind::Paren(Box::new(e)),
-                    };
-                }
-            }
             let Some(Spanned {
                 kind: Tt::Plain(kind),
                 span,

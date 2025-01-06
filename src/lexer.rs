@@ -35,7 +35,6 @@ pub enum PlainToken {
     Asterisk,
     LessThanEqual,
     Hat,
-    Pipe,
     At,
     // ThinArrow,
 }
@@ -77,7 +76,6 @@ const KEYWORDS: &[(&str, Token)] = &[
 ];
 
 const PUNCTUATION: &[(&str, Token)] = &[
-    ("|>", Pl(P::Pipe)),
     ("<=", Pl(P::LessThanEqual)),
     ("(", Co(C::ParenOpen)),
     (")", Co(C::ParenClose)),
