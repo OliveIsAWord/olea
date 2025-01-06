@@ -130,6 +130,7 @@ fn main() -> ExitCode {
                 ),
                 E::CantAssignToConstant => ("can't assign to constant".to_owned(), None),
                 E::UnknownIntLiteralSuffix => ("unknown int literal suffix".to_owned(), None),
+                E::Todo(msg) => (format!("not yet implemented: {msg}"), None),
             };
             let mut e = Snippet::source(&src)
                 .origin(file_path)

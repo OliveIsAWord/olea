@@ -21,9 +21,10 @@ pub enum PlainToken {
     Error,
     Name,
     Int,
+    As,
+    If,
     Fn,
     Let,
-    If,
     While,
     Extern,
     // Block,
@@ -65,9 +66,10 @@ impl From<PlainToken> for Token {
 const ERR: Token = Pl(P::Error);
 
 const KEYWORDS: &[(&str, Token)] = &[
+    ("as", Pl(P::As)),
+    ("if", Pl(P::If)),
     ("fn", Pl(P::Fn)),
     ("let", Pl(P::Let)),
-    ("if", Pl(P::If)),
     ("else", Co(C::Else)),
     ("while", Pl(P::While)),
     ("extern", Pl(P::Extern)),

@@ -1,6 +1,5 @@
-extern fn foo(u8^)
+fn foo(x usize) u8:
+    x as u8
 
-fn bar(x u8) u8:
-    let y = 42u8
-    foo(y@[37]@)
-    bar(y) + bar(x)
+fn bar(x u8) usize:
+    x + x as usize

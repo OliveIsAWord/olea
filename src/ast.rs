@@ -97,6 +97,8 @@ pub enum ExprKind {
     UnaryOp(UnaryOp, Box<Expr>),
     /// A calculation taking the values of two expressions to yield another.
     BinOp(BinOp, Box<Expr>, Box<Expr>),
+    /// A cast of a value to a given type.
+    As(Box<Expr>, Ty),
     /// An expression wrapped in parentheses.
     Paren(Box<Expr>),
     /// An "if" block composed of a condition and two branch bodies. The boolean condition is evaluated. If true, the first branch is evaluated. Otherise, the second branch is evaluated.

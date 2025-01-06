@@ -356,37 +356,41 @@ impl<'src> Parser<'src> {
         };
         // NOTE: These postfix operators have the highest precedence, so we skip the precedence level check and do this in a separate loop.
         loop {
+            let span: Span;
+            let kind: ExprKind;
             if let Some(deref_span) = self.just(P::Hat) {
-                let span = e.span.start..deref_span.end;
-                let kind = ExprKind::Place(PlaceKind::Deref(Box::new(e), deref_span));
-                e = Expr { kind, span };
+                span = e.span.start..deref_span.end;
+                kind = ExprKind::Place(PlaceKind::Deref(Box::new(e), deref_span));
             } else if let Some(ref_span) = self.just(P::At) {
-                let span = e.span.start..ref_span.end;
+                span = e.span.start..ref_span.end;
                 let op = UnaryOp {
                     kind: UnaryOpKind::Ref,
                     span: ref_span,
                 };
-                let kind = ExprKind::UnaryOp(op, Box::new(e));
-                e = Expr { kind, span };
+                kind = ExprKind::UnaryOp(op, Box::new(e));
+            } else if self.just(P::As).is_some() {
+                let Some(ty) = self.ty()? else {
+                    return Err(self.err_previous("expected type after `as`"));
+                };
+                span = e.span.start..ty.span.end;
+                kind = ExprKind::As(Box::new(e), ty);
             } else if let Some(Spanned {
                 kind: Tt::Paren(args, _),
-                span,
+                span: args_span,
             }) = self.peek()
             {
                 self.next().unwrap();
                 let args = self.block(
                     Self::expr,
                     args,
-                    span.start + 1..span.start + 1,
-                    span.end - 1..span.end - 1,
+                    args_span.start + 1..args_span.start + 1,
+                    args_span.end - 1..args_span.end - 1,
                 )?;
-                e = Expr {
-                    span: e.span.start..span.end,
-                    kind: ExprKind::Call(Box::new(e), args),
-                };
+                span = e.span.start..args_span.end;
+                kind = ExprKind::Call(Box::new(e), args);
             } else if let Some(Spanned {
                 kind: Tt::Square(block, multi),
-                span,
+                span: index_span,
             }) = self.peek()
             {
                 if *multi {
@@ -394,16 +398,15 @@ impl<'src> Parser<'src> {
                 }
                 assert_eq!(block.len(), 1);
                 self.next().unwrap();
-                let start_span = span.start + 1..span.start + 1;
-                let end_span = span.end - 1..span.end - 1;
+                let start_span = index_span.start + 1..index_span.start + 1;
+                let end_span = index_span.end - 1..index_span.end - 1;
                 let expr = self.item(Self::expr, &block[0], start_span, end_span)?;
-                e = Expr {
-                    span: e.span.start..span.end,
-                    kind: ExprKind::Place(PlaceKind::Index(Box::new(e), Box::new(expr), span)),
-                };
+                span = e.span.start..index_span.end;
+                kind = ExprKind::Place(PlaceKind::Index(Box::new(e), Box::new(expr), index_span));
             } else {
                 break;
             }
+            e = Expr { kind, span };
         }
         loop {
             // `|>` has the lowest precedence, so we have to check the current level.

@@ -28,6 +28,8 @@ pub enum ErrorKind {
     DoesNotYield(Span),
     CantAssignToConstant,
     UnknownIntLiteralSuffix,
+    #[allow(dead_code)]
+    Todo(&'static str),
 }
 
 type Error = Spanned<ErrorKind>;
@@ -263,6 +265,12 @@ impl<'a> IrBuilder<'a> {
                 let rhs_reg = self.build_expr_unvoid(rhs, span.clone())?;
                 self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg), span)
                     .some_if(unvoid)
+            }
+            E::As(_value, _ty) => {
+                return Err(Error {
+                    kind: ErrorKind::Todo("casting"),
+                    span,
+                })
             }
             // NOTE: When building Paren and Block, we forget their spans, which means subsequent error diagnostics will only ever point to the inner expression. Is this good or bad? We could change this by creating a Copy of the inner register, assigning the copy the outer span.
             E::Paren(inner) => self.build_expr(inner.as_ref(), unvoid)?,
