@@ -23,6 +23,8 @@ pub enum DeclKind {
     Function(Function),
     /// See [`ExternFunction`].
     ExternFunction(ExternFunction),
+    /// See [`Struct`].
+    Struct(Struct),
 }
 
 /// A named body of code that can be called with a list of arguments and yield a return value.
@@ -47,6 +49,15 @@ pub struct ExternFunction {
     pub parameters: Vec<Ty>,
     /// The type of value the function returns, if any.
     pub returns: Option<Ty>,
+}
+
+/// A type declaration of a struct, a collection of fields.
+#[derive(Clone, Debug)]
+pub struct Struct {
+    /// The name of the struct.
+    pub name: Name,
+    /// The fields of the struct.
+    pub fields: Vec<(Name, Ty)>,
 }
 
 /// See [`TyKind`].

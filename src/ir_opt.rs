@@ -119,23 +119,23 @@ fn collect_stackallocs(f: &mut Function) -> Vec<Register> {
     candidates
 }
 
-fn contains_write_to(block: &Block, var: Register) -> bool {
+fn _contains_write_to(block: &Block, var: Register) -> bool {
     block
         .insts
         .iter()
         .any(|i| matches!(i, Inst::Write(ptr, _) if *ptr == var))
 }
 
-fn phi_locations(f: &mut Function, stackallocs: &Vec<Register>) -> Map<Register, Set<BlockId>> {
-    let mut locs = Map::new();
+fn _phi_locations(f: &mut Function, stackallocs: &Vec<Register>) -> Map<Register, Set<BlockId>> {
+    let locs = Map::new();
 
     for var in stackallocs {
         let written_blocks = f
             .blocks
             .iter()
-            .filter(|(_, block)| contains_write_to(block, *var));
+            .filter(|(_, block)| _contains_write_to(block, *var));
 
-        let blocks = written_blocks.clone();
+        let _blocks = written_blocks.clone();
     }
 
     locs

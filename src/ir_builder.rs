@@ -272,11 +272,13 @@ impl<'a> IrBuilder<'a> {
                 let ir_ty = to_ir_ty(&ty.kind);
                 let kind = match ir_ty {
                     Ty::Int(k) => k,
-                    t => return Err(Error {
-                        kind: ErrorKind::CantCastToTy(t),
-                        // Should we annotate the span of the type or the entire `as` expression?
-                        span: ty.span.clone(),
-                    }),
+                    t => {
+                        return Err(Error {
+                            kind: ErrorKind::CantCastToTy(t),
+                            // Should we annotate the span of the type or the entire `as` expression?
+                            span: ty.span.clone(),
+                        });
+                    }
                 };
                 self.push_store(Sk::IntCast(value_reg, kind), span).some()
             }
@@ -505,30 +507,31 @@ pub fn build(program: &ast::Program) -> Result<Program> {
     let function_tys = program
         .decls
         .iter()
-        .map(|decl| match &decl.kind {
+        .filter_map(|decl| match &decl.kind {
             D::Function(ast::Function {
                 name,
                 parameters,
                 returns,
                 body: _,
-            }) => (
+            }) => Some((
                 name.kind.clone(),
                 (
                     parameters.iter().map(|arg| to_ir_ty(&arg.1.kind)).collect(),
                     returns.as_ref().map(|ret| to_ir_ty(&ret.kind)),
                 ),
-            ),
+            )),
             D::ExternFunction(ast::ExternFunction {
                 name,
                 parameters,
                 returns,
-            }) => (
+            }) => Some((
                 name.kind.clone(),
                 (
                     parameters.iter().map(|arg| to_ir_ty(&arg.kind)).collect(),
                     returns.as_ref().map(|ret| to_ir_ty(&ret.kind)),
                 ),
-            ),
+            )),
+            D::Struct(_) => None,
         })
         .collect();
     let mut functions = Map::new();
@@ -540,6 +543,12 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 functions.insert(fn_decl.name.kind.clone(), function);
             }
             D::ExternFunction(_) => {}
+            D::Struct(_) => {
+                return Err(Error {
+                    kind: ErrorKind::Todo("structs"),
+                    span: decl.span.clone(),
+                });
+            }
         }
     }
     let function_tys = function_tys
