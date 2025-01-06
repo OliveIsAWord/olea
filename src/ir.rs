@@ -65,7 +65,8 @@ impl Cfg {
         cfg
     }
 
-    /// use the Lengauer-Tarjan algorithm to create a dominator tree
+    /// Use the Lengauer-Tarjan algorithm to create a dominator tree.
+    #[allow(clippy::items_after_statements)] // we can figure this out if and when we rewrite this function
     pub fn build_domtree(&mut self) {
         // TODO: add a special case that skips all of this when a single-block function is found
 
