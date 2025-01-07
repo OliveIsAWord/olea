@@ -123,7 +123,11 @@ fn main() -> ExitCode {
         Err(Spanned { kind, span }) => {
             use ir_builder::ErrorKind as E;
             let (title, note) = match kind {
-                E::VariableNotFound(v) => (format!("could not find variable `{v}`"), None),
+                E::NotFound(kind, v) => (format!("could not find {kind} `{v}`"), None),
+                E::NameConflict(kind, span) => (
+                    format!("a {kind} with this name has already been defined"),
+                    span.map(|span| ("previously defined here".to_owned(), span)),
+                ),
                 E::DoesNotYield(span) => (
                     "this expression needs to yield a value but doesn't".to_string(),
                     Some(("required by this outer context".to_owned(), span)),

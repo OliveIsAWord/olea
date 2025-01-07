@@ -66,8 +66,8 @@ pub type Ty = Spanned<TyKind>;
 /// A data type.
 #[derive(Clone, Debug)]
 pub enum TyKind {
-    /// An integer.
-    Int(IntKind),
+    /// A type accessed by an identifier.
+    Name(Name),
     /// A pointer to a value of a given type.
     Pointer(Box<Ty>),
     /// A function accepting and returning values of given types.
