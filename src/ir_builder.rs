@@ -381,7 +381,7 @@ impl<'a> IrBuilder<'a> {
                             .map(|ty| self.new_reg(ty, span.clone()))
                             .collect()
                     }
-                    Ty::Int(_) | Ty::Pointer(_) => {
+                    Ty::Int(_) | Ty::Pointer(_) | Ty::Struct(_) => {
                         // dummy return
                         vec![self.new_reg(Ty::Int(IntKind::Usize), span.clone())]
                     }
@@ -477,7 +477,7 @@ impl<'a> IrBuilder<'a> {
             Sk::Copy(r) | Sk::UnaryOp(UnaryOp::Neg, r) => t(r),
             Sk::Read(r) => match self.tys.get(r).unwrap() {
                 Ty::Pointer(inner) => inner.as_ref().clone(),
-                e @ (Ty::Int(_) | Ty::Function(..)) => e.clone(), // Dummy type
+                e @ (Ty::Int(_) | Ty::Function(..) | Ty::Struct(_)) => e.clone(), // Dummy type
             },
             Sk::Function(name) => {
                 let (args, returns) = self
@@ -551,8 +551,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                         });
                     }
                 }
-                drop(ir_fields); // TODO: IR struct type
-                let ty = Ty::Int(IntKind::U8);
+                let ty = Ty::Struct(ir_fields);
                 let name_span = name.span.clone();
                 // check if another ty in the same scope has the same name
                 let maybe_clash = defined_tys

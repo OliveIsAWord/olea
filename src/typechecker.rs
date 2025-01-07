@@ -58,13 +58,13 @@ impl<'a> TypeChecker<'a> {
     fn int(&self, r: Register) -> Result<IntKind> {
         match self.t(r) {
             &Ty::Int(k) => Ok(k),
-            Ty::Pointer(_) | Ty::Function(..) => Err((self.name.into(), ErrorKind::NotInt(r))),
+            Ty::Pointer(_) | Ty::Function(..) | Ty::Struct(_) => Err((self.name.into(), ErrorKind::NotInt(r))),
         }
     }
     fn pointer(&self, r: Register) -> Result<&'a Ty> {
         match self.t(r) {
             Ty::Pointer(inner) => Ok(inner.as_ref()),
-            Ty::Int(_) | Ty::Function(..) => Err((self.name.into(), ErrorKind::NotPointer(r))),
+            Ty::Int(_) | Ty::Function(..) | Ty::Struct(_) => Err((self.name.into(), ErrorKind::NotPointer(r))),
         }
     }
     fn infer_storekind(&self, sk: &StoreKind) -> Result<Ty> {
@@ -132,7 +132,7 @@ impl<'a> TypeChecker<'a> {
             } => {
                 match self.t(*callee) {
                     Ty::Function(..) => {}
-                    Ty::Int(_) | Ty::Pointer(_) => {
+                    Ty::Int(_) | Ty::Pointer(_) | Ty::Struct(_) => {
                         return Err((self.name.into(), ErrorKind::NotFunction(*callee)))
                     }
                 }
