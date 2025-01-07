@@ -1,7 +1,7 @@
 struct Foo:
     a u8
     b fn(usize) usize
+    c u8
 
-fn id(f Foo^) Foo^:
-    let x = f
-    x
+fn get_first_field(f Foo^) u8:
+    f.c

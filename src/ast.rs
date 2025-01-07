@@ -139,6 +139,8 @@ pub enum PlaceKind {
     Deref(Box<Expr>, Span),
     /// An index operation, consisting of the indexee, the index, and the span of the index (including square brackets).
     Index(Box<Expr>, Box<Expr>, Span),
+    /// A field of a struct value.
+    Field(Box<Expr>, Name),
 }
 
 /// See [`UnaryOpKind`].

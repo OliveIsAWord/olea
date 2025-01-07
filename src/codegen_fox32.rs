@@ -24,7 +24,7 @@ impl Size {
             _ => unreachable!("accessing inner type of non-pointer type `{ty}`"),
         }
     }
-    const fn in_bytes(self) -> usize {
+    const fn in_bytes(self) -> u32 {
         match self {
             Self::Byte => 1,
             Self::Word => 4,
@@ -364,6 +364,26 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                             write_inst!(code, "mov {}, {stride}", TEMP_REG.foo());
                             write_inst!(code, "mul {}, {}", TEMP_REG.foo(), rhs_reg.foo());
                             write_inst!(code, "add {}, {}", reg.foo(), TEMP_REG.foo());
+                        }
+                        Sk::FieldOffset(ptr, accessed_field) => {
+                            let Ty::Pointer(value) = &f.tys[ptr] else {
+                                unreachable!("field offset");
+                            };
+                            let Ty::Struct(fields) = value.as_ref() else {
+                                unreachable!("field offset");
+                            };
+                            let mut offset: u32 = 0;
+                            for (field_name, field_ty) in fields {
+                                if field_name == accessed_field {
+                                    break;
+                                }
+                                offset += Size::of_ty(field_ty).in_bytes();
+                            }
+                            let ptr_reg = &regs[ptr];
+                            if reg != ptr_reg {
+                                write_inst!(code, "mov {}, {}", reg.foo(), ptr_reg.foo());
+                            }
+                            write_inst!(code, "add {}, {offset}", reg.foo());
                         }
                         Sk::Int(..) | Sk::Function(_) => unreachable!(
                             "register store should have been optimized as a constant literal"

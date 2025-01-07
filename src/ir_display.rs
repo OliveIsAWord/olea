@@ -164,6 +164,7 @@ impl DisplayWithName for Function {
                             ),
                             Sk::IntCast(inner, ty) => write!(f, "{inner} as {ty}"),
                             Sk::PtrOffset(lhs, rhs) => write!(f, "{lhs}[{rhs}]@"),
+                            Sk::FieldOffset(inner, field) => write!(f, "{inner}.{field}@"),
                             Sk::Phi(regs) => write!(
                                 f,
                                 "Phi({})",
@@ -231,7 +232,11 @@ impl Display for Ty {
                 write!(f, "fn({}){}", Commas(params), ReturnsSpace(returns))
             }
             Self::Struct(fields) => {
-                write!(f, "struct({})", Commas(fields.iter().map(|(name, ty)| format!("{name} {ty}"))))
+                write!(
+                    f,
+                    "struct({})",
+                    Commas(fields.iter().map(|(name, ty)| format!("{name} {ty}")))
+                )
             }
         }
     }

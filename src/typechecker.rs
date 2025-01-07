@@ -3,12 +3,16 @@ use crate::ir::*;
 
 #[derive(Clone, Debug)]
 pub enum ErrorKind {
+    /// We performed an integer operation on a non-integer.
+    NotInt(Register),
     /// We dereferenced a register of a non-pointer type.
     NotPointer(Register),
     /// We called a register of a non-function type.
     NotFunction(Register),
-    /// We performed an integer operation on a non-integer.
-    NotInt(Register),
+    /// We accessed a field of a non-struct type.
+    NotStruct(Register),
+    /// We accessed a non-existent field of a struct.
+    NoFieldNamed(Register, Str),
     /// The register has one type but we expected another.
     Expected(Register, Ty),
 }
@@ -58,13 +62,17 @@ impl<'a> TypeChecker<'a> {
     fn int(&self, r: Register) -> Result<IntKind> {
         match self.t(r) {
             &Ty::Int(k) => Ok(k),
-            Ty::Pointer(_) | Ty::Function(..) | Ty::Struct(_) => Err((self.name.into(), ErrorKind::NotInt(r))),
+            Ty::Pointer(_) | Ty::Function(..) | Ty::Struct(_) => {
+                Err((self.name.into(), ErrorKind::NotInt(r)))
+            }
         }
     }
     fn pointer(&self, r: Register) -> Result<&'a Ty> {
         match self.t(r) {
             Ty::Pointer(inner) => Ok(inner.as_ref()),
-            Ty::Int(_) | Ty::Function(..) | Ty::Struct(_) => Err((self.name.into(), ErrorKind::NotPointer(r))),
+            Ty::Int(_) | Ty::Function(..) | Ty::Struct(_) => {
+                Err((self.name.into(), ErrorKind::NotPointer(r)))
+            }
         }
     }
     fn infer_storekind(&self, sk: &StoreKind) -> Result<Ty> {
@@ -87,6 +95,15 @@ impl<'a> TypeChecker<'a> {
                 self.pointer(lhs)?;
                 self.expect(rhs, &Ty::Int(IntKind::Usize))?;
                 self.t(lhs).clone()
+            }
+            Sk::FieldOffset(r, ref field) => {
+                let Ty::Struct(fields) = self.pointer(r)? else {
+                    return Err((self.name.into(), ErrorKind::NotStruct(r)));
+                };
+                fields
+                    .iter()
+                    .find_map(|(name, ty)| (name == field).then(|| Ty::Pointer(Box::new(ty.clone()))))
+                    .ok_or_else(|| (self.name.into(), ErrorKind::NoFieldNamed(r, field.clone())))?
             }
             Sk::UnaryOp(UnaryOp::Neg, rhs) => {
                 let kind = self.int(rhs)?;
