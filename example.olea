@@ -1,8 +1,7 @@
 struct Foo:
     a u8
-    b usize^
-    a fn()
+    b fn(usize) usize
 
-fn id(f Foo) Foo:
+fn id(f Foo^) Foo^:
     let x = f
     x

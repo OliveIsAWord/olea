@@ -312,6 +312,8 @@ pub enum Ty {
     Pointer(Box<Self>),
     /// A function pointer accepting and returning some values.
     Function(Vec<Self>, Vec<Self>),
+    /// A collection of named values.
+    Struct(Vec<(Str, Self)>),
 }
 
 /// The sizes an integer type can be.

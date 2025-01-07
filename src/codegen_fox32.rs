@@ -11,10 +11,11 @@ enum Size {
 }
 
 impl Size {
-    const fn of_ty(ty: &Ty) -> Self {
+    fn of_ty(ty: &Ty) -> Self {
         match ty {
             Ty::Int(IntKind::U8) => Self::Byte,
             Ty::Int(IntKind::Usize) | Ty::Pointer(_) | Ty::Function(..) => Self::Word,
+            Ty::Struct(_) => unreachable!("struct type {ty} encountered during codegen"),
         }
     }
     fn of_inner(ty: &Ty) -> Self {

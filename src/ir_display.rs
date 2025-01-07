@@ -230,6 +230,9 @@ impl Display for Ty {
             Self::Function(params, returns) => {
                 write!(f, "fn({}){}", Commas(params), ReturnsSpace(returns))
             }
+            Self::Struct(fields) => {
+                write!(f, "struct({})", Commas(fields.iter().map(|(name, ty)| format!("{name} {ty}"))))
+            }
         }
     }
 }
