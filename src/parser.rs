@@ -236,21 +236,9 @@ impl<'src> Parser<'src> {
         let Some(name) = self.name() else {
             return Ok(None);
         };
-        let mut ty = if name.kind.as_ref() == "usize" {
-            Ty {
-                kind: TyKind::Int(IntKind::Usize),
-                span: name.span,
-            }
-        } else if name.kind.as_ref() == "u8" {
-            Ty {
-                kind: TyKind::Int(IntKind::U8),
-                span: name.span,
-            }
-        } else if name.kind.as_ref() == "int" {
-            // simple error for legacy integer type name
-            return Err(self.err_previous("unknown type `int`. Did you mean `usize`?"));
-        } else {
-            return Err(self.err_previous("unknown type"));
+        let mut ty = Ty {
+            span: name.span.clone(),
+            kind: TyKind::Name(name),
         };
         while let Some(deref_span) = self.just(P::Hat) {
             let span = ty.span.start..deref_span.end;

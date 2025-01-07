@@ -24,7 +24,8 @@ impl<T> ToSome for T {
 }
 
 pub enum ErrorKind {
-    VariableNotFound(Str),
+    NotFound(&'static str, Str),
+    NameConflict(&'static str, Option<Span>),
     DoesNotYield(Span),
     CantAssignToConstant,
     UnknownIntLiteralSuffix,
@@ -35,25 +36,6 @@ pub enum ErrorKind {
 
 type Error = Spanned<ErrorKind>;
 type Result<T> = std::result::Result<T, Error>;
-
-fn to_ir_ty(ty: &ast::TyKind) -> Ty {
-    use ast::IntKind as I;
-    use ast::TyKind as T;
-    match ty {
-        &T::Int(kind) => {
-            let kind = match kind {
-                I::Usize => IntKind::Usize,
-                I::U8 => IntKind::U8,
-            };
-            Ty::Int(kind)
-        }
-        T::Pointer(inner) => Ty::Pointer(Box::new(to_ir_ty(&inner.kind))),
-        T::Function(params, returns) => Ty::Function(
-            params.iter().map(|t| to_ir_ty(&t.kind)).collect(),
-            returns.iter().map(|t| to_ir_ty(&t.kind)).collect(),
-        ),
-    }
-}
 
 #[derive(Clone, Debug)]
 struct IrBuilder<'a> {
@@ -67,6 +49,7 @@ struct IrBuilder<'a> {
     scopes: Vec<Map<Str, Register>>,
     next_reg_id: u128,
     function_tys: &'a Map<Str, (Vec<Ty>, Option<Ty>)>,
+    defined_tys: &'a DefinedTys,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -77,8 +60,40 @@ enum MaybeVar {
     Variable(Register),
 }
 
+#[derive(Clone, Debug)]
+struct DefinedTys {
+    tys: Map<Str, (Ty, Option<Span>)>,
+}
+
+impl DefinedTys {
+    fn build_ty(&self, ty: &ast::Ty) -> Result<Ty> {
+        use ast::TyKind as T;
+        match &ty.kind {
+            T::Name(name) => match self.tys.get(&name.kind) {
+                Some((ty, _)) => Ok(ty.clone()),
+                None => Err(Error {
+                    kind: ErrorKind::NotFound("type", name.kind.clone()),
+                    span: ty.span.clone(),
+                }),
+            },
+            T::Pointer(inner) => self.build_ty(inner).map(Box::new).map(Ty::Pointer),
+            T::Function(params, returns) => {
+                let params = params
+                    .iter()
+                    .map(|t| self.build_ty(t))
+                    .collect::<Result<_>>()?;
+                let returns = returns
+                    .iter()
+                    .map(|t| self.build_ty(t))
+                    .collect::<Result<_>>()?;
+                Ok(Ty::Function(params, returns))
+            }
+        }
+    }
+}
+
 impl<'a> IrBuilder<'a> {
-    fn new(function_tys: &'a Map<Str, (Vec<Ty>, Option<Ty>)>) -> Self {
+    fn new(function_tys: &'a Map<Str, (Vec<Ty>, Option<Ty>)>, defined_tys: &'a DefinedTys) -> Self {
         Self {
             parameters: vec![],
             current_block: vec![],
@@ -90,6 +105,7 @@ impl<'a> IrBuilder<'a> {
             scopes: vec![Map::new()],
             next_reg_id: 0,
             function_tys,
+            defined_tys,
         }
     }
 
@@ -103,7 +119,7 @@ impl<'a> IrBuilder<'a> {
         }: &ast::Function,
     ) -> Result<Function> {
         for (p_name, p_ty) in parameters {
-            let ir_ty = to_ir_ty(&p_ty.kind);
+            let ir_ty = self.build_ty(p_ty)?;
             let reg = self.new_reg(ir_ty.clone(), p_name.span.clone());
             self.parameters.push(reg);
             // Currently, we assume all variables are stack allocated, so we copy the argument to a stack allocation.
@@ -157,10 +173,10 @@ impl<'a> IrBuilder<'a> {
         let reg = match kind {
             S::Let(name, ty, body) => {
                 let value_reg = self.build_expr_unvoid(body, span)?;
-                let alloc_ty = ty.as_ref().map_or_else(
-                    || self.tys.get(&value_reg).unwrap().clone(),
-                    |t| to_ir_ty(&t.kind),
-                );
+                let alloc_ty = match ty {
+                    Some(t) => self.build_ty(t)?,
+                    None => self.tys.get(&value_reg).unwrap().clone(),
+                };
                 let alloc_reg = self.new_var(name.clone(), alloc_ty);
                 self.push_write(alloc_reg, value_reg);
                 None
@@ -269,7 +285,7 @@ impl<'a> IrBuilder<'a> {
             }
             E::As(value, ty) => {
                 let value_reg = self.build_expr_unvoid(value, span.clone())?;
-                let ir_ty = to_ir_ty(&ty.kind);
+                let ir_ty = self.build_ty(ty)?;
                 let kind = match ir_ty {
                     Ty::Int(k) => k,
                     t => {
@@ -400,7 +416,7 @@ impl<'a> IrBuilder<'a> {
                         .map(MaybeVar::Constant)
                 })
                 .ok_or_else(|| Error {
-                    kind: ErrorKind::VariableNotFound(name.kind.clone()),
+                    kind: ErrorKind::NotFound("variable", name.kind.clone()),
                     span: name.span.clone(),
                 }),
             Pk::Deref(e, _) => self.build_expr_unvoid(e, span).map(MaybeVar::Variable),
@@ -422,13 +438,17 @@ impl<'a> IrBuilder<'a> {
         self.scopes.pop();
     }
 
+    fn build_ty(&self, ty: &ast::Ty) -> Result<Ty> {
+        self.defined_tys.build_ty(ty)
+    }
+
     fn new_var(&mut self, name: Name, ty: Ty) -> Register {
         let reg = self.push_store(StoreKind::StackAlloc(ty), name.span);
         self.scopes.last_mut().unwrap().insert(name.kind, reg);
         reg
     }
 
-    fn get_var(&mut self, name: &Name) -> Option<Register> {
+    fn get_var(&self, name: &Name) -> Option<Register> {
         self.scopes
             .iter()
             .rev()
@@ -504,51 +524,102 @@ impl<'a> IrBuilder<'a> {
 
 pub fn build(program: &ast::Program) -> Result<Program> {
     use ast::DeclKind as D;
-    let function_tys = program
-        .decls
-        .iter()
-        .filter_map(|decl| match &decl.kind {
+    let mut function_tys = Map::new();
+    let mut defined_tys = DefinedTys {
+        tys: Map::from([
+            ("u8".into(), (Ty::Int(IntKind::U8), None)),
+            ("usize".into(), (Ty::Int(IntKind::Usize), None)),
+        ]),
+    };
+    // collect struct types
+    // currently we only accept forward declarations of structs (bad). fixing this in the general case requires a pervasive rewrite of the IR type system.
+    for ast::Decl { kind, span: _ } in &program.decls {
+        match kind {
+            D::Function(_) | D::ExternFunction(_) => {}
+            D::Struct(ast::Struct { name, fields }) => {
+                let mut ir_fields: Vec<(Str, Ty)> = Vec::with_capacity(fields.len());
+                let mut names = Map::new();
+                for (field_name, field_ty) in fields {
+                    let ty = defined_tys.build_ty(field_ty)?;
+                    ir_fields.push((field_name.kind.clone(), ty));
+                    if let Some(previous_span) =
+                        names.insert(field_name.kind.clone(), field_name.span.clone())
+                    {
+                        return Err(Error {
+                            kind: ErrorKind::NameConflict("field", Some(previous_span)),
+                            span: field_name.span.clone(),
+                        });
+                    }
+                }
+                drop(ir_fields); // TODO: IR struct type
+                let ty = Ty::Int(IntKind::U8);
+                let name_span = name.span.clone();
+                // check if another ty in the same scope has the same name
+                let maybe_clash = defined_tys
+                    .tys
+                    .insert(name.kind.clone(), (ty, name_span.some()));
+                if let Some((_, previous_span)) = maybe_clash {
+                    return Err(Error {
+                        kind: ErrorKind::NameConflict("type", previous_span),
+                        span: name.span.clone(),
+                    });
+                }
+            }
+        }
+    }
+    for ast::Decl { kind, span: _ } in &program.decls {
+        match kind {
             D::Function(ast::Function {
                 name,
                 parameters,
                 returns,
                 body: _,
-            }) => Some((
-                name.kind.clone(),
-                (
-                    parameters.iter().map(|arg| to_ir_ty(&arg.1.kind)).collect(),
-                    returns.as_ref().map(|ret| to_ir_ty(&ret.kind)),
-                ),
-            )),
+            }) => {
+                function_tys.insert(
+                    name.kind.clone(),
+                    (
+                        parameters
+                            .iter()
+                            .map(|arg| defined_tys.build_ty(&arg.1))
+                            .collect::<Result<_>>()?,
+                        returns
+                            .as_ref()
+                            .map(|ret| defined_tys.build_ty(ret))
+                            .transpose()?,
+                    ),
+                );
+            }
             D::ExternFunction(ast::ExternFunction {
                 name,
                 parameters,
                 returns,
-            }) => Some((
-                name.kind.clone(),
-                (
-                    parameters.iter().map(|arg| to_ir_ty(&arg.kind)).collect(),
-                    returns.as_ref().map(|ret| to_ir_ty(&ret.kind)),
-                ),
-            )),
-            D::Struct(_) => None,
-        })
-        .collect();
+            }) => {
+                function_tys.insert(
+                    name.kind.clone(),
+                    (
+                        parameters
+                            .iter()
+                            .map(|arg| defined_tys.build_ty(arg))
+                            .collect::<Result<_>>()?,
+                        returns
+                            .as_ref()
+                            .map(|ret| defined_tys.build_ty(ret))
+                            .transpose()?,
+                    ),
+                );
+            }
+            D::Struct(_) => {}
+        }
+    }
     let mut functions = Map::new();
     for decl in &program.decls {
         match &decl.kind {
             D::Function(fn_decl) => {
-                let builder = IrBuilder::new(&function_tys);
+                let builder = IrBuilder::new(&function_tys, &defined_tys);
                 let function = builder.build_function(fn_decl)?;
                 functions.insert(fn_decl.name.kind.clone(), function);
             }
-            D::ExternFunction(_) => {}
-            D::Struct(_) => {
-                return Err(Error {
-                    kind: ErrorKind::Todo("structs"),
-                    span: decl.span.clone(),
-                });
-            }
+            D::ExternFunction(_) | D::Struct(_) => {}
         }
     }
     let function_tys = function_tys
