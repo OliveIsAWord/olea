@@ -356,6 +356,21 @@ impl<'src> Parser<'src> {
                     span: ref_span,
                 };
                 kind = ExprKind::UnaryOp(op, Box::new(e));
+            } else if self.just(P::Dot).is_some() {
+                let field = self
+                    .name()
+                    .ok_or_else(|| self.err("expected field or method name after dot"))?;
+                if matches!(
+                    self.peek(),
+                    Some(Spanned {
+                        kind: Tt::Paren(..),
+                        span: _
+                    })
+                ) {
+                    return Err(self.err("not yet implemented: method calls"));
+                }
+                span = e.span.start..field.span.end;
+                kind = ExprKind::Place(PlaceKind::Field(Box::new(e), field));
             } else if self.just(P::As).is_some() {
                 let Some(ty) = self.ty()? else {
                     return Err(self.err_previous("expected type after `as`"));

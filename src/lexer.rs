@@ -28,8 +28,7 @@ pub enum PlainToken {
     While,
     Extern,
     Struct,
-    // Block,
-    // Dot,
+    Dot,
     Equals,
     Plus,
     Minus,
@@ -37,7 +36,6 @@ pub enum PlainToken {
     LessThanEqual,
     Hat,
     At,
-    // ThinArrow,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -74,7 +72,6 @@ const KEYWORDS: &[(&str, Token)] = &[
     ("while", Pl(P::While)),
     ("struct", Pl(P::Struct)),
     ("extern", Pl(P::Extern)),
-    // ("block", Pl(P::Block)),
 ];
 
 const PUNCTUATION: &[(&str, Token)] = &[
@@ -85,7 +82,7 @@ const PUNCTUATION: &[(&str, Token)] = &[
     ("]", Co(C::SquareClose)),
     (":", Co(C::Colon)),
     (",", Co(C::Comma)),
-    // (".", Pl(P::Dot)),
+    (".", Pl(P::Dot)),
     ("=", Pl(P::Equals)),
     ("+", Pl(P::Plus)),
     ("-", Pl(P::Minus)),

@@ -406,9 +406,11 @@ impl Inst {
             Self::Store(r, sk) => {
                 f(*r, true);
                 match *sk {
-                    Sk::UnaryOp(_, r) | Sk::IntCast(r, _) | Sk::Read(r) | Sk::Copy(r) => {
-                        f(r, false)
-                    }
+                    Sk::UnaryOp(_, r)
+                    | Sk::IntCast(r, _)
+                    | Sk::Read(r)
+                    | Sk::Copy(r)
+                    | Sk::FieldOffset(r, _) => f(r, false),
                     Sk::BinOp(_, r1, r2) | Sk::PtrOffset(r1, r2) => {
                         f(r1, false);
                         f(r2, false);
@@ -459,7 +461,11 @@ impl Inst {
         match self {
             Self::Store(_, sk) => match *sk {
                 Sk::BinOp(_, r1, r2) | Sk::PtrOffset(r1, r2) => r1 == reg || r2 == reg,
-                Sk::UnaryOp(_, r) | Sk::IntCast(r, _) | Sk::Read(r) | Sk::Copy(r) => r == reg,
+                Sk::UnaryOp(_, r)
+                | Sk::IntCast(r, _)
+                | Sk::Read(r)
+                | Sk::Copy(r)
+                | Sk::FieldOffset(r, _) => r == reg,
                 Sk::Phi(ref srcs) => count_phi && srcs.iter().any(|(_, r)| *r == reg),
                 Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => false,
             },
@@ -491,6 +497,8 @@ pub enum StoreKind {
     IntCast(Register, IntKind),
     /// A pointer offset from the first register by a number of elements according to the second register. Equivalent to `r1[r2]@`.
     PtrOffset(Register, Register),
+    /// A pointer offset to a field of the pointed struct.
+    FieldOffset(Register, Str),
     /// A pointer to a unique allocation for a value of a given type.
     StackAlloc(Ty),
     /// A read access through a pointer to memory.

@@ -427,6 +427,12 @@ impl<'a> IrBuilder<'a> {
                     self.push_store(StoreKind::PtrOffset(indexee_reg, index_reg), span);
                 Ok(MaybeVar::Variable(indexed_reg))
             }
+            Pk::Field(struct_value, field) => {
+                let struct_reg = self.build_expr_unvoid(struct_value, span.clone())?;
+                let field_ptr_reg =
+                    self.push_store(StoreKind::FieldOffset(struct_reg, field.kind.clone()), span);
+                Ok(MaybeVar::Variable(field_ptr_reg))
+            }
         }
     }
 
@@ -466,6 +472,7 @@ impl<'a> IrBuilder<'a> {
         reg
     }
     pub fn guess_ty(&self, sk: &StoreKind) -> Ty {
+        const DUMMY_TY: Ty = Ty::Int(IntKind::U8);
         use StoreKind as Sk;
         let t = |r| self.tys.get(r).unwrap().clone();
         match sk {
@@ -473,11 +480,27 @@ impl<'a> IrBuilder<'a> {
             Sk::Phi(regs) => t(regs.first_key_value().expect("empty phi").1),
             Sk::BinOp(_, lhs, _rhs) => t(lhs),
             Sk::PtrOffset(ptr, _) => t(ptr),
+            Sk::FieldOffset(r, field) => {
+                let Ty::Pointer(value) = t(r) else {
+                    println!("foo");
+                    return DUMMY_TY;
+                };
+                let Ty::Struct(fields) = value.as_ref() else {
+                    println!("foofoo");
+                    return DUMMY_TY;
+                };
+                fields
+                    .iter()
+                    .find_map(|(name, ty)| {
+                        (name == field).then(|| Ty::Pointer(Box::new(ty.clone())))
+                    })
+                    .unwrap_or(DUMMY_TY)
+            }
             Sk::StackAlloc(ty) => Ty::Pointer(Box::new(ty.clone())),
             Sk::Copy(r) | Sk::UnaryOp(UnaryOp::Neg, r) => t(r),
             Sk::Read(r) => match self.tys.get(r).unwrap() {
                 Ty::Pointer(inner) => inner.as_ref().clone(),
-                e @ (Ty::Int(_) | Ty::Function(..) | Ty::Struct(_)) => e.clone(), // Dummy type
+                Ty::Int(_) | Ty::Function(..) | Ty::Struct(_) => DUMMY_TY,
             },
             Sk::Function(name) => {
                 let (args, returns) = self

@@ -157,6 +157,10 @@ fn main() -> ExitCode {
             let fun = ir.functions.get(&fn_name).unwrap();
             let snippet = Snippet::source(&src).origin(file_path).fold(true);
             let (title, snippet): (String, _) = match e {
+                E::NotInt(reg) => (
+                    format!("expected integer, got {}", fun.tys.get(&reg).unwrap()),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
                 E::NotPointer(reg) => (
                     format!(
                         "cannot dereference a value of type {}",
@@ -168,18 +172,21 @@ fn main() -> ExitCode {
                     format!("expected function, got {}", fun.tys.get(&reg).unwrap()),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
-                E::NotInt(reg) => (
-                    format!("expected integer, got {}", fun.tys.get(&reg).unwrap()),
+                E::NotStruct(reg) => (
+                    format!(
+                        "type {} does not support field access",
+                        fun.tys.get(&reg).unwrap()
+                    ),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
-                E::Expected(reg, given_ty) => {
-                    let span = fun.spans.get(&reg).unwrap().clone();
-                    let reg_ty = fun.tys.get(&reg).unwrap();
-                    (
-                        format!("expected {given_ty}, got {reg_ty}"),
-                        snippet.annotation(Level::Error.span(span)),
-                    )
-                }
+                E::NoFieldNamed(reg, field) => (
+                    format!("{} does not have field {field}", fun.tys.get(&reg).unwrap()),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
+                E::Expected(reg, given_ty) => (
+                    format!("expected {given_ty}, got {}", fun.tys.get(&reg).unwrap()),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
             };
             error_snippet(Level::Error.title(&title).snippet(snippet));
             return ExitCode::FAILURE;
