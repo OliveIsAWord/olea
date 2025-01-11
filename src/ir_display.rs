@@ -126,7 +126,7 @@ impl DisplayWithName for Exit {
 
 impl DisplayWithName for Function {
     fn fmt_with_name<'a>(&'a self, f: F, name: &str) -> Result {
-        let reg_def = |r: &'a Register| WithTy(r, self.tys.get(r).unwrap());
+        let reg_def = |r: &'a Register| WithTy(r, self.tys.get(r).unwrap_or(&Ty::Int(IntKind::U8)));
         write!(
             f,
             "fn {name}({})",

@@ -12,10 +12,14 @@ enum Size {
 
 impl Size {
     fn of_ty(ty: &Ty) -> Self {
+        Self::of_ty_or(ty)
+            .unwrap_or_else(|_| unreachable!("struct type {ty} encountered during codegen"))
+    }
+    fn of_ty_or(ty: &Ty) -> Result<Self, u32> {
         match ty {
-            Ty::Int(IntKind::U8) => Self::Byte,
-            Ty::Int(IntKind::Usize) | Ty::Pointer(_) | Ty::Function(..) => Self::Word,
-            Ty::Struct(_) => unreachable!("struct type {ty} encountered during codegen"),
+            Ty::Int(IntKind::U8) => Ok(Self::Byte),
+            Ty::Int(IntKind::Usize) | Ty::Pointer(_) | Ty::Function(..) => Ok(Self::Word),
+            Ty::Struct(fields) => Err(fields.iter().map(|(_, ty)| Self::of_in_bytes(ty)).sum()),
         }
     }
     fn of_inner(ty: &Ty) -> Self {
@@ -29,6 +33,9 @@ impl Size {
             Self::Byte => 1,
             Self::Word => 4,
         }
+    }
+    fn of_in_bytes(ty: &Ty) -> u32 {
+        Self::of_ty_or(ty).map(Self::in_bytes).unwrap_or_else(|x| x)
     }
 }
 
@@ -377,7 +384,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                                 if field_name == accessed_field {
                                     break;
                                 }
-                                offset += Size::of_ty(field_ty).in_bytes();
+                                offset += Size::of_in_bytes(field_ty);
                             }
                             let ptr_reg = &regs[ptr];
                             if reg != ptr_reg {

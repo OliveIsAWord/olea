@@ -1,7 +1,13 @@
+struct Bar:
+    meow usize
+    cat u8
+
 struct Foo:
     a u8
-    b fn(usize) usize
-    c u8
+    b Bar
 
-fn get_first_field(f Foo^) u8:
-    f.c
+extern fn woof(Foo) Foo
+
+fn meow(f Foo) Foo:
+    f = woof(f)
+    if 1: f else: f
