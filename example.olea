@@ -1,13 +1,9 @@
 struct Bar:
-    meow usize
-    cat u8
+    bah u8
 
 struct Foo:
-    a u8
+    a fn(Bar) Bar
     b Bar
 
-extern fn woof(Foo) Foo
-
-fn meow(f Foo) Foo:
-    f = woof(f)
-    if 1: f else: f
+fn meow(f Foo) Bar:
+    (f@.a)(f@.b)
