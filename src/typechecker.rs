@@ -102,7 +102,9 @@ impl<'a> TypeChecker<'a> {
                 };
                 fields
                     .iter()
-                    .find_map(|(name, ty)| (name == field).then(|| Ty::Pointer(Box::new(ty.clone()))))
+                    .find_map(|(name, ty)| {
+                        (name == field).then(|| Ty::Pointer(Box::new(ty.clone())))
+                    })
                     .ok_or_else(|| (self.name.into(), ErrorKind::NoFieldNamed(r, field.clone())))?
             }
             Sk::UnaryOp(UnaryOp::Neg, rhs) => {
@@ -180,12 +182,9 @@ impl<'a> TypeChecker<'a> {
         }
         match &block.exit {
             Exit::Jump(_) => Ok(()),
-            Exit::CondJump(cond, _, _) => {
-                match cond {
-                    Condition::NonZero(_) => {}
-                }
-                Ok(())
-            }
+            Exit::CondJump(cond, _, _) => match cond {
+                &Condition::NonZero(r) => self.int(r).map(|_| ()),
+            },
             Exit::Return(regs) => {
                 if regs.len() != self.return_tys.len() {
                     // The IR lowering phase will always produce functions with 0 or 1 returns, and it checks that all paths return the appropriate number of values. This code path will only run when typechecking transformed IR, namely after lowering IR types to machine-friendly types.

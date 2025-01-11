@@ -18,6 +18,7 @@ mod codegen_fox32;
 pub mod compiler_types;
 pub mod ir;
 mod ir_builder;
+mod ir_desugar;
 mod ir_display;
 pub mod ir_liveness;
 // TODO: rewrite to account for `used_regs` not including phi arguments.
@@ -192,22 +193,29 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     }
-
-    eprintln!("#Optimizer phase");
-    ir_opt::STACK_TO_REGISTER.run_program(&mut ir);
-    ir_opt::CONSTANT_PROPAGATION.run_program(&mut ir);
-    ir_opt::NOP_ELIMINATION.run_program(&mut ir);
+    eprintln!("#Desugaring phase");
+    ir_desugar::desugar_program(&mut ir);
     eprintln!("{ir}\n");
 
-    for (name, f) in &ir.functions {
-        let live = ir_liveness::calculate_liveness(f);
-        eprintln!("{name}:");
-        live.pretty_print();
+    if false {
+        eprintln!("#Optimizer phase");
+        ir_opt::STACK_TO_REGISTER.run_program(&mut ir);
+        ir_opt::CONSTANT_PROPAGATION.run_program(&mut ir);
+        ir_opt::NOP_ELIMINATION.run_program(&mut ir);
+        eprintln!("{ir}\n");
     }
-    eprintln!();
 
-    let asm = codegen_fox32::gen_program(&ir);
-    eprintln!("#Codegen");
-    print!("{asm}");
+    if true {
+        for (name, f) in &ir.functions {
+            let live = ir_liveness::calculate_liveness(f);
+            eprintln!("{name}:");
+            live.pretty_print();
+        }
+        eprintln!();
+
+        let asm = codegen_fox32::gen_program(&ir);
+        eprintln!("#Codegen");
+        print!("{asm}");
+    }
     ExitCode::SUCCESS
 }
