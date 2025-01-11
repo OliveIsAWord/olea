@@ -38,10 +38,14 @@ fn make_struct_fields(fields: &[(Str, Ty)], next_register: &mut u128) -> StructF
 pub fn desugar_program(program: &mut Program) {
     let Program {
         functions,
-        function_tys: _, // does not contain registers
+        function_tys,
     } = program;
     for f in functions.values_mut() {
         desugar_function(f);
+    }
+    for (params, returns) in function_tys.values_mut() {
+        desugar_ty_vec(params);
+        desugar_ty_vec(returns);
     }
 }
 
@@ -81,6 +85,9 @@ pub fn desugar_function(f: &mut Function) {
             tys.insert(field_r, field_ty.clone());
             spans.insert(field_r, span.clone());
         }
+    }
+    for ty in tys.values_mut() {
+        desugar_ty(ty);
     }
 }
 
@@ -167,6 +174,11 @@ fn desugar_block(
                 }
             }
             &mut Inst::Store(r, ref mut sk) => {
+                if let Sk::StackAlloc(ty) = sk {
+                    eprintln!("before: {ty}");
+                    desugar_ty(ty);
+                    eprintln!("after:  {ty}");
+                }
                 let Some(fields) = struct_regs.get(&r) else {
                     continue;
                 };
@@ -249,6 +261,49 @@ fn desugar_block(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+fn desugar_ty(ty: &mut Ty) {
+    match ty {
+        Ty::Int(_) => {}
+        Ty::Pointer(ty) => desugar_ty(ty),
+        Ty::Function(params, returns) => {
+            desugar_ty_vec(params);
+            desugar_ty_vec(returns);
+        }
+        Ty::Struct(fields) => {
+            for (_, ty) in fields {
+                desugar_ty(ty);
+            }
+        }
+    }
+}
+
+fn desugar_ty_vec(tys: &mut Vec<Ty>) {
+    let mut i = 0;
+    while let Some(ty) = tys.get_mut(i) {
+        i += 1;
+        match ty {
+            Ty::Int(_) => {}
+            Ty::Pointer(ty) => desugar_ty(ty),
+            Ty::Function(params, returns) => {
+                desugar_ty_vec(params);
+                desugar_ty_vec(returns);
+            }
+            Ty::Struct(_) => {
+                i -= 1;
+                let old_i = i;
+                let Ty::Struct(fields) = tys.remove(i) else {
+                    unreachable!();
+                };
+                for (_, ty) in fields {
+                    tys.insert(i, ty);
+                    i += 1;
+                }
+                i = old_i; // yeah this sucks
             }
         }
     }
