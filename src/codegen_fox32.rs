@@ -35,7 +35,7 @@ impl Size {
         }
     }
     fn of_in_bytes(ty: &Ty) -> u32 {
-        Self::of_ty_or(ty).map(Self::in_bytes).unwrap_or_else(|x| x)
+        Self::of_ty_or(ty).map_or_else(|x| x, Self::in_bytes)
     }
 }
 

@@ -116,7 +116,7 @@ fn desugar_block(
         assert!(
             !struct_regs.contains_key(&r),
             "found struct register {r} in condition"
-        )
+        );
     };
     match exit {
         Exit::Jump(_) => {}

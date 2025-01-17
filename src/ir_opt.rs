@@ -102,9 +102,9 @@ pub const STACK_TO_REGISTER: Pass = Pass {
     on_function: stack_to_register_impl,
 };
 
-fn collect_stackallocs(f: &mut Function) -> Vec<Register> {
+fn collect_stackallocs(f: &Function) -> Vec<Register> {
     let mut candidates: Vec<Register> = Vec::new();
-    for (_, block) in &f.blocks {
+    for block in f.blocks.values() {
         let mut subcandidates: Vec<Register> = block
             .insts
             .iter()
@@ -126,7 +126,7 @@ fn _contains_write_to(block: &Block, var: Register) -> bool {
         .any(|i| matches!(i, Inst::Write(ptr, _) if *ptr == var))
 }
 
-fn _phi_locations(f: &mut Function, stackallocs: &Vec<Register>) -> Map<Register, Set<BlockId>> {
+fn _phi_locations(f: &Function, stackallocs: &Vec<Register>) -> Map<Register, Set<BlockId>> {
     let locs = Map::new();
 
     for var in stackallocs {
@@ -145,7 +145,7 @@ fn stack_to_register_impl(f: &mut Function) {
     // find stackallocs
     let stackallocs = collect_stackallocs(f);
 
-    eprintln!("promotion candidates: {:?}", stackallocs);
+    eprintln!("promotion candidates: {stackallocs:?}");
 
     // Write turns into Store(Copy)
     // Store(Read) turns into Store(Copy)

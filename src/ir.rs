@@ -213,6 +213,7 @@ impl Cfg {
     }
 
     /// Is N strictly dominated by D?
+    #[must_use]
     pub fn strict_dom(&self, d: BlockId, mut n: BlockId) -> bool {
         while self.map[&n].immediate_dominator.is_some() {
             n = self.map[&n].immediate_dominator.unwrap();
@@ -224,6 +225,7 @@ impl Cfg {
     }
 
     /// Is N dominated by D?
+    #[must_use]
     pub fn dom(&self, d: BlockId, mut n: BlockId) -> bool {
         if n == d {
             return true;
