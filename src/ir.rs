@@ -9,7 +9,107 @@ pub struct Program {
     pub functions: Map<Str, Function>,
     /// The type signature of every function including extern functions.
     pub function_tys: Map<Str, (Vec<Ty>, Vec<Ty>)>,
+    pub tys: TyMap,
 }
+
+#[derive(Clone, Debug, Default)]
+pub struct TyMap {
+    inner: Map<Ty, TyKind>,
+    next_ty: u128,
+}
+
+impl TyMap {
+    /// Construct a new [`TyMap`]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Get a type immutably.
+    pub fn get(&self, index: Ty) -> Option<&TyKind> {
+        self.inner.get(&index)
+    }
+
+    // /// Get a type mutably.
+    // pub fn get_mut(&mut self, ty: Ty) -> Option<&mut TyKind> {
+    //     self.inner.get_mut(&ty)
+    // }
+
+    /// Reserve a type id for future use;
+    pub fn reserve(&mut self) -> Ty {
+        let reserved = self.next_ty;
+        self.next_ty += 1;
+        Ty(reserved)
+    }
+
+    /// Insert a new type and get the index to it.
+    pub fn insert(&mut self, kind: TyKind) -> Ty {
+        let index = self.reserve();
+        self.insert_at(index, kind);
+        index
+    }
+
+    /// Insert a new type with a previously reserved id.
+    pub fn insert_at(&mut self, index: Ty, kind: TyKind) {
+        if let Some(previous) = self.get(index) {
+            panic!("inserted two types at the same id\n  id: {index}\n  type 1: {previous}\n  type 2: {kind}")
+        }
+        self.inner.insert(index, kind);
+    }
+
+    /// Format a type as a string through its id.
+    pub fn format(&self, index: Ty) -> String {
+        self.format_kind(&self[index])
+    }
+
+    /// Format a type as a string.
+    pub fn format_kind(&self, kind: &TyKind) -> String {
+        // yeah this is bad
+        match kind {
+            TyKind::Int(size) => size.to_string(),
+            &TyKind::Pointer(inner) => format!("{}^", self.format(inner)),
+            TyKind::Function(params, returns) => {
+                let mut string = "fn(".to_owned();
+                for (i, &param) in params.iter().enumerate() {
+                    if i != 0 {
+                        string.push_str(", ");
+                    }
+                    string.push_str(&self.format(param));
+                }
+                match returns.len() {
+                    0 => {}
+                    1 => {
+                        string.push(' ');
+                        string.push_str(&self.format(returns[0]));
+                    }
+                    2.. => {
+                        string.push('{');
+                        for (i, &ret) in returns.iter().enumerate() {
+                            if i != 0 {
+                                string.push_str(", ");
+                            }
+                            string.push_str(&self.format(ret));
+                        }
+                        string.push('}');
+                    }
+                }
+                string
+            }
+        }
+    }
+}
+
+impl std::ops::Index<Ty> for TyMap {
+    type Output = TyKind;
+    fn index(&self, index: Ty) -> &TyKind {
+        self.get(index).expect("no type found")
+    }
+}
+
+// impl std::ops::IndexMut<Ty> for TyMap {
+//     fn index_mut(&self, index: Ty) -> TyKind {
+//         self.get_mut(index).expect("no type found")
+//     }
+// }
 
 /// A body of code that accepts and yields some registers.
 #[derive(Clone, Debug)]
@@ -305,17 +405,20 @@ impl Function {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct Ty(u128);
+
 /// The type of any value operated on.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum Ty {
+pub enum TyKind {
     /// An integer.
     Int(IntKind),
     /// A pointer into memory storing a value of a given type.
-    Pointer(Box<Self>),
+    Pointer(Ty),
     /// A function pointer accepting and returning some values.
-    Function(Vec<Self>, Vec<Self>),
+    Function(Vec<Ty>, Vec<Ty>),
     /// A collection of named values.
-    Struct(Vec<(Str, Self)>),
+    Struct(Vec<(Str, Ty)>),
 }
 
 /// The sizes an integer type can be.

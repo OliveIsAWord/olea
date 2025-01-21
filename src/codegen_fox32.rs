@@ -11,31 +11,11 @@ enum Size {
 }
 
 impl Size {
-    fn of_ty(ty: &Ty) -> Self {
-        Self::of_ty_or(ty)
-            .unwrap_or_else(|_| unreachable!("struct type {ty} encountered during codegen"))
-    }
-    fn of_ty_or(ty: &Ty) -> Result<Self, u32> {
-        match ty {
-            Ty::Int(IntKind::U8) => Ok(Self::Byte),
-            Ty::Int(IntKind::Usize) | Ty::Pointer(_) | Ty::Function(..) => Ok(Self::Word),
-            Ty::Struct(fields) => Err(fields.iter().map(|(_, ty)| Self::of_in_bytes(ty)).sum()),
-        }
-    }
-    fn of_inner(ty: &Ty) -> Self {
-        match ty {
-            Ty::Pointer(inner) => Self::of_ty(inner),
-            _ => unreachable!("accessing inner type of non-pointer type `{ty}`"),
-        }
-    }
     const fn in_bytes(self) -> u32 {
         match self {
             Self::Byte => 1,
             Self::Word => 4,
         }
-    }
-    fn of_in_bytes(ty: &Ty) -> u32 {
-        Self::of_ty_or(ty).map_or_else(|x| x, Self::in_bytes)
     }
 }
 
@@ -46,6 +26,56 @@ impl std::fmt::Display for Size {
             Self::Word => "", // implicitly ".32" to the assembler
         };
         write!(f, "{dot_size}")
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SizeFinder<'a>(&'a TyMap);
+
+impl SizeFinder<'_> {
+    fn of_ty(self, ty: Ty) -> Size {
+        self.of_ty_or(ty)
+            .unwrap_or_else(|_| unreachable!("struct type {ty} encountered during codegen"))
+    }
+    fn of_ty_or(self, ty: Ty) -> Result<Size, u32> {
+        match &self.0[ty] {
+            TyKind::Int(IntKind::U8) => Ok(Size::Byte),
+            TyKind::Int(IntKind::Usize) | TyKind::Pointer(_) | TyKind::Function(..) => {
+                Ok(Size::Word)
+            }
+            TyKind::Struct(fields) => Err(fields.iter().map(|(_, ty)| self.of_in_bytes(*ty)).sum()),
+        }
+    }
+    fn of_inner(self, ty: Ty) -> Size {
+        match &self.0[ty] {
+            &TyKind::Pointer(inner) => self.of_ty(inner),
+            t => unreachable!("accessing inner type of non-pointer type `{t}`"),
+        }
+    }
+    fn of_in_bytes(self, ty: Ty) -> u32 {
+        self.of_ty_or(ty).map_or_else(|x| x, Size::in_bytes)
+    }
+    fn of_inner_in_bytes(self, ty: Ty) -> u32 {
+        match &self.0[ty] {
+            &TyKind::Pointer(inner) => self.of_in_bytes(inner),
+            t => unreachable!("accessing inner type of non-pointer type `{t}`"),
+        }
+    }
+    fn field_offset(self, ty: Ty, accessed_field: &Str) -> u32 {
+        let TyKind::Pointer(value) = self.0[ty] else {
+            unreachable!("field offset");
+        };
+        let TyKind::Struct(fields) = &self.0[value] else {
+            unreachable!("field offset");
+        };
+        let mut offset: u32 = 0;
+        for (field_name, field_ty) in fields {
+            if field_name == accessed_field {
+                break;
+            }
+            offset += self.of_in_bytes(*field_ty);
+        }
+        offset
     }
 }
 
@@ -123,7 +153,7 @@ struct RegAllocInfo {
     pub liveness: FunctionLiveness,
 }
 
-fn reg_alloc(f: &Function) -> RegAllocInfo {
+fn reg_alloc(f: &Function, get_size: SizeFinder) -> RegAllocInfo {
     let liveness = ir_liveness::calculate_liveness(f);
     let live_graph = LivenessGraph::from_function_liveness(&liveness);
     let mut stack_size = 0;
@@ -132,9 +162,9 @@ fn reg_alloc(f: &Function) -> RegAllocInfo {
         .values()
         .flat_map(|b| &b.insts)
         .filter_map(|inst| match inst {
-            Inst::Store(reg, StoreKind::StackAlloc(_ty)) => {
-                let ret = Some((*reg, stack_size));
-                stack_size += 4;
+            &Inst::Store(reg, StoreKind::StackAlloc(ty)) => {
+                let ret = Some((reg, stack_size));
+                stack_size += get_size.of_in_bytes(ty);
                 ret
             }
             _ => None,
@@ -224,25 +254,26 @@ macro_rules! write_comment {
 }
 
 pub fn gen_program(ir: &Program) -> String {
+    let get_size = SizeFinder(&ir.tys);
     let mut code = String::new();
     for (i, (name, f)) in ir.functions.iter().enumerate() {
         if i != 0 {
             code.push('\n');
         }
-        let fn_output = gen_function(f, name);
+        let fn_output = gen_function(f, name, get_size);
         code.push_str(&fn_output);
     }
     code
 }
 
-pub fn gen_function(f: &Function, function_name: &str) -> String {
+pub fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> String {
     let mut code = String::new();
     let RegAllocInfo {
         regs,
         local_locs,
         stack_size,
         liveness,
-    } = reg_alloc(f);
+    } = reg_alloc(f, get_size);
     {
         let locs: Set<_> = regs.values().collect();
         for loc in locs {
@@ -280,7 +311,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
         for (inst_i, inst) in block.insts.iter().enumerate() {
             match inst {
                 Inst::Store(r, sk) => {
-                    let size = Size::of_ty(&f.tys[r]);
+                    let size = get_size.of_ty(f.tys[r]);
                     let reg = regs.get(r).unwrap();
                     if matches!(reg, StoreLoc::Constant(_)) {
                         continue;
@@ -300,7 +331,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                             }
                         }
                         Sk::Read(src) => {
-                            let inner_size = Size::of_inner(&f.tys[src]);
+                            let inner_size = get_size.of_inner(f.tys[src]);
                             let src_reg = regs.get(src).unwrap();
                             write_inst!(
                                 code,
@@ -362,7 +393,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                             write_inst!(code, "mov {}, {}", reg.foo(), inner_reg.foo());
                         }
                         Sk::PtrOffset(lhs, rhs) => {
-                            let stride = Size::of_inner(&f.tys[lhs]).in_bytes();
+                            let stride = get_size.of_inner_in_bytes(f.tys[lhs]);
                             let lhs_reg = regs.get(lhs).unwrap();
                             let rhs_reg = regs.get(rhs).unwrap();
                             if reg != lhs_reg {
@@ -373,19 +404,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                             write_inst!(code, "add {}, {}", reg.foo(), TEMP_REG.foo());
                         }
                         Sk::FieldOffset(ptr, accessed_field) => {
-                            let Ty::Pointer(value) = &f.tys[ptr] else {
-                                unreachable!("field offset");
-                            };
-                            let Ty::Struct(fields) = value.as_ref() else {
-                                unreachable!("field offset");
-                            };
-                            let mut offset: u32 = 0;
-                            for (field_name, field_ty) in fields {
-                                if field_name == accessed_field {
-                                    break;
-                                }
-                                offset += Size::of_in_bytes(field_ty);
-                            }
+                            let offset = get_size.field_offset(f.tys[ptr], accessed_field);
                             let ptr_reg = &regs[ptr];
                             if reg != ptr_reg {
                                 write_inst!(code, "mov {}, {}", reg.foo(), ptr_reg.foo());
@@ -400,7 +419,7 @@ pub fn gen_function(f: &Function, function_name: &str) -> String {
                     }
                 }
                 Inst::Write(dst, src) => {
-                    let inner_size = Size::of_inner(&f.tys[dst]);
+                    let inner_size = get_size.of_inner(f.tys[dst]);
                     let dst_reg = regs.get(dst).unwrap();
                     let src_reg = regs.get(src).unwrap();
                     write_inst!(
