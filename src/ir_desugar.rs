@@ -43,7 +43,7 @@ fn make_struct_fields(
 pub fn desugar_program(program: &mut Program) {
     let Program {
         functions,
-        function_tys: _,
+        function_tys,
         tys,
     } = program;
     for f in functions.values_mut() {
@@ -51,9 +51,27 @@ pub fn desugar_program(program: &mut Program) {
     }
     // TODO: update `function_tys` and the function `tys`
     // For each `Vec<Ty>` (params and returns), we need to expand any struct `Ty` into a list of its fields.
+    for (params, returns) in function_tys.values_mut() {
+        desugar_struct_in_list(params, tys);
+        desugar_struct_in_list(returns, tys);
+    }
     // 1. for each ty in the ty map
-    // 2. if it's a function, mem::take its params and returns
-    // pass it to desugar_ty_vec (which no longer has to be recursive) maybe call it desugar_struct_in_function_signature
+    for ty in tys.inner.keys().copied().collect::<Vec<_>>() {
+        let kind = tys.inner.get_mut(&ty).unwrap();
+        // 2. if it's a function, mem::take its params and returns
+        match kind {
+            TyKind::Function(params, returns) => {
+                use std::mem::take;
+                let mut params = take(params);
+                let mut returns = take(returns);
+                desugar_struct_in_list(&mut params, tys);
+                desugar_struct_in_list(&mut returns, tys);
+                tys.inner.insert(ty, TyKind::Function(params, returns));
+            }
+            _ => {}
+        }
+        // pass it to desugar_ty_vec (which no longer has to be recursive) maybe call it desugar_struct_in_function_signature
+    }
 
     // dsifs:
     // 1. for each ty
@@ -270,6 +288,23 @@ fn desugar_block(
                     }
                 }
             }
+        }
+    }
+}
+
+fn desugar_struct_in_list(ty_list: &mut Vec<Ty>, ty_map: &TyMap) {
+    let mut i = 0;
+    while let Some(&ty) = ty_list.get(i) {
+        match &ty_map[ty] {
+            TyKind::Struct(fields) => {
+                ty_list.remove(i);
+                let mut field_i = i;
+                for &(_, field_ty) in fields {
+                    ty_list.insert(field_i, field_ty);
+                    field_i += 1;
+                }
+            }
+            _ => i += 1,
         }
     }
 }

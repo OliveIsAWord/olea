@@ -14,7 +14,7 @@ pub struct Program {
 
 #[derive(Clone, Debug, Default)]
 pub struct TyMap {
-    inner: Map<Ty, TyKind>,
+    pub(crate) inner: Map<Ty, TyKind>,
     next_ty: u128,
 }
 

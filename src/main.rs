@@ -45,6 +45,59 @@ fn error_snippet(message: Message) {
     anstream::eprintln!("{}", Renderer::styled().render(message));
 }
 
+/// A boolean flag indicating whether to output a detected error as a normal diagnostic or an internal compiler error.
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum ErrorMode {
+    /// A diagnostic indicating user error.
+    User,
+    /// A diagnostic indicating a bug in the compiler.
+    Internal,
+}
+
+fn typecheck(ir: &ir::Program, src: &str, file_path: &str, error_mode: ErrorMode) -> bool {
+    match typechecker::typecheck(&ir) {
+        Ok(()) => false,
+        Err((fn_name, e)) => {
+            use typechecker::ErrorKind as E;
+            let fun = ir.functions.get(&fn_name).unwrap();
+            let snippet = Snippet::source(&src).origin(file_path).fold(true);
+            let t = |r: ir::Register| ir.tys.format(fun.tys[&r]);
+            let (title, snippet): (String, _) = match e {
+                E::NotInt(reg) => (
+                    format!("expected integer, got {}", t(reg)),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
+                E::NotPointer(reg) => (
+                    format!("cannot dereference a value of type {}", t(reg),),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
+                E::NotFunction(reg) => (
+                    format!("expected function, got {}", t(reg),),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
+                E::NotStruct(reg) => (
+                    format!("type {} does not support field access", t(reg),),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
+                E::NoFieldNamed(reg, field) => (
+                    format!("{} does not have field {field}", t(reg),),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
+                E::Expected(reg, given_ty) => (
+                    format!("expected {given_ty}, got {}", t(reg)),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
+            };
+            if error_mode == ErrorMode::Internal {
+                eprint!("An internal compiler error occurred! ");
+                eprintln!("An IR transformation has failed typechecking");
+            }
+            error_snippet(Level::Error.title(&title).snippet(snippet));
+            true
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<_> = std::env::args().collect();
     if args.len() != 2 {
@@ -150,47 +203,16 @@ fn main() -> ExitCode {
         }
     };
     eprintln!("#IR:\n{ir}\n");
-
-    match typechecker::typecheck(&ir) {
-        Ok(()) => {}
-        Err((fn_name, e)) => {
-            use typechecker::ErrorKind as E;
-            let fun = ir.functions.get(&fn_name).unwrap();
-            let snippet = Snippet::source(&src).origin(file_path).fold(true);
-            let t = |r: ir::Register| &ir.tys[fun.tys[&r]];
-            let (title, snippet): (String, _) = match e {
-                E::NotInt(reg) => (
-                    format!("expected integer, got {}", t(reg)),
-                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
-                ),
-                E::NotPointer(reg) => (
-                    format!("cannot dereference a value of type {}", t(reg),),
-                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
-                ),
-                E::NotFunction(reg) => (
-                    format!("expected function, got {}", t(reg),),
-                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
-                ),
-                E::NotStruct(reg) => (
-                    format!("type {} does not support field access", t(reg),),
-                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
-                ),
-                E::NoFieldNamed(reg, field) => (
-                    format!("{} does not have field {field}", t(reg),),
-                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
-                ),
-                E::Expected(reg, given_ty) => (
-                    format!("expected {given_ty}, got {}", t(reg)),
-                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
-                ),
-            };
-            error_snippet(Level::Error.title(&title).snippet(snippet));
-            return ExitCode::FAILURE;
-        }
+    if typecheck(&ir, &src, &file_path, ErrorMode::User) {
+        return ExitCode::FAILURE;
     }
+
     eprintln!("#Desugaring phase");
     ir_desugar::desugar_program(&mut ir);
     eprintln!("{ir}\n");
+    if typecheck(&ir, &src, &file_path, ErrorMode::Internal) {
+        return ExitCode::FAILURE;
+    }
 
     if false {
         eprintln!("#Optimizer phase");
