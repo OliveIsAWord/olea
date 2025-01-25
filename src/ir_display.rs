@@ -249,6 +249,8 @@ impl Display for IntKind {
         let name = match self {
             Self::Usize => "usize",
             Self::U8 => "u8",
+            Self::U16 => "u16",
+            Self::U32 => "u32",
         };
         write!(f, "{name}")
     }

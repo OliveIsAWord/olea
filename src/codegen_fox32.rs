@@ -6,6 +6,8 @@ use crate::ir_liveness::{self, FunctionLiveness};
 enum Size {
     /// 8 bits
     Byte,
+    /// 16 bits
+    Short,
     /// 32 bits
     Word,
 }
@@ -14,6 +16,7 @@ impl Size {
     const fn in_bytes(self) -> u32 {
         match self {
             Self::Byte => 1,
+            Self::Short => 2,
             Self::Word => 4,
         }
     }
@@ -23,6 +26,7 @@ impl std::fmt::Display for Size {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let dot_size = match self {
             Self::Byte => ".8",
+            Self::Short => ".16",
             Self::Word => "", // implicitly ".32" to the assembler
         };
         write!(f, "{dot_size}")
@@ -40,9 +44,10 @@ impl SizeFinder<'_> {
     fn of_ty_or(self, ty: Ty) -> Result<Size, u32> {
         match &self.0[ty] {
             TyKind::Int(IntKind::U8) => Ok(Size::Byte),
-            TyKind::Int(IntKind::Usize) | TyKind::Pointer(_) | TyKind::Function(..) => {
-                Ok(Size::Word)
-            }
+            TyKind::Int(IntKind::U16) => Ok(Size::Short),
+            TyKind::Int(IntKind::U32 | IntKind::Usize)
+            | TyKind::Pointer(_)
+            | TyKind::Function(..) => Ok(Size::Word),
             TyKind::Struct { fields, .. } => {
                 Err(fields.iter().map(|(_, ty)| self.of_in_bytes(*ty)).sum())
             }
@@ -183,8 +188,9 @@ fn reg_alloc(f: &Function, get_size: SizeFinder) -> RegAllocInfo {
                 // cast from i128 to u32 because fox32asm doesn't support negative int literals
                 #[allow(clippy::cast_sign_loss)]
                 &StoreKind::Int(i, kind) => match kind {
-                    IntKind::Usize => (i as u32).to_string().into(),
+                    IntKind::U32 | IntKind::Usize => (i as u32).to_string().into(),
                     IntKind::U8 => (i as u8).to_string().into(),
+                    IntKind::U16 => (i as u16).to_string().into(),
                 },
                 StoreKind::Function(name) => name.clone(),
                 _ => continue,
@@ -389,10 +395,10 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                             };
                             compile(&mut code);
                         }
-                        &Sk::IntCast(inner, _kind) => {
-                            let inner_reg = &regs[&inner];
-                            // this relies on how we store smaller-than-word types in registers
-                            write_inst!(code, "mov {}, {}", reg.foo(), inner_reg.foo());
+                        Sk::IntCast(inner, _kind) => {
+                            let inner_reg = &regs[inner];
+                            let min_size = size.min(get_size.of_ty(f.tys[inner]));
+                            write_inst!(code, "movz{min_size} {}, {}", reg.foo(), inner_reg.foo());
                         }
                         Sk::PtrOffset(lhs, rhs) => {
                             let stride = get_size.of_inner_in_bytes(f.tys[lhs]);

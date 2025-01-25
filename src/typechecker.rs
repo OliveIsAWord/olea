@@ -214,6 +214,7 @@ impl<'a> TypeChecker<'a> {
 }
 
 pub fn typecheck(program: &Program) -> Result {
+    eprintln!("{:?}", program.tys);
     for (fn_name, f) in &program.functions {
         /*
         println!("typechecking {fn_name}");

@@ -555,20 +555,25 @@ impl<'a> IrBuilder<'a> {
 }
 
 pub fn build(program: &ast::Program) -> Result<Program> {
+    const INT_TYPES: &[(&str, IntKind)] = &[
+        ("u8", IntKind::U8),
+        ("u16", IntKind::U16),
+        ("u32", IntKind::U32),
+        ("usize", IntKind::Usize),
+    ];
     use ast::DeclKind as D;
     let mut program_tys = TyMap::new();
     // Global type construction first pass: register all type names in `defined_tys`. Type declarations can reference structs declared after themselves, even cyclically.
     let mut defined_tys = DefinedTys {
-        tys: Map::from([
-            (
-                "u8".into(),
-                (program_tys.insert(TyKind::Int(IntKind::U8)), None),
-            ),
-            (
-                "usize".into(),
-                (program_tys.insert(TyKind::Int(IntKind::Usize)), None),
-            ),
-        ]),
+        tys: INT_TYPES
+            .iter()
+            .map(|&(name, int_kind)| {
+                (
+                    name.into(),
+                    (program_tys.insert(TyKind::Int(int_kind)), None),
+                )
+            })
+            .collect(),
     };
     for ast::Decl { kind, span: _ } in &program.decls {
         match kind {

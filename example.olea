@@ -1,8 +1,11 @@
 struct Foo:
-    same_name u8
+    a u8
+    b u16
+    c u32
+    d usize
 
-struct Bar:
-    same_name u8
-
-fn id(f Foo) Bar:
-    f
+fn add(f Foo^) u16:
+    f.a as u16
+      + f.b
+      + f.c as u16
+      + f.d as u16

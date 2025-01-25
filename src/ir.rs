@@ -445,6 +445,10 @@ pub enum IntKind {
     Usize,
     /// 8 bits.
     U8,
+    /// 16 bits.
+    U16,
+    /// 32 bits.
+    U32,
 }
 
 /// A basic block, as in a block of code with one entrance and one exit where each instruction is executed in sequence exactly once before another block executes or the function returns.
