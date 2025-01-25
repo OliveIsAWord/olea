@@ -7,31 +7,36 @@ use crate::ir::*;
 
 type StructFields = Map<Register, (Ty, Vec<Str>)>;
 
-fn make_struct_fields(fields: &[(Str, Ty)], next_register: &mut u128) -> StructFields {
+fn make_struct_fields(
+    fields: &[(Str, Ty)],
+    next_register: &mut u128,
+    ty_map: &TyMap,
+) -> StructFields {
     fn visit(
         this: &mut StructFields,
         prefix: &[Str],
         fields: &[(Str, Ty)],
         next_register: &mut u128,
+        ty_map: &TyMap,
     ) {
-        for (field, ty) in fields {
+        for &(ref field, ty) in fields {
             let mut path = prefix.to_vec();
             path.push(field.clone());
-            match ty {
+            match &ty_map[ty] {
                 // Types that don't need desugaring
-                Ty::Int(_) | Ty::Pointer(_) | Ty::Function { .. } => {
+                TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. } => {
                     let r = Register(*next_register);
                     *next_register += 1;
-                    this.insert(r, (ty.clone(), path));
+                    this.insert(r, (ty, path));
                 }
-                Ty::Struct(child_fields) => {
-                    visit(this, &path, child_fields, next_register);
+                TyKind::Struct(child_fields) => {
+                    visit(this, &path, child_fields, next_register, ty_map);
                 }
             }
         }
     }
     let mut this = StructFields::new();
-    visit(&mut this, &[], fields, next_register);
+    visit(&mut this, &[], fields, next_register, ty_map);
     this
 }
 
@@ -39,23 +44,46 @@ pub fn desugar_program(program: &mut Program) {
     let Program {
         functions,
         function_tys,
+        tys,
     } = program;
     for f in functions.values_mut() {
-        desugar_function(f);
+        desugar_function(f, tys);
     }
+    // TODO: update `function_tys` and the function `tys`
+    // For each `Vec<Ty>` (params and returns), we need to expand any struct `Ty` into a list of its fields.
     for (params, returns) in function_tys.values_mut() {
-        desugar_ty_vec(params);
-        desugar_ty_vec(returns);
+        desugar_struct_in_list(params, tys);
+        desugar_struct_in_list(returns, tys);
     }
+    // 1. for each ty in the ty map
+    for ty in tys.inner.keys().copied().collect::<Vec<_>>() {
+        let kind = tys.inner.get_mut(&ty).unwrap();
+        // 2. if it's a function, mem::take its params and returns
+        if let TyKind::Function(params, returns) = kind {
+            use std::mem::take;
+            let mut params = take(params);
+            let mut returns = take(returns);
+            desugar_struct_in_list(&mut params, tys);
+            desugar_struct_in_list(&mut returns, tys);
+            tys.inner.insert(ty, TyKind::Function(params, returns));
+        }
+        // pass it to desugar_ty_vec (which no longer has to be recursive) maybe call it desugar_struct_in_function_signature
+    }
+
+    // dsifs:
+    // 1. for each ty
+    // 2. if struct, expand to fields and retape
 }
 
-pub fn desugar_function(f: &mut Function) {
+pub fn desugar_function(f: &mut Function, ty_map: &mut TyMap) {
     let struct_regs: Map<Register, StructFields> = f
         .tys
         .iter()
-        .filter_map(|(&r, ty)| match ty {
-            Ty::Struct(fields) => Some((r, make_struct_fields(fields, &mut f.next_register))),
-            Ty::Int(_) | Ty::Pointer(_) | Ty::Function { .. } => None,
+        .filter_map(|(&r, &ty)| match &ty_map[ty] {
+            TyKind::Struct(fields) => {
+                Some((r, make_struct_fields(fields, &mut f.next_register, ty_map)))
+            }
+            TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. } => None,
         })
         .collect();
     for (r, fields) in &struct_regs {
@@ -75,19 +103,16 @@ pub fn desugar_function(f: &mut Function) {
 
     desugar_vec(&struct_regs, parameters);
     for block in blocks.values_mut() {
-        desugar_block(&struct_regs, block, tys, next_register);
+        desugar_block(&struct_regs, block, tys, next_register, ty_map);
     }
     for (r, fields) in &struct_regs {
         // NOTE: `desugar_block` relies on getting the type of `r`
         tys.remove(r);
         let span = spans.remove(r).unwrap();
         for (&field_r, (field_ty, _)) in fields {
-            tys.insert(field_r, field_ty.clone());
+            tys.insert(field_r, *field_ty);
             spans.insert(field_r, span.clone());
         }
-    }
-    for ty in tys.values_mut() {
-        desugar_ty(ty);
     }
 }
 
@@ -96,6 +121,7 @@ fn desugar_block(
     block: &mut Block,
     tys: &mut Map<Register, Ty>,
     next_register: &mut u128,
+    ty_map: &mut TyMap,
 ) {
     let Block {
         insts,
@@ -148,20 +174,21 @@ fn desugar_block(
                 insts.remove(i);
                 for (&r, (_, accesses)) in fields {
                     let mut ptr = dst;
-                    let mut ty = tys[&src].clone();
+                    let mut ty = tys[&src];
                     for access in accesses {
                         ty = {
-                            let Ty::Struct(fields) = ty else {
+                            let TyKind::Struct(fields) = &ty_map[ty] else {
                                 unreachable!();
                             };
                             fields
-                                .into_iter()
-                                .find_map(|(name, ty)| (&name == access).then_some(ty))
+                                .iter()
+                                .find_map(|(name, ty)| (name == access).then_some(*ty))
                                 .unwrap()
                         };
                         let new_ptr = Register(*next_register);
                         *next_register += 1;
-                        tys.insert(new_ptr, Ty::Pointer(Box::new(ty.clone())));
+                        let ty = ty_map.insert(TyKind::Pointer(ty));
+                        tys.insert(new_ptr, ty);
                         insts.insert(
                             i,
                             Inst::Store(new_ptr, Sk::FieldOffset(ptr, access.clone())),
@@ -174,11 +201,6 @@ fn desugar_block(
                 }
             }
             &mut Inst::Store(r, ref mut sk) => {
-                if let Sk::StackAlloc(ty) = sk {
-                    eprintln!("before: {ty}");
-                    desugar_ty(ty);
-                    eprintln!("after:  {ty}");
-                }
                 let Some(fields) = struct_regs.get(&r) else {
                     continue;
                 };
@@ -235,20 +257,21 @@ fn desugar_block(
                         insts.remove(i);
                         for (&r2, (_, accesses)) in fields {
                             let mut ptr = src;
-                            let mut ty = tys[&r].clone();
+                            let mut ty = tys[&r];
                             for access in accesses {
                                 ty = {
-                                    let Ty::Struct(fields) = ty else {
+                                    let TyKind::Struct(fields) = &ty_map[ty] else {
                                         unreachable!();
                                     };
                                     fields
-                                        .into_iter()
-                                        .find_map(|(name, ty)| (&name == access).then_some(ty))
+                                        .iter()
+                                        .find_map(|(name, ty)| (name == access).then_some(*ty))
                                         .unwrap()
                                 };
                                 let new_ptr = Register(*next_register);
                                 *next_register += 1;
-                                tys.insert(new_ptr, Ty::Pointer(Box::new(ty.clone())));
+                                let ty = ty_map.insert(TyKind::Pointer(ty));
+                                tys.insert(new_ptr, ty);
                                 insts.insert(
                                     i,
                                     Inst::Store(new_ptr, Sk::FieldOffset(ptr, access.clone())),
@@ -266,51 +289,25 @@ fn desugar_block(
     }
 }
 
-fn desugar_ty(ty: &mut Ty) {
-    match ty {
-        Ty::Int(_) => {}
-        Ty::Pointer(ty) => desugar_ty(ty),
-        Ty::Function(params, returns) => {
-            desugar_ty_vec(params);
-            desugar_ty_vec(returns);
-        }
-        Ty::Struct(fields) => {
-            for (_, ty) in fields {
-                desugar_ty(ty);
-            }
-        }
-    }
-}
-
-fn desugar_ty_vec(tys: &mut Vec<Ty>) {
+fn desugar_struct_in_list(ty_list: &mut Vec<Ty>, ty_map: &TyMap) {
     let mut i = 0;
-    while let Some(ty) = tys.get_mut(i) {
-        i += 1;
-        match ty {
-            Ty::Int(_) => {}
-            Ty::Pointer(ty) => desugar_ty(ty),
-            Ty::Function(params, returns) => {
-                desugar_ty_vec(params);
-                desugar_ty_vec(returns);
-            }
-            Ty::Struct(_) => {
-                i -= 1;
-                let old_i = i;
-                let Ty::Struct(fields) = tys.remove(i) else {
-                    unreachable!();
-                };
-                for (_, ty) in fields {
-                    tys.insert(i, ty);
-                    i += 1;
+    while let Some(&ty) = ty_list.get(i) {
+        match &ty_map[ty] {
+            TyKind::Struct(fields) => {
+                ty_list.remove(i);
+                let mut field_i = i;
+                for &(_, field_ty) in fields {
+                    ty_list.insert(field_i, field_ty);
+                    field_i += 1;
                 }
-                i = old_i; // yeah this sucks
             }
+            _ => i += 1,
         }
     }
 }
 
 fn desugar_vec(struct_regs: &Map<Register, StructFields>, regs: &mut Vec<Register>) {
-    // we could probably write some unsafe code here if this becomes a bottleneck
+    // we could write some unsafe code here if this becomes a bottleneck
     let mut i = 0;
     while i < regs.len() {
         if let Some(fields) = struct_regs.get(&regs[i]) {

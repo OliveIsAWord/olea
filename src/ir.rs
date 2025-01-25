@@ -9,7 +9,125 @@ pub struct Program {
     pub functions: Map<Str, Function>,
     /// The type signature of every function including extern functions.
     pub function_tys: Map<Str, (Vec<Ty>, Vec<Ty>)>,
+    /// All the types used in this program, indexed by `Ty`s.
+    pub tys: TyMap,
 }
+
+/// The storage for all the types used in a program.
+#[derive(Clone, Debug, Default)]
+pub struct TyMap {
+    /// The storage structure mapping type indexes to type data.
+    pub(crate) inner: Map<Ty, TyKind>,
+    /// A counter for the next type index to return.
+    next_ty: u128,
+}
+
+impl TyMap {
+    /// Construct a new [`TyMap`]
+    #[must_use] pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Get a type immutably.
+    #[must_use] pub fn get(&self, index: Ty) -> Option<&TyKind> {
+        self.inner.get(&index)
+    }
+
+    // /// Get a type mutably.
+    // pub fn get_mut(&mut self, ty: Ty) -> Option<&mut TyKind> {
+    //     self.inner.get_mut(&ty)
+    // }
+
+    /// Reserve a type id for future use;
+    pub fn reserve(&mut self) -> Ty {
+        let reserved = self.next_ty;
+        self.next_ty += 1;
+        Ty(reserved)
+    }
+
+    /// Insert a new type and get the index to it.
+    pub fn insert(&mut self, kind: TyKind) -> Ty {
+        let index = self.reserve();
+        self.insert_at(index, kind);
+        index
+    }
+
+    /// Insert a new type with a previously reserved id.
+    pub fn insert_at(&mut self, index: Ty, kind: TyKind) {
+        if let Some(previous) = self.get(index) {
+            panic!("inserted two types at the same id\n  id: {index}\n  type 1: {previous}\n  type 2: {kind}")
+        }
+        self.inner.insert(index, kind);
+    }
+
+    /// Format a type as a string through its id.
+    #[must_use] pub fn format(&self, index: Ty) -> String {
+        self.format_kind(&self[index])
+    }
+
+    /// Format a type as a string.
+    #[must_use] pub fn format_kind(&self, kind: &TyKind) -> String {
+        // yeah this is bad
+        match kind {
+            TyKind::Int(size) => size.to_string(),
+            &TyKind::Pointer(inner) => format!("{}^", self.format(inner)),
+            TyKind::Function(params, returns) => {
+                let mut string = "fn(".to_owned();
+                for (i, &param) in params.iter().enumerate() {
+                    if i != 0 {
+                        string.push_str(", ");
+                    }
+                    string.push_str(&self.format(param));
+                }
+                string.push(')');
+                match returns.len() {
+                    0 => {}
+                    1 => {
+                        string.push(' ');
+                        string.push_str(&self.format(returns[0]));
+                    }
+                    2.. => {
+                        string.push('{');
+                        for (i, &ret) in returns.iter().enumerate() {
+                            if i != 0 {
+                                string.push_str(", ");
+                            }
+                            string.push_str(&self.format(ret));
+                        }
+                        string.push('}');
+                    }
+                }
+                string
+            }
+            TyKind::Struct(fields) => {
+                let mut string = "struct(".to_owned();
+                for (i, (name, ty)) in fields.iter().enumerate() {
+                    if i != 0 {
+                        string.push_str(", ");
+                    }
+                    string.push_str(name);
+                    string.push_str(": ");
+                    string.push_str(&self.format(*ty));
+                }
+                string.push(')');
+                string
+            }
+        }
+    }
+}
+
+impl std::ops::Index<Ty> for TyMap {
+    type Output = TyKind;
+    fn index(&self, index: Ty) -> &TyKind {
+        self.get(index).expect("no type found")
+    }
+}
+
+// impl std::ops::IndexMut<Ty> for TyMap {
+//     fn index_mut(&self, index: Ty) -> TyKind {
+//         self.get_mut(index).expect("no type found")
+//     }
+// }
 
 /// A body of code that accepts and yields some registers.
 #[derive(Clone, Debug)]
@@ -305,17 +423,22 @@ impl Function {
     }
 }
 
+/// An index into the program level type storage.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+// I'd prefer not to have this field public but it's needed for `ir_display`.
+pub struct Ty(pub(crate) u128);
+
 /// The type of any value operated on.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum Ty {
+pub enum TyKind {
     /// An integer.
     Int(IntKind),
     /// A pointer into memory storing a value of a given type.
-    Pointer(Box<Self>),
+    Pointer(Ty),
     /// A function pointer accepting and returning some values.
-    Function(Vec<Self>, Vec<Self>),
+    Function(Vec<Ty>, Vec<Ty>),
     /// A collection of named values.
-    Struct(Vec<(Str, Self)>),
+    Struct(Vec<(Str, Ty)>),
 }
 
 /// The sizes an integer type can be.

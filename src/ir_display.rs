@@ -126,7 +126,7 @@ impl DisplayWithName for Exit {
 
 impl DisplayWithName for Function {
     fn fmt_with_name<'a>(&'a self, f: F, name: &str) -> Result {
-        let reg_def = |r: &'a Register| WithTy(r, self.tys.get(r).unwrap_or(&Ty::Int(IntKind::U8)));
+        let reg_def = |r: &'a Register| WithTy(r, self.tys.get(r).unwrap());
         write!(
             f,
             "fn {name}({})",
@@ -224,6 +224,12 @@ impl Display for Program {
 }
 
 impl Display for Ty {
+    fn fmt(&self, f: F) -> Result {
+        write!(f, "ty_{}", self.0)
+    }
+}
+
+impl Display for TyKind {
     fn fmt(&self, f: F) -> Result {
         match self {
             Self::Int(kind) => write!(f, "{kind}"),
