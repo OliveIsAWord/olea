@@ -209,19 +209,19 @@ fn constant_propagation_impl(f: &mut Function) {
                 let val = match op {
                     UnaryOp::Neg => x.wrapping_neg(),
                 };
-		(val, kind)
+                (val, kind)
             }
             StoreKind::BinOp(op, lhs, rhs) => {
                 let (lhs, lhs_kind) = *const_list.get(&lhs)?;
                 let (rhs, rhs_kind) = *const_list.get(&rhs)?;
-		assert_eq!(lhs_kind, rhs_kind);
+                assert_eq!(lhs_kind, rhs_kind);
                 let val = match op {
                     BinOp::Add => lhs.wrapping_add(rhs),
                     BinOp::Sub => lhs.wrapping_sub(rhs),
                     BinOp::Mul => lhs.wrapping_mul(rhs),
                     BinOp::CmpLe => i128::from(lhs <= rhs),
                 };
-		(val, lhs_kind)
+                (val, lhs_kind)
             }
             _ => return None,
         };

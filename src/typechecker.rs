@@ -14,18 +14,18 @@ pub enum ErrorKind {
     /// We accessed a non-existent field of a struct.
     NoFieldNamed(Register, Str),
     /// The register has one type but we expected another.
-    Expected(Register, Ty),
+    Expected(Register, String),
 }
 
 type Error = (Str, ErrorKind);
 type Result<T = ()> = std::result::Result<T, Error>;
 
 type Tys = Map<Register, Ty>;
-// NOTE: This can be changed to take 2 lifetime parameters.
 type FunctionTys<'a> = &'a Map<Str, (Vec<Ty>, Vec<Ty>)>;
 
 #[derive(Debug)]
 struct TypeChecker<'a> {
+    ty_map: &'a TyMap,
     function_tys: FunctionTys<'a>,
     return_tys: &'a [Ty],
     tys: &'a Tys,
@@ -46,39 +46,38 @@ impl<'a> TypeChecker<'a> {
         }
     }
     */
-    fn t(&self, r: Register) -> &'a Ty {
-        self.tys.get(&r).expect("register with no type")
+    fn t(&self, r: Register) -> &'a TyKind {
+        &self.ty_map[self.tys[&r]]
     }
-    fn err(&self, r: Register, ty: Ty) -> Result {
-        Err((self.name.into(), ErrorKind::Expected(r, ty)))
+    fn err(&self, r: Register, kind: &TyKind) -> Result {
+        Err((
+            self.name.into(),
+            ErrorKind::Expected(r, self.ty_map.format_kind(kind)),
+        ))
     }
-    fn expect(&self, r: Register, ty: &'a Ty) -> Result {
-        if self.t(r) == ty {
+    fn expect(&self, r: Register, kind: &TyKind) -> Result {
+        if self.t(r) == kind {
             Ok(())
         } else {
-            self.err(r, ty.clone())
+            self.err(r, kind)
         }
     }
     fn int(&self, r: Register) -> Result<IntKind> {
         match self.t(r) {
-            &Ty::Int(k) => Ok(k),
-            Ty::Pointer(_) | Ty::Function(..) | Ty::Struct(_) => {
-                Err((self.name.into(), ErrorKind::NotInt(r)))
-            }
+            &TyKind::Int(k) => Ok(k),
+            _ => Err((self.name.into(), ErrorKind::NotInt(r))),
         }
     }
-    fn pointer(&self, r: Register) -> Result<&'a Ty> {
+    fn pointer(&self, r: Register) -> Result<&'a TyKind> {
         match self.t(r) {
-            Ty::Pointer(inner) => Ok(inner.as_ref()),
-            Ty::Int(_) | Ty::Function(..) | Ty::Struct(_) => {
-                Err((self.name.into(), ErrorKind::NotPointer(r)))
-            }
+            &TyKind::Pointer(inner) => Ok(&self.ty_map[inner]),
+            _ => Err((self.name.into(), ErrorKind::NotPointer(r))),
         }
     }
-    fn infer_storekind(&self, sk: &StoreKind) -> Result<Ty> {
+    fn infer_storekind(&self, sk: &StoreKind) -> Result<TyKind> {
         use StoreKind as Sk;
         let ty = match *sk {
-            Sk::Int(_, kind) | Sk::IntCast(_, kind) => Ty::Int(kind),
+            Sk::Int(_, kind) | Sk::IntCast(_, kind) => TyKind::Int(kind),
             Sk::Copy(r) => self.t(r).clone(),
             Sk::BinOp(op, lhs, rhs) => {
                 match op {
@@ -87,31 +86,29 @@ impl<'a> TypeChecker<'a> {
                 let lhs_int = self.int(lhs)?;
                 let rhs_int = self.int(rhs)?;
                 if lhs_int != rhs_int {
-                    self.err(rhs, Ty::Int(lhs_int))?;
+                    self.err(rhs, &TyKind::Int(lhs_int))?;
                 }
-                Ty::Int(lhs_int)
+                TyKind::Int(lhs_int)
             }
             Sk::PtrOffset(lhs, rhs) => {
                 self.pointer(lhs)?;
-                self.expect(rhs, &Ty::Int(IntKind::Usize))?;
+                self.expect(rhs, &TyKind::Int(IntKind::Usize))?;
                 self.t(lhs).clone()
             }
             Sk::FieldOffset(r, ref field) => {
-                let Ty::Struct(fields) = self.pointer(r)? else {
+                let TyKind::Struct(fields) = self.pointer(r)? else {
                     return Err((self.name.into(), ErrorKind::NotStruct(r)));
                 };
                 fields
                     .iter()
-                    .find_map(|(name, ty)| {
-                        (name == field).then(|| Ty::Pointer(Box::new(ty.clone())))
-                    })
+                    .find_map(|(name, ty)| (name == field).then(|| TyKind::Pointer(*ty)))
                     .ok_or_else(|| (self.name.into(), ErrorKind::NoFieldNamed(r, field.clone())))?
             }
             Sk::UnaryOp(UnaryOp::Neg, rhs) => {
                 let kind = self.int(rhs)?;
-                Ty::Int(kind)
+                TyKind::Int(kind)
             }
-            Sk::StackAlloc(ref inner) => Ty::Pointer(Box::new(inner.clone())),
+            Sk::StackAlloc(inner) => TyKind::Pointer(inner),
             Sk::Read(src) => self.pointer(src)?.clone(),
             Sk::Phi(ref rs) => {
                 let mut rs = rs.values().copied();
@@ -123,20 +120,20 @@ impl<'a> TypeChecker<'a> {
             }
             Sk::Function(ref name) => {
                 let (params, returns) = self.function_tys.get(name.as_ref()).expect("function get");
-                Ty::Function(params.clone(), returns.clone())
+                TyKind::Function(params.clone(), returns.clone())
             }
         };
         Ok(ty)
     }
     fn visit_inst(&self, inst: &Inst) -> Result {
         match inst {
-            Inst::Store(r, sk) => {
-                let expected = self.t(*r);
+            &Inst::Store(r, ref sk) => {
+                let expected = self.t(r);
                 let got = self.infer_storekind(sk)?;
                 if *expected == got {
                     Ok(())
                 } else {
-                    Err((self.name.into(), ErrorKind::Expected(*r, got)))
+                    self.err(r, &got)
                 }
             }
             &Inst::Write(dst, src) => {
@@ -150,14 +147,12 @@ impl<'a> TypeChecker<'a> {
                 returns,
             } => {
                 match self.t(*callee) {
-                    Ty::Function(..) => {}
-                    Ty::Int(_) | Ty::Pointer(_) | Ty::Struct(_) => {
-                        return Err((self.name.into(), ErrorKind::NotFunction(*callee)))
-                    }
+                    TyKind::Function(..) => {}
+                    _ => return Err((self.name.into(), ErrorKind::NotFunction(*callee))),
                 }
-                let arg_tys = args.iter().map(|&r| self.t(r).clone()).collect();
-                let return_tys = returns.iter().map(|&r| self.t(r).clone()).collect();
-                let fn_ty = Ty::Function(arg_tys, return_tys);
+                let arg_tys = args.iter().map(|r| self.tys[r]).collect();
+                let return_tys = returns.iter().map(|r| self.tys[r]).collect();
+                let fn_ty = TyKind::Function(arg_tys, return_tys);
                 self.expect(*callee, &fn_ty)
             }
         }
@@ -192,13 +187,19 @@ impl<'a> TypeChecker<'a> {
                 }
                 regs.iter()
                     .zip(self.return_tys)
-                    .try_for_each(|(&r, ty)| self.expect(r, ty))
+                    .try_for_each(|(&r, &ty)| self.expect(r, &self.ty_map[ty]))
             }
         }
     }
-    fn visit_function(f: &'a Function, name: &'a str, function_tys: FunctionTys<'a>) -> Result {
+    fn visit_function(
+        f: &'a Function,
+        name: &'a str,
+        function_tys: FunctionTys<'a>,
+        ty_map: &'a TyMap,
+    ) -> Result {
         let return_tys = &function_tys.get(name).unwrap().1;
         let this = Self {
+            ty_map,
             function_tys,
             return_tys,
             tys: &f.tys,
@@ -220,7 +221,7 @@ pub fn typecheck(program: &Program) -> Result {
             println!("  {r} {ty}");
         }
         */
-        TypeChecker::visit_function(f, fn_name, &program.function_tys)?;
+        TypeChecker::visit_function(f, fn_name, &program.function_tys, &program.tys)?;
     }
     Ok(())
 }

@@ -75,6 +75,7 @@ impl TyMap {
                     }
                     string.push_str(&self.format(param));
                 }
+                string.push(')');
                 match returns.len() {
                     0 => {}
                     1 => {
@@ -94,19 +95,19 @@ impl TyMap {
                 }
                 string
             }
-	    TyKind::Struct(fields) => {
+            TyKind::Struct(fields) => {
                 let mut string = "struct(".to_owned();
                 for (i, (name, ty)) in fields.iter().enumerate() {
                     if i != 0 {
                         string.push_str(", ");
                     }
-		    string.push_str(name);
-		    string.push_str(": ");
+                    string.push_str(name);
+                    string.push_str(": ");
                     string.push_str(&self.format(*ty));
                 }
-		string.push(')');
-		string
-	    }
+                string.push(')');
+                string
+            }
         }
     }
 }

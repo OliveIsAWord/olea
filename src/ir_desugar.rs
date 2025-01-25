@@ -50,6 +50,14 @@ pub fn desugar_program(program: &mut Program) {
         desugar_function(f, tys);
     }
     // TODO: update `function_tys` and the function `tys`
+    // For each `Vec<Ty>` (params and returns), we need to expand any struct `Ty` into a list of its fields.
+    // 1. for each ty in the ty map
+    // 2. if it's a function, mem::take its params and returns
+    // pass it to desugar_ty_vec (which no longer has to be recursive) maybe call it desugar_struct_in_function_signature
+
+    // dsifs:
+    // 1. for each ty
+    // 2. if struct, expand to fields and retape
 }
 
 pub fn desugar_function(f: &mut Function, ty_map: &mut TyMap) {
