@@ -55,12 +55,12 @@ enum ErrorMode {
 }
 
 fn typecheck(ir: &ir::Program, src: &str, file_path: &str, error_mode: ErrorMode) -> bool {
-    match typechecker::typecheck(&ir) {
+    match typechecker::typecheck(ir) {
         Ok(()) => false,
         Err((fn_name, e)) => {
             use typechecker::ErrorKind as E;
             let fun = ir.functions.get(&fn_name).unwrap();
-            let snippet = Snippet::source(&src).origin(file_path).fold(true);
+            let snippet = Snippet::source(src).origin(file_path).fold(true);
             let t = |r: ir::Register| ir.tys.format(fun.tys[&r]);
             let (title, snippet): (String, _) = match e {
                 E::NotInt(reg) => (
@@ -203,14 +203,14 @@ fn main() -> ExitCode {
         }
     };
     eprintln!("#IR:\n{ir}\n");
-    if typecheck(&ir, &src, &file_path, ErrorMode::User) {
+    if typecheck(&ir, &src, file_path, ErrorMode::User) {
         return ExitCode::FAILURE;
     }
 
     eprintln!("#Desugaring phase");
     ir_desugar::desugar_program(&mut ir);
     eprintln!("{ir}\n");
-    if typecheck(&ir, &src, &file_path, ErrorMode::Internal) {
+    if typecheck(&ir, &src, file_path, ErrorMode::Internal) {
         return ExitCode::FAILURE;
     }
 

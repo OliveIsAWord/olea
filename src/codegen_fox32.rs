@@ -266,7 +266,7 @@ pub fn gen_program(ir: &Program) -> String {
     code
 }
 
-pub fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> String {
+fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> String {
     let mut code = String::new();
     let RegAllocInfo {
         regs,

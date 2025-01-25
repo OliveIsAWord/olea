@@ -131,7 +131,7 @@ impl<'a> IrBuilder<'a> {
     ) -> Result<Function> {
         for (p_name, p_ty) in parameters {
             let ir_ty = self.build_ty(p_ty)?;
-            let reg = self.new_reg(ir_ty.clone(), p_name.span.clone());
+            let reg = self.new_reg(ir_ty, p_name.span.clone());
             self.parameters.push(reg);
             // Currently, we assume all variables are stack allocated, so we copy the argument to a stack allocation.
             let var_reg = self.new_var(p_name.clone(), ir_ty);
@@ -186,7 +186,7 @@ impl<'a> IrBuilder<'a> {
                 let value_reg = self.build_expr_unvoid(body, span)?;
                 let alloc_ty = match ty {
                     Some(t) => self.build_ty(t)?,
-                    None => self.tys.get(&value_reg).unwrap().clone(),
+                    None => self.tys[&value_reg],
                 };
                 let alloc_reg = self.new_var(name.clone(), alloc_ty);
                 self.push_write(alloc_reg, value_reg);
@@ -269,10 +269,8 @@ impl<'a> IrBuilder<'a> {
                         match maybe_var {
                             MaybeVar::Variable(v) => Some(v),
                             MaybeVar::Constant(c) => {
-                                let r = self.push_store(
-                                    Sk::StackAlloc(self.tys.get(&c).unwrap().clone()),
-                                    e.span.clone(),
-                                );
+                                let r =
+                                    self.push_store(Sk::StackAlloc(self.tys[&c]), e.span.clone());
                                 self.push_write(r, c);
                                 Some(r)
                             }
@@ -456,7 +454,7 @@ impl<'a> IrBuilder<'a> {
     }
 
     fn build_ty(&mut self, ty: &ast::Ty) -> Result<Ty> {
-        self.defined_tys.build_ty(ty, &mut self.program_tys)
+        self.defined_tys.build_ty(ty, self.program_tys)
     }
 
     fn new_var(&mut self, name: Name, ty: Ty) -> Register {

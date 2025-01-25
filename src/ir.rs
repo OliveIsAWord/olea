@@ -9,23 +9,27 @@ pub struct Program {
     pub functions: Map<Str, Function>,
     /// The type signature of every function including extern functions.
     pub function_tys: Map<Str, (Vec<Ty>, Vec<Ty>)>,
+    /// All the types used in this program, indexed by `Ty`s.
     pub tys: TyMap,
 }
 
+/// The storage for all the types used in a program.
 #[derive(Clone, Debug, Default)]
 pub struct TyMap {
+    /// The storage structure mapping type indexes to type data.
     pub(crate) inner: Map<Ty, TyKind>,
+    /// A counter for the next type index to return.
     next_ty: u128,
 }
 
 impl TyMap {
     /// Construct a new [`TyMap`]
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self::default()
     }
 
     /// Get a type immutably.
-    pub fn get(&self, index: Ty) -> Option<&TyKind> {
+    #[must_use] pub fn get(&self, index: Ty) -> Option<&TyKind> {
         self.inner.get(&index)
     }
 
@@ -57,12 +61,12 @@ impl TyMap {
     }
 
     /// Format a type as a string through its id.
-    pub fn format(&self, index: Ty) -> String {
+    #[must_use] pub fn format(&self, index: Ty) -> String {
         self.format_kind(&self[index])
     }
 
     /// Format a type as a string.
-    pub fn format_kind(&self, kind: &TyKind) -> String {
+    #[must_use] pub fn format_kind(&self, kind: &TyKind) -> String {
         // yeah this is bad
         match kind {
             TyKind::Int(size) => size.to_string(),
@@ -419,6 +423,7 @@ impl Function {
     }
 }
 
+/// An index into the program level type storage.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 // I'd prefer not to have this field public but it's needed for `ir_display`.
 pub struct Ty(pub(crate) u128);

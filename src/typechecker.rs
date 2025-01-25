@@ -101,7 +101,7 @@ impl<'a> TypeChecker<'a> {
                 };
                 fields
                     .iter()
-                    .find_map(|(name, ty)| (name == field).then(|| TyKind::Pointer(*ty)))
+                    .find_map(|(name, ty)| (name == field).then_some(TyKind::Pointer(*ty)))
                     .ok_or_else(|| (self.name.into(), ErrorKind::NoFieldNamed(r, field.clone())))?
             }
             Sk::UnaryOp(UnaryOp::Neg, rhs) => {

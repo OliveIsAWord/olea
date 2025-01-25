@@ -19,15 +19,15 @@ fn make_struct_fields(
         next_register: &mut u128,
         ty_map: &TyMap,
     ) {
-        for (field, ty) in fields {
+        for &(ref field, ty) in fields {
             let mut path = prefix.to_vec();
             path.push(field.clone());
-            match &ty_map[*ty] {
+            match &ty_map[ty] {
                 // Types that don't need desugaring
                 TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. } => {
                     let r = Register(*next_register);
                     *next_register += 1;
-                    this.insert(r, (ty.clone(), path));
+                    this.insert(r, (ty, path));
                 }
                 TyKind::Struct(child_fields) => {
                     visit(this, &path, child_fields, next_register, ty_map);
@@ -59,16 +59,13 @@ pub fn desugar_program(program: &mut Program) {
     for ty in tys.inner.keys().copied().collect::<Vec<_>>() {
         let kind = tys.inner.get_mut(&ty).unwrap();
         // 2. if it's a function, mem::take its params and returns
-        match kind {
-            TyKind::Function(params, returns) => {
-                use std::mem::take;
-                let mut params = take(params);
-                let mut returns = take(returns);
-                desugar_struct_in_list(&mut params, tys);
-                desugar_struct_in_list(&mut returns, tys);
-                tys.inner.insert(ty, TyKind::Function(params, returns));
-            }
-            _ => {}
+        if let TyKind::Function(params, returns) = kind {
+            use std::mem::take;
+            let mut params = take(params);
+            let mut returns = take(returns);
+            desugar_struct_in_list(&mut params, tys);
+            desugar_struct_in_list(&mut returns, tys);
+            tys.inner.insert(ty, TyKind::Function(params, returns));
         }
         // pass it to desugar_ty_vec (which no longer has to be recursive) maybe call it desugar_struct_in_function_signature
     }
@@ -113,7 +110,7 @@ pub fn desugar_function(f: &mut Function, ty_map: &mut TyMap) {
         tys.remove(r);
         let span = spans.remove(r).unwrap();
         for (&field_r, (field_ty, _)) in fields {
-            tys.insert(field_r, field_ty.clone());
+            tys.insert(field_r, *field_ty);
             spans.insert(field_r, span.clone());
         }
     }
