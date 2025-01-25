@@ -29,7 +29,10 @@ fn make_struct_fields(
                     *next_register += 1;
                     this.insert(r, (ty, path));
                 }
-                TyKind::Struct(child_fields) => {
+                TyKind::Struct {
+                    fields: child_fields,
+                    ..
+                } => {
                     visit(this, &path, child_fields, next_register, ty_map);
                 }
             }
@@ -80,7 +83,7 @@ pub fn desugar_function(f: &mut Function, ty_map: &mut TyMap) {
         .tys
         .iter()
         .filter_map(|(&r, &ty)| match &ty_map[ty] {
-            TyKind::Struct(fields) => {
+            TyKind::Struct { fields, .. } => {
                 Some((r, make_struct_fields(fields, &mut f.next_register, ty_map)))
             }
             TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. } => None,
@@ -177,7 +180,7 @@ fn desugar_block(
                     let mut ty = tys[&src];
                     for access in accesses {
                         ty = {
-                            let TyKind::Struct(fields) = &ty_map[ty] else {
+                            let TyKind::Struct { fields, .. } = &ty_map[ty] else {
                                 unreachable!();
                             };
                             fields
@@ -260,7 +263,7 @@ fn desugar_block(
                             let mut ty = tys[&r];
                             for access in accesses {
                                 ty = {
-                                    let TyKind::Struct(fields) = &ty_map[ty] else {
+                                    let TyKind::Struct { fields, .. } = &ty_map[ty] else {
                                         unreachable!();
                                     };
                                     fields
@@ -293,7 +296,7 @@ fn desugar_struct_in_list(ty_list: &mut Vec<Ty>, ty_map: &TyMap) {
     let mut i = 0;
     while let Some(&ty) = ty_list.get(i) {
         match &ty_map[ty] {
-            TyKind::Struct(fields) => {
+            TyKind::Struct { fields, .. } => {
                 ty_list.remove(i);
                 let mut field_i = i;
                 for &(_, field_ty) in fields {

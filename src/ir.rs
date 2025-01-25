@@ -24,12 +24,14 @@ pub struct TyMap {
 
 impl TyMap {
     /// Construct a new [`TyMap`]
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self::default()
     }
 
     /// Get a type immutably.
-    #[must_use] pub fn get(&self, index: Ty) -> Option<&TyKind> {
+    #[must_use]
+    pub fn get(&self, index: Ty) -> Option<&TyKind> {
         self.inner.get(&index)
     }
 
@@ -61,12 +63,14 @@ impl TyMap {
     }
 
     /// Format a type as a string through its id.
-    #[must_use] pub fn format(&self, index: Ty) -> String {
+    #[must_use]
+    pub fn format(&self, index: Ty) -> String {
         self.format_kind(&self[index])
     }
 
     /// Format a type as a string.
-    #[must_use] pub fn format_kind(&self, kind: &TyKind) -> String {
+    #[must_use]
+    pub fn format_kind(&self, kind: &TyKind) -> String {
         // yeah this is bad
         match kind {
             TyKind::Int(size) => size.to_string(),
@@ -99,19 +103,7 @@ impl TyMap {
                 }
                 string
             }
-            TyKind::Struct(fields) => {
-                let mut string = "struct(".to_owned();
-                for (i, (name, ty)) in fields.iter().enumerate() {
-                    if i != 0 {
-                        string.push_str(", ");
-                    }
-                    string.push_str(name);
-                    string.push_str(": ");
-                    string.push_str(&self.format(*ty));
-                }
-                string.push(')');
-                string
-            }
+            TyKind::Struct { name, .. } => name.as_ref().into(),
         }
     }
 }
@@ -437,8 +429,13 @@ pub enum TyKind {
     Pointer(Ty),
     /// A function pointer accepting and returning some values.
     Function(Vec<Ty>, Vec<Ty>),
-    /// A collection of named values.
-    Struct(Vec<(Str, Ty)>),
+    /// A named collection of named values.
+    Struct {
+        /// The name of the struct type.
+        name: Str,
+        /// The fields of the struct type.
+        fields: Vec<(Str, Ty)>,
+    },
 }
 
 /// The sizes an integer type can be.

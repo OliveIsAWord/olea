@@ -96,7 +96,7 @@ impl<'a> TypeChecker<'a> {
                 self.t(lhs).clone()
             }
             Sk::FieldOffset(r, ref field) => {
-                let TyKind::Struct(fields) = self.pointer(r)? else {
+                let TyKind::Struct { fields, .. } = self.pointer(r)? else {
                     return Err((self.name.into(), ErrorKind::NotStruct(r)));
                 };
                 fields

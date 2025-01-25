@@ -493,7 +493,7 @@ impl<'a> IrBuilder<'a> {
                 let TyKind::Pointer(value) = self.program_tys[t(r)] else {
                     return dummy_ty;
                 };
-                let TyKind::Struct(fields) = &self.program_tys[value] else {
+                let TyKind::Struct { fields, .. } = &self.program_tys[value] else {
                     return dummy_ty;
                 };
                 fields
@@ -606,7 +606,10 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                         });
                     }
                 }
-                let kind = TyKind::Struct(ir_fields);
+                let kind = TyKind::Struct {
+                    name: name.kind.clone(),
+                    fields: ir_fields,
+                };
                 let ty_index = defined_tys.tys[&name.kind].0;
                 program_tys.insert_at(ty_index, kind);
             }

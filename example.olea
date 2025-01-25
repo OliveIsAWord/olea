@@ -1,9 +1,8 @@
-struct Bar:
-    bah u8
-
 struct Foo:
-    a fn(Bar) Bar
-    b Bar
+    same_name u8
 
-fn meow(f Foo) Bar:
-    (f@.a)(f@.b)
+struct Bar:
+    same_name u8
+
+fn id(f Foo) Bar:
+    f

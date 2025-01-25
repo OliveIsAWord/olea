@@ -237,12 +237,8 @@ impl Display for TyKind {
             Self::Function(params, returns) => {
                 write!(f, "fn({}){}", Commas(params), ReturnsSpace(returns))
             }
-            Self::Struct(fields) => {
-                write!(
-                    f,
-                    "struct({})",
-                    Commas(fields.iter().map(|(name, ty)| format!("{name} {ty}")))
-                )
+            Self::Struct { name, .. } => {
+                write!(f, "{name}")
             }
         }
     }

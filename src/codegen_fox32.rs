@@ -43,7 +43,9 @@ impl SizeFinder<'_> {
             TyKind::Int(IntKind::Usize) | TyKind::Pointer(_) | TyKind::Function(..) => {
                 Ok(Size::Word)
             }
-            TyKind::Struct(fields) => Err(fields.iter().map(|(_, ty)| self.of_in_bytes(*ty)).sum()),
+            TyKind::Struct { fields, .. } => {
+                Err(fields.iter().map(|(_, ty)| self.of_in_bytes(*ty)).sum())
+            }
         }
     }
     fn of_inner(self, ty: Ty) -> Size {
@@ -65,7 +67,7 @@ impl SizeFinder<'_> {
         let TyKind::Pointer(value) = self.0[ty] else {
             unreachable!("field offset");
         };
-        let TyKind::Struct(fields) = &self.0[value] else {
+        let TyKind::Struct { fields, .. } = &self.0[value] else {
             unreachable!("field offset");
         };
         let mut offset: u32 = 0;
