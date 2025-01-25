@@ -94,6 +94,19 @@ impl TyMap {
                 }
                 string
             }
+	    TyKind::Struct(fields) => {
+                let mut string = "struct(".to_owned();
+                for (i, (name, ty)) in fields.iter().enumerate() {
+                    if i != 0 {
+                        string.push_str(", ");
+                    }
+		    string.push_str(name);
+		    string.push_str(": ");
+                    string.push_str(&self.format(*ty));
+                }
+		string.push(')');
+		string
+	    }
         }
     }
 }
@@ -406,7 +419,8 @@ impl Function {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Ty(u128);
+// I'd prefer not to have this field public but it's needed for `ir_display`.
+pub struct Ty(pub(crate) u128);
 
 /// The type of any value operated on.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]

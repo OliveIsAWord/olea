@@ -66,7 +66,6 @@ fn collect_uses(f: &Function, reg: Register) -> Vec<Use> {
 // }
 
 fn is_valid_candidate(f: &Function, reg: Register) -> bool {
-    assert!(matches!(*f.tys.get(&reg).unwrap(), Ty::Pointer(_)));
     let uses = collect_uses(f, reg);
 
     // TODO: recognize returning the pointer as an invalid use
@@ -197,28 +196,32 @@ pub const CONSTANT_PROPAGATION: Pass = Pass {
 };
 
 fn constant_propagation_impl(f: &mut Function) {
-    let mut const_vals: Map<Register, i128> = Map::new();
+    type ConstMap = Map<Register, (i128, IntKind)>;
+    let mut const_vals: ConstMap = Map::new();
 
     // if a constant eval can be done, do it, otherwise return None.
-    let evaluate = |const_list: &Map<Register, i128>, sk: &StoreKind| -> Option<i128> {
+    let evaluate = |const_list: &ConstMap, sk: &StoreKind| -> Option<(i128, IntKind)> {
         let val = match *sk {
-            StoreKind::Int(constant, _) => constant,
+            StoreKind::Int(constant, kind) => (constant, kind),
             StoreKind::Copy(reg) => *const_list.get(&reg)?,
             StoreKind::UnaryOp(op, reg) => {
-                let x = const_list.get(&reg)?;
-                match op {
+                let (x, kind) = *const_list.get(&reg)?;
+                let val = match op {
                     UnaryOp::Neg => x.wrapping_neg(),
-                }
+                };
+		(val, kind)
             }
             StoreKind::BinOp(op, lhs, rhs) => {
-                let lhs = *const_list.get(&lhs)?;
-                let rhs = *const_list.get(&rhs)?;
-                match op {
+                let (lhs, lhs_kind) = *const_list.get(&lhs)?;
+                let (rhs, rhs_kind) = *const_list.get(&rhs)?;
+		assert_eq!(lhs_kind, rhs_kind);
+                let val = match op {
                     BinOp::Add => lhs.wrapping_add(rhs),
                     BinOp::Sub => lhs.wrapping_sub(rhs),
                     BinOp::Mul => lhs.wrapping_mul(rhs),
                     BinOp::CmpLe => i128::from(lhs <= rhs),
-                }
+                };
+		(val, lhs_kind)
             }
             _ => return None,
         };
@@ -239,15 +242,11 @@ fn constant_propagation_impl(f: &mut Function) {
                 if const_vals.contains_key(reg) {
                     continue;
                 }
-                if let Some(const_val) = evaluate(&const_vals, sk) {
+                if let Some((const_val, int_kind)) = evaluate(&const_vals, sk) {
                     // eprintln!("map {} to constant {}", reg, const_val);
-                    const_vals.insert(reg.to_owned(), const_val);
+                    const_vals.insert(reg.to_owned(), (const_val, int_kind));
                     if !matches!(sk, StoreKind::Int(_, _)) {
                         keep_going = true;
-                        let int_kind = match &f.tys[reg] {
-                            &Ty::Int(k) => k,
-                            ty => unreachable!("const eval {ty}"),
-                        };
                         *sk = StoreKind::Int(const_val, int_kind);
                     }
                 }
@@ -259,7 +258,7 @@ fn constant_propagation_impl(f: &mut Function) {
         match block.exit {
             Exit::Jump(_) | Exit::Return(_) => {}
             Exit::CondJump(Condition::NonZero(cond), if_true, if_false) => {
-                let Some(&cond) = const_vals.get(&cond) else {
+                let Some(&(cond, _)) = const_vals.get(&cond) else {
                     continue;
                 };
                 let jump_to = if cond != 0 { if_true } else { if_false };
