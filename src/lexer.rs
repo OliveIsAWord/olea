@@ -179,6 +179,10 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                         src.consume().unwrap();
                         continue;
                     }
+                    Some('#') => {
+                        src.skip_while(|c| c != '\n');
+                        continue;
+                    }
                     None => 0,
                     _ => src.index - start,
                 };
@@ -242,6 +246,11 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                 Pl(P::Int)
             }
             '\n' => {
+                was_newline = true;
+                Co(C::Newline)
+            }
+            '#' => {
+                src.skip_while(|c| c != '\n');
                 was_newline = true;
                 Co(C::Newline)
             }

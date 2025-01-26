@@ -1,11 +1,9 @@
-struct Foo:
-    a u8
-    b u16
-    c u32
-    d usize
+# Man, a source comment!
 
-fn add(f Foo^) u16:
-    f.a as u16
-      + f.b
-      + f.c as u16
-      + f.d as u16
+fn meow(
+    a#in't this sick?
+     u8
+    b fn(u8)
+):
+        # we can put one here too as a treat
+    b(a)

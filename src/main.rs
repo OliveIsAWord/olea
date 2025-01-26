@@ -151,9 +151,9 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // eprintln!("# Token tree:");
-    // ttree_visualize::visualize(&ttree, &src);
-    // eprintln!();
+    eprintln!("# Token tree:");
+    ttree_visualize::visualize(&ttree, &src);
+    eprintln!();
 
     let ast = match parser::parse(&ttree, &src) {
         Ok(x) => x,
