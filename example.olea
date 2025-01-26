@@ -1,9 +1,5 @@
-# Man, a source comment!
+struct Foo:
+    a u8
 
-fn meow(
-    a#in't this sick?
-     u8
-    b fn(u8)
-):
-        # we can put one here too as a treat
-    b(a)
+fn meow(f Foo^) usize:
+    f as usize

@@ -77,7 +77,11 @@ impl<'a> TypeChecker<'a> {
     fn infer_storekind(&self, sk: &StoreKind) -> Result<TyKind> {
         use StoreKind as Sk;
         let ty = match *sk {
-            Sk::Int(_, kind) | Sk::IntCast(_, kind) => TyKind::Int(kind),
+            Sk::Int(_, kind) => TyKind::Int(kind),
+            Sk::IntCast(int, kind) => {
+                self.int(int)?;
+                TyKind::Int(kind)
+            }
             Sk::Copy(r) => self.t(r).clone(),
             Sk::BinOp(op, lhs, rhs) => {
                 match op {
