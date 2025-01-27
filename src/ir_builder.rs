@@ -30,6 +30,7 @@ pub enum ErrorKind {
     CantAssignToConstant,
     UnknownIntLiteralSuffix,
     CantCastToTy(String),
+    InfiniteType(Vec<Str>),
     #[allow(dead_code)]
     Todo(&'static str),
 }
@@ -620,6 +621,8 @@ pub fn build(program: &ast::Program) -> Result<Program> {
             }
         }
     }
+    // detect infinite sized types
+    // TODO
     let mut function_tys = Map::new();
     for ast::Decl { kind, span: _ } in &program.decls {
         let mut build_ty = |t| defined_tys.build_ty(t, &mut program_tys);
