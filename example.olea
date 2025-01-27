@@ -1,5 +1,5 @@
 struct Foo:
-    a u8
+    bar Bar
 
-fn meow(f Foo^) usize:
-    f as usize
+struct Bar:
+    foo Foo

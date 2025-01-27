@@ -189,6 +189,12 @@ fn main() -> ExitCode {
                 E::CantAssignToConstant => ("can't assign to constant".to_owned(), None),
                 E::CantCastToTy(ty) => (format!("can't cast a value to type {ty}"), None),
                 E::UnknownIntLiteralSuffix => ("unknown int literal suffix".to_owned(), None),
+                E::InfiniteType(ty_names) => {
+                    use std::fmt::Write;
+                    let mut s = "these recursive types have infinite size: ".to_owned();
+                    _ = write!(s, "{ty_names:?}");
+                    (s, None)
+                }
                 E::Todo(msg) => (format!("not yet implemented: {msg}"), None),
             };
             let mut e = Snippet::source(&src)
