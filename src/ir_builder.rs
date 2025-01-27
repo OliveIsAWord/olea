@@ -1,5 +1,5 @@
 use crate::ast;
-use crate::compiler_types::{Map, Name, Span, Spanned, Str};
+use crate::compiler_types::{Map, Name, Set, Span, Spanned, Str};
 use crate::ir::*;
 
 /// This trait defines a helper method for transforming a `T` into an `Option<T>` with a postfix syntax.
@@ -594,12 +594,17 @@ pub fn build(program: &ast::Program) -> Result<Program> {
         }
     }
     // Global type construction second pass: fill out actual type information we skipped in the first pass.
+    // also track value size dependencies to detect and reject infinite size types
+    // this is a map from named types to the named types this type stores by value, as well as a span for diagnostics
+    let mut value_cycles: Map<Str, (Span, Vec<Str>)> = Map::new();
     for ast::Decl { kind, span: _ } in &program.decls {
         match kind {
             D::Function(_) | D::ExternFunction(_) => {}
             D::Struct(ast::Struct { name, fields }) => {
+                use ast::TyKind as Tk;
                 let mut ir_fields: Vec<(Str, Ty)> = Vec::with_capacity(fields.len());
                 let mut names = Map::new();
+                let mut fields_stored_by_value = vec![];
                 for (field_name, field_ty) in fields {
                     let ty = defined_tys.build_ty(field_ty, &mut program_tys)?;
                     ir_fields.push((field_name.kind.clone(), ty));
@@ -611,6 +616,11 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                             span: field_name.span.clone(),
                         });
                     }
+                    // does this field store a possibly recursive type by value?
+                    match &field_ty.kind {
+                        Tk::Pointer(_) | Tk::Function(_, _) => {}
+                        Tk::Name(name) => fields_stored_by_value.push(name.kind.clone()),
+                    }
                 }
                 let kind = TyKind::Struct {
                     name: name.kind.clone(),
@@ -618,11 +628,50 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 };
                 let ty_index = defined_tys.tys[&name.kind].0;
                 program_tys.insert_at(ty_index, kind);
+                // register this struct in the cycle graph
+                value_cycles.insert(
+                    name.kind.clone(),
+                    (name.span.clone(), fields_stored_by_value),
+                );
             }
         }
     }
-    // detect infinite sized types
-    // TODO
+    // detect infinite size types
+    {
+        // each item on the stack is a visited type and all the types it is going to visit
+        let mut stack: Vec<(&Str, &[Str])> = vec![];
+        // all the types we know don't form infinite size loops
+        let mut closed: Set<Str> = Set::new();
+        for (name, (_, fields)) in &value_cycles {
+            stack.push((name, fields));
+            while let Some((_, fields)) = stack.last_mut() {
+                let Some(field) = fields.first() else {
+                    let (old_field, _) = stack.pop().unwrap();
+                    closed.insert(old_field.clone());
+                    continue;
+                };
+                *fields = &fields[1..];
+                if closed.contains(field) {
+                    continue;
+                }
+                for (i, (prior, _)) in stack.iter().enumerate().rev() {
+                    if field == *prior {
+                        let cycle = stack[i..].iter().map(|&(n, _)| n.clone()).collect();
+                        return Err(Error {
+                            kind: ErrorKind::InfiniteType(cycle),
+                            span: value_cycles[*prior].0.clone(),
+                        });
+                    }
+                }
+                if let Some((_, recursive_fields)) = value_cycles.get(field) {
+                    stack.push((field, recursive_fields));
+                } else {
+                    closed.insert(field.clone());
+                }
+            }
+        }
+        drop(value_cycles);
+    }
     let mut function_tys = Map::new();
     for ast::Decl { kind, span: _ } in &program.decls {
         let mut build_ty = |t| defined_tys.build_ty(t, &mut program_tys);
