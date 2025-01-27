@@ -117,7 +117,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    eprintln!("# Source code:\n{src}");
+    // eprintln!("# Source code:\n{src}");
 
     let tokens = lexer::tokenize(&src);
     /*
@@ -151,9 +151,9 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    eprintln!("# Token tree:");
-    ttree_visualize::visualize(&ttree, &src);
-    eprintln!();
+    // eprintln!("# Token tree:");
+    // ttree_visualize::visualize(&ttree, &src);
+    // eprintln!();
 
     let ast = match parser::parse(&ttree, &src) {
         Ok(x) => x,
@@ -190,9 +190,23 @@ fn main() -> ExitCode {
                 E::CantCastToTy(ty) => (format!("can't cast a value to type {ty}"), None),
                 E::UnknownIntLiteralSuffix => ("unknown int literal suffix".to_owned(), None),
                 E::InfiniteType(ty_names) => {
-                    use std::fmt::Write;
-                    let mut s = "these recursive types have infinite size: ".to_owned();
-                    _ = write!(s, "{ty_names:?}");
+                    let s = match ty_names.len() {
+                        0 => unreachable!(),
+                        1 => format!("recursive type `{}` has infinite size", ty_names[0]),
+                        2 => format!(
+                            "recursive types `{}` and `{}` have infinite size",
+                            ty_names[0], ty_names[1]
+                        ),
+                        _ => {
+                            use std::fmt::Write;
+                            let mut s = "recursive types ".to_owned();
+                            for name in &ty_names[0..ty_names.len() - 1] {
+                                _ = write!(s, "`{name}`, ");
+                            }
+                            _ = write!(s, "and `{}` have infinite size", ty_names.last().unwrap());
+                            s
+                        }
+                    };
                     (s, None)
                 }
                 E::Todo(msg) => (format!("not yet implemented: {msg}"), None),
