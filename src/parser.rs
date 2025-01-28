@@ -1,4 +1,7 @@
-#![allow(clippy::range_plus_one)]
+#![expect(
+    clippy::range_plus_one,
+    reason = "This lint hurts the understanding of this code."
+)]
 
 use crate::arborist::{self as a, PlainToken as P, TokenTree as Tt};
 use crate::ast::*;
@@ -206,7 +209,6 @@ impl<'src> Parser<'src> {
     ) -> Result<Vec<O>> {
         Self::parse_block(item_parser, block, self.source, start_span, end_span)
     }
-    #[allow(clippy::unnecessary_wraps)]
     fn ty(&mut self) -> Parsed<Ty> {
         if let Some(fn_span) = self.just(P::Fn) {
             let Some(Spanned {
@@ -506,7 +508,6 @@ impl<'src> Parser<'src> {
     fn decl(&mut self) -> Parsed<Decl> {
         self.spanned2(Self::decl_kind)
     }
-    #[allow(clippy::single_match_else)]
     fn decl_kind(&mut self) -> Parsed<DeclKind> {
         let Some(Spanned { kind, .. }) = self.next() else {
             return Ok(None);

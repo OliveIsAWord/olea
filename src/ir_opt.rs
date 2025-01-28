@@ -1,3 +1,5 @@
+#![expect(dead_code, reason = "This code is unfinished.")]
+
 use crate::compiler_types::{Map, Set};
 use crate::ir::*;
 
@@ -21,8 +23,6 @@ impl Pass {
     }
 }
 
-#[allow(dead_code)]
-// get rust to stop complaining about Exit never being read
 enum Use<'a> {
     Inst(&'a Inst),
     Exit(&'a Exit),
@@ -118,21 +118,21 @@ fn collect_stackallocs(f: &Function) -> Vec<Register> {
     candidates
 }
 
-fn _contains_write_to(block: &Block, var: Register) -> bool {
+fn contains_write_to(block: &Block, var: Register) -> bool {
     block
         .insts
         .iter()
         .any(|i| matches!(i, Inst::Write(ptr, _) if *ptr == var))
 }
 
-fn _phi_locations(f: &Function, stackallocs: &Vec<Register>) -> Map<Register, Set<BlockId>> {
+fn phi_locations(f: &Function, stackallocs: &Vec<Register>) -> Map<Register, Set<BlockId>> {
     let locs = Map::new();
 
     for var in stackallocs {
         let written_blocks = f
             .blocks
             .iter()
-            .filter(|(_, block)| _contains_write_to(block, *var));
+            .filter(|(_, block)| contains_write_to(block, *var));
 
         let _blocks = written_blocks.clone();
     }

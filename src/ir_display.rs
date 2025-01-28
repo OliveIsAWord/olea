@@ -8,10 +8,9 @@ type F<'a, 'b> = &'a mut Formatter<'b>;
 const DISPLAY_TYS: bool = false;
 
 struct SepBy<'a, T, U: ?Sized>(T, &'a U);
-impl<T, I, U> Display for SepBy<'_, T, U>
+impl<T, U> Display for SepBy<'_, T, U>
 where
-    T: Clone + IntoIterator<Item = I>,
-    I: Display,
+    T: Clone + IntoIterator<Item: Display>,
     U: Display + ?Sized,
 {
     fn fmt(&self, f: F) -> Result {
@@ -26,10 +25,9 @@ where
 }
 
 struct Commas<T>(T);
-impl<T, I> Display for Commas<T>
+impl<T> Display for Commas<T>
 where
-    T: Clone + IntoIterator<Item = I>,
-    I: Display,
+    T: Clone + IntoIterator<Item: Display>,
 {
     fn fmt(&self, f: F) -> Result {
         write!(f, "{}", SepBy(self.0.clone(), ", "))
@@ -47,19 +45,19 @@ impl<T: Display + ?Sized> Display for WithTy<'_, T> {
     }
 }
 
-impl<'a, T> Clone for WithTy<'a, T> {
+// explicit Clone and Copy impls to avoid enforcing that T is Clone or Copy
+impl<T> Clone for WithTy<'_, T> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<'a, T> Copy for WithTy<'a, T> {}
+impl<T> Copy for WithTy<'_, T> {}
 
 struct Returns<T>(T);
-impl<T, I> Display for Returns<T>
+impl<T> Display for Returns<T>
 where
-    T: Clone + IntoIterator<Item = I>,
-    I: Display,
+    T: Clone + IntoIterator<Item: Display>,
 {
     fn fmt(&self, f: F) -> Result {
         let oops: Vec<_> = self.0.clone().into_iter().collect();
@@ -72,10 +70,9 @@ where
 }
 
 struct ReturnsSpace<T>(T);
-impl<T, I> Display for ReturnsSpace<T>
+impl<T> Display for ReturnsSpace<T>
 where
-    T: Clone + IntoIterator<Item = I>,
-    I: Display,
+    T: Clone + IntoIterator<Item: Display>,
 {
     fn fmt(&self, f: F) -> Result {
         let returns = format!("{}", Returns(self.0.clone()));
@@ -145,23 +142,15 @@ impl DisplayWithName for Function {
                             Sk::Int(i, kind) => write!(f, "{i}_{kind}"),
                             Sk::Copy(r) => write!(f, "{r}"),
                             Sk::Read(r) => write!(f, "{r}^"),
-                            Sk::UnaryOp(op, inner) => write!(
-                                f,
-                                "{}{inner}",
-                                match op {
-                                    UnaryOp::Neg => "-",
-                                }
-                            ),
-                            Sk::BinOp(op, lhs, rhs) => write!(
-                                f,
-                                "{lhs} {} {rhs}",
-                                match op {
-                                    BinOp::Add => "+",
-                                    BinOp::Sub => "-",
-                                    BinOp::Mul => "*",
-                                    BinOp::CmpLe => "<=",
-                                }
-                            ),
+                            Sk::UnaryOp(op, inner) => write!(f, "{}{inner}", match op {
+                                UnaryOp::Neg => "-",
+                            }),
+                            Sk::BinOp(op, lhs, rhs) => write!(f, "{lhs} {} {rhs}", match op {
+                                BinOp::Add => "+",
+                                BinOp::Sub => "-",
+                                BinOp::Mul => "*",
+                                BinOp::CmpLe => "<=",
+                            }),
                             Sk::IntCast(inner, ty) => write!(f, "{inner} as {ty}"),
                             Sk::PtrOffset(lhs, rhs) => write!(f, "{lhs}[{rhs}]@"),
                             Sk::FieldOffset(inner, field) => write!(f, "{inner}.{field}@"),

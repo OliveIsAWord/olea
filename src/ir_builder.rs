@@ -31,7 +31,10 @@ pub enum ErrorKind {
     UnknownIntLiteralSuffix,
     CantCastToTy(String),
     InfiniteType(Vec<Str>),
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "This variant is often used sporadically and temporarily, and only serves to give better diagnostics in the presence of future language direction. It may come in and out of use over the lifetime of the compiler."
+    )]
     Todo(&'static str),
 }
 
@@ -210,8 +213,8 @@ impl<'a> IrBuilder<'a> {
     }
 
     fn build_expr(&mut self, expr: &ast::Expr, unvoid: bool) -> Result<Option<Register>> {
-        use ast::ExprKind as E;
         use StoreKind as Sk;
+        use ast::ExprKind as E;
         let ast::Expr { kind, span } = expr;
         let span = span.clone();
         // let span2 = span.clone(); // maybe if i write enough of these, Rust 2024 will make it Copy
@@ -254,8 +257,8 @@ impl<'a> IrBuilder<'a> {
                 self.push_store(Sk::Int((*int).into(), int_ty), span).some()
             }
             E::UnaryOp(op, e) => {
-                use ast::UnaryOpKind as A;
                 use UnaryOp as B;
+                use ast::UnaryOpKind as A;
                 match op.kind {
                     A::Neg => {
                         let reg = self.build_expr_unvoid(e, span.clone())?;
@@ -280,8 +283,8 @@ impl<'a> IrBuilder<'a> {
                 }
             }
             E::BinOp(op, lhs, rhs) => {
-                use ast::BinOpKind as A;
                 use BinOp as B;
+                use ast::BinOpKind as A;
                 let op_kind = match op.kind {
                     A::Add => B::Add,
                     A::Sub => B::Sub,

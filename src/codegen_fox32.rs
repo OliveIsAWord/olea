@@ -137,7 +137,7 @@ impl LivenessGraph {
     }
     pub fn get(&self, a: Register, b: Register) -> bool {
         let (min, max) = Self::minmax(a, b);
-        self.regs.get(&min).map_or(false, |s| s.contains(&max))
+        self.regs.get(&min).is_some_and(|s| s.contains(&max))
     }
     pub fn insert(&mut self, a: Register, b: Register) {
         let (min, max) = Self::minmax(a, b);
@@ -185,8 +185,10 @@ fn reg_alloc(f: &Function, get_size: SizeFinder) -> RegAllocInfo {
                 continue;
             };
             let constant_str = match sk {
-                // cast from i128 to u32 because fox32asm doesn't support negative int literals
-                #[allow(clippy::cast_sign_loss)]
+                #[expect(
+                    clippy::cast_sign_loss,
+                    reason = "`fox32asm` doesn't support negative int literals, so we have to do the two's complement conversion ourselves."
+                )]
                 &StoreKind::Int(i, kind) => match kind {
                     IntKind::U32 | IntKind::Usize => (i as u32).to_string().into(),
                     IntKind::U8 => (i as u8).to_string().into(),
@@ -250,7 +252,10 @@ macro_rules! write_inst {
     }}
 }
 
-#[allow(unused_macros)]
+#[allow(
+    unused_macros,
+    reason = "Comments do not affect behavior of the assembled code and are currently useful only for debugging."
+)]
 macro_rules! write_comment {
     ($dst:expr, $($arg:tt)*) => {{
         use ::std::fmt::Write;

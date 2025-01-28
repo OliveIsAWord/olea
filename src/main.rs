@@ -1,6 +1,6 @@
 //! A compiler for the Olea programming language.
 
-#![warn(missing_docs)]
+#![warn(missing_docs, clippy::allow_attributes_without_reason)]
 #![allow(
     clippy::cast_possible_truncation,
     clippy::missing_panics_doc,
@@ -9,7 +9,8 @@
     clippy::too_many_lines,
     clippy::type_complexity,
     clippy::wildcard_imports,
-    clippy::cognitive_complexity
+    clippy::cognitive_complexity,
+    reason = "In the author's opinion, these lints are either too noisy or don't help correctness or sanity."
 )]
 
 mod arborist;
@@ -26,11 +27,10 @@ pub mod ir_liveness;
 mod ir_opt;
 mod lexer;
 mod parser;
-#[allow(dead_code)]
 mod ttree_visualize;
 mod typechecker;
 
-use annotate_snippets::{renderer::Style, Level, Message, Renderer, Snippet};
+use annotate_snippets::{Level, Message, Renderer, Snippet, renderer::Style};
 use compiler_types::Spanned;
 use std::process::ExitCode;
 
@@ -151,9 +151,11 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // eprintln!("# Token tree:");
-    // ttree_visualize::visualize(&ttree, &src);
-    // eprintln!();
+    if false {
+        eprintln!("# Token tree:");
+        ttree_visualize::visualize(&ttree, &src);
+        eprintln!();
+    }
 
     let ast = match parser::parse(&ttree, &src) {
         Ok(x) => x,

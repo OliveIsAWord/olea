@@ -131,11 +131,7 @@ impl<'a> View<'a> {
     }
 
     const fn normalize_cr(c: char) -> char {
-        if c == '\r' {
-            '\n'
-        } else {
-            c
-        }
+        if c == '\r' { '\n' } else { c }
     }
 
     fn peek(&self) -> Option<char> {
@@ -196,21 +192,15 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                             // TODO: We might not want to start a new block here on an error.
                             indents.push(indent);
                             if has_dedented {
-                                tokens.push(
-                                    ERR,
-                                    Span {
-                                        start: start + indent,
-                                        end: start + indent,
-                                    },
-                                );
+                                tokens.push(ERR, Span {
+                                    start: start + indent,
+                                    end: start + indent,
+                                });
                             } else {
-                                tokens.push(
-                                    Co(C::Indent),
-                                    Span {
-                                        start: start + last_indent,
-                                        end: start + indent,
-                                    },
-                                );
+                                tokens.push(Co(C::Indent), Span {
+                                    start: start + last_indent,
+                                    end: start + indent,
+                                });
                             };
                             break 'do_indent;
                         }

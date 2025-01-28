@@ -57,7 +57,9 @@ impl TyMap {
     /// Insert a new type with a previously reserved id.
     pub fn insert_at(&mut self, index: Ty, kind: TyKind) {
         if let Some(previous) = self.get(index) {
-            panic!("inserted two types at the same id\n  id: {index}\n  type 1: {previous}\n  type 2: {kind}")
+            panic!(
+                "inserted two types at the same id\n  id: {index}\n  type 1: {previous}\n  type 2: {kind}"
+            )
         }
         self.inner.insert(index, kind);
     }
@@ -180,7 +182,10 @@ impl Cfg {
     }
 
     /// Use the Lengauer-Tarjan algorithm to create a dominator tree.
-    #[allow(clippy::items_after_statements)] // we can figure this out if and when we rewrite this function
+    #[expect(
+        clippy::items_after_statements,
+        reason = "This code needs rewriting anyways."
+    )]
     pub fn build_domtree(&mut self) {
         // TODO: add a special case that skips all of this when a single-block function is found
 
@@ -370,7 +375,7 @@ pub struct CfgNode {
 impl CfgNode {
     /// Construct a CFG node.
     #[must_use]
-    pub fn new(id: BlockId) -> Self {
+    pub const fn new(id: BlockId) -> Self {
         Self {
             id,
             immediate_dominator: None,

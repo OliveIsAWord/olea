@@ -44,7 +44,10 @@ pub struct BlockLiveness {
 }
 
 /// Calculate the liveness information for a function.
-#[allow(clippy::assigning_clones)]
+#[expect(
+    clippy::assigning_clones,
+    reason = "We only assign clones to sets of 0 capacity, negating the usage of `clone_from`."
+)]
 #[must_use]
 pub fn calculate_liveness(f: &Function) -> FunctionLiveness {
     let start_map = calculate_start(f);
@@ -56,7 +59,6 @@ pub fn calculate_liveness(f: &Function) -> FunctionLiveness {
             insts_map.insert(id, vec![]);
             continue;
         }
-        let mut insts_live: Vec<_> = (0..insts.len()).map(|_| Set::new()).collect();
         let mut last = Set::new();
         block.exit.visit_regs(|r| {
             last.insert(r);
@@ -71,6 +73,7 @@ pub fn calculate_liveness(f: &Function) -> FunctionLiveness {
                 last.insert(*regs.get(&id).unwrap());
             }
         }
+        let mut insts_live: Vec<_> = (0..insts.len()).map(|_| Set::new()).collect();
         *insts_live.last_mut().unwrap() = last.clone();
         for (i, inst) in insts[1..].iter().enumerate().rev() {
             inst.visit_regs(|r, is_def| {

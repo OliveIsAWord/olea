@@ -59,6 +59,7 @@ pub fn desugar_program(program: &mut Program) {
         desugar_struct_in_list(returns, tys);
     }
     // 1. for each ty in the ty map
+    #[expect(clippy::needless_collect, reason = "False positive")]
     for ty in tys.inner.keys().copied().collect::<Vec<_>>() {
         let kind = tys.inner.get_mut(&ty).unwrap();
         // 2. if it's a function, mem::take its params and returns
