@@ -1,1 +1,4 @@
 extern fn named(param1 u8, param2 u8) u32^
+
+fn main():
+    let foo u32 = named(42_u8 + 255_u8, 69_u8)^

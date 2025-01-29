@@ -56,7 +56,7 @@ impl<'a> TypeChecker<'a> {
         ))
     }
     fn expect(&self, r: Register, kind: &TyKind) -> Result {
-        if self.t(r) == kind {
+        if self.ty_map.equals_kind(self.t(r), kind) {
             Ok(())
         } else {
             self.err(r, kind)
@@ -130,15 +130,11 @@ impl<'a> TypeChecker<'a> {
         Ok(ty)
     }
     fn visit_inst(&self, inst: &Inst) -> Result {
+        eprintln!("visit {inst:?}");
         match inst {
             &Inst::Store(r, ref sk) => {
-                let expected = self.t(r);
                 let got = self.infer_storekind(sk)?;
-                if *expected == got {
-                    Ok(())
-                } else {
-                    self.err(r, &got)
-                }
+                self.expect(r, &got)
             }
             &Inst::Write(dst, src) => {
                 let inner = self.pointer(dst)?;

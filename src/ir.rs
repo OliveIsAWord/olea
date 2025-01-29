@@ -108,6 +108,44 @@ impl TyMap {
             TyKind::Struct { name, .. } => name.as_ref().into(),
         }
     }
+
+    /// Are the types behind these two ids structurally equal?
+    #[must_use]
+    pub fn equals(&self, a: Ty, b: Ty) -> bool {
+        self.equals_kind(&self[a], &self[b])
+    }
+
+    /// Are these two types structurally equal?
+    #[must_use]
+    pub fn equals_kind(&self, a: &TyKind, b: &TyKind) -> bool {
+        use TyKind as T;
+        // exhaustiveness check; if this errors then you should probably update this function!
+        match a {
+            T::Int(_) | T::Pointer(_) | T::Function(..) | T::Struct{..} => {}
+        }
+        match (a, b) {
+            (T::Int(a), T::Int(b)) => a == b,
+            (&T::Pointer(a), &T::Pointer(b)) => self.equals(a, b),
+            (T::Function(a_params, a_returns), T::Function(b_params, b_returns)) => {
+                if a_params.len() != b_params.len() || a_returns.len() != b_returns.len() {
+                    return false;
+                }
+                for (&a, &b) in a_params.iter().zip(b_params) {
+                    if !self.equals(a, b) {
+                        return false;
+                    }
+                }
+                for (&a, &b) in a_returns.iter().zip(b_returns) {
+                    if !self.equals(a, b) {
+                        return false;
+                    }
+                }
+                true
+            }
+            (T::Struct{name: a, ..}, T::Struct{name: b, ..}) => a == b,
+            _ => false
+        }
+    }
 }
 
 impl std::ops::Index<Ty> for TyMap {
@@ -426,7 +464,7 @@ impl Function {
 pub struct Ty(pub(crate) u128);
 
 /// The type of any value operated on.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug)]
 pub enum TyKind {
     /// An integer.
     Int(IntKind),
