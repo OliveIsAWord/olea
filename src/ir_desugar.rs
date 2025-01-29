@@ -257,6 +257,34 @@ fn desugar_block(
                             i += 1;
                         }
                     }
+                    Sk::Struct { .. } => {
+                        i -= 1;
+                        let Inst::Store(
+                            _,
+                            Sk::Struct {
+                                fields: literal_fields,
+                                ..
+                            },
+                        ) = insts.remove(i)
+                        else {
+                            unreachable!();
+                        };
+                        let mut fields = fields.keys().copied();
+                        let mut add_copy = |from_reg| {
+                            let r = fields.next().unwrap();
+                            insts.insert(i, Inst::Store(r, Sk::Copy(from_reg)));
+                            i += 1;
+                        };
+                        for (_, literal_reg) in literal_fields {
+                            if let Some(inner_fields) = struct_regs.get(&literal_reg) {
+                                for &inner_reg in inner_fields.keys() {
+                                    add_copy(inner_reg);
+                                }
+                            } else {
+                                add_copy(literal_reg);
+                            }
+                        }
+                    }
                     &mut Sk::Read(src) => {
                         i -= 1;
                         insts.remove(i);

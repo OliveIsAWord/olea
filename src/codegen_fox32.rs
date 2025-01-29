@@ -431,6 +431,7 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                         Sk::Int(..) | Sk::Function(_) => unreachable!(
                             "register store should have been optimized as a constant literal"
                         ),
+                        Sk::Struct { .. } => unreachable!("struct literal"),
                         Sk::Phi(_) => (),
                         // _ => write_comment!(code, "TODO: {inst:?}"),
                     }

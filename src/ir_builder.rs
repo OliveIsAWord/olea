@@ -31,6 +31,8 @@ pub enum ErrorKind {
     UnknownIntLiteralSuffix,
     CantCastToTy(String),
     InfiniteType(Vec<Str>),
+    NotStruct(Str),
+    MissingFields(Vec<Str>, Option<Span>),
     #[allow(
         dead_code,
         reason = "This variant is often used sporadically and temporarily, and only serves to give better diagnostics in the presence of future language direction. It may come in and out of use over the lifetime of the compiler."
@@ -255,6 +257,72 @@ impl<'a> IrBuilder<'a> {
                     IntKind::Usize
                 };
                 self.push_store(Sk::Int((*int).into(), int_ty), span).some()
+            }
+            E::Struct(name, fields) => {
+                const DUMMY_REG: Register = Register(u128::MAX);
+                let mut evaled_fields: Map<Str, (Span, Register)> = Map::new();
+                for (field, expr) in fields {
+                    if let Some((prev_span, _)) = evaled_fields.get(&field.kind) {
+                        return Err(Error {
+                            kind: ErrorKind::NameConflict("struct field", prev_span.clone().some()),
+                            span: field.span.clone(),
+                        });
+                    }
+                    let evaled = self.build_expr_unvoid(expr, span.clone())?;
+                    evaled_fields.insert(field.kind.clone(), (field.span.clone(), evaled));
+                }
+                let Some((struct_ty, struct_span)) = self.defined_tys.tys.get(&name.kind) else {
+                    return Err(Error {
+                        kind: ErrorKind::NotFound("struct type", name.kind.clone()),
+                        span: name.span.clone(),
+                    });
+                };
+                let TyKind::Struct {
+                    name: type_name,
+                    fields: type_fields,
+                } = &self.program_tys[*struct_ty]
+                else {
+                    return Err(Error {
+                        kind: ErrorKind::NotStruct(name.kind.clone()),
+                        span: name.span.clone(),
+                    });
+                };
+                assert_eq!(&name.kind, type_name);
+                let mut filled_fields: Vec<(Str, Register)> = type_fields
+                    .iter()
+                    .map(|(name, _)| (name.clone(), DUMMY_REG))
+                    .collect();
+                for (name, (span, r)) in evaled_fields {
+                    let Some(dummy_r) = filled_fields
+                        .iter_mut()
+                        .find_map(|(field_name, r)| (&name == field_name).then_some(r))
+                    else {
+                        return Err(Error {
+                            kind: ErrorKind::NotFound("struct field", name),
+                            span,
+                        });
+                    };
+                    *dummy_r = r;
+                }
+                let missing_fields: Vec<_> = filled_fields
+                    .iter()
+                    .filter(|(_, r)| *r == DUMMY_REG)
+                    .map(|(name, _)| name.clone())
+                    .collect();
+                if !missing_fields.is_empty() {
+                    return Err(Error {
+                        kind: ErrorKind::MissingFields(missing_fields, struct_span.clone()),
+                        span,
+                    });
+                }
+                self.push_store(
+                    Sk::Struct {
+                        name: name.kind.clone(),
+                        fields: filled_fields,
+                    },
+                    span,
+                )
+                .some()
             }
             E::UnaryOp(op, e) => {
                 use UnaryOp as B;
@@ -525,6 +593,7 @@ impl<'a> IrBuilder<'a> {
                 self.program_tys
                     .insert(TyKind::Function(args, returns.into_iter().collect()))
             }
+            Sk::Struct { name, .. } => self.defined_tys.tys[name].0,
         }
     }
 

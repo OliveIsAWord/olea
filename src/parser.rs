@@ -295,7 +295,28 @@ impl<'src> Parser<'src> {
             let block = self.colon_block()?;
             ExprKind::Block(block)
         } else if let Some(name) = self.name() {
-            ExprKind::Place(PlaceKind::Var(name))
+            if let Some(Spanned {
+                kind: Tt::IndentedBlock(fields),
+                span: fields_span,
+            }) = self.peek()
+            {
+                self.next().unwrap();
+                let fields = self.block(
+                    |this| {
+                        Ok((
+                            this.name()
+                                .ok_or_else(|| this.err("expected struct field name"))?,
+                            this.expr()?,
+                        ))
+                    },
+                    fields,
+                    fields_span.start..fields_span.start,
+                    fields_span.end..fields_span.end,
+                )?;
+                ExprKind::Struct(name, fields)
+            } else {
+                ExprKind::Place(PlaceKind::Var(name))
+            }
         } else if let Some((int, suffix)) = self.int() {
             ExprKind::Int(int, suffix)
         } else if self.just(P::If).is_some() {

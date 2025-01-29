@@ -1,2 +1,9 @@
-fn biter(x u32^) u8:
-    (x as u8^)[3]
+struct Foo:
+    a u8
+    b usize
+
+fn main() Foo:
+    Foo:
+        b 1 + 1000
+        a 2u8 + 2u8
+        # c main

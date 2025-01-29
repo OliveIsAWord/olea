@@ -211,6 +211,29 @@ fn main() -> ExitCode {
                     };
                     (s, None)
                 }
+                E::NotStruct(type_name) => (
+                    format!("struct literal with non-struct type {type_name}"),
+                    None,
+                ),
+                E::MissingFields(fields, span) => {
+                    const START: &str = "struct literal has missing field";
+                    let s = match fields.len() {
+                        0 => unreachable!(),
+                        1 => format!("{START} `{}`", fields[0]),
+                        2 => format!("{START}s `{}` and `{}`", fields[0], fields[1]),
+                        _ => {
+                            use std::fmt::Write;
+                            let mut s = format!("{START}s ");
+                            for name in &fields[0..fields.len() - 1] {
+                                _ = write!(s, "`{name}`, ");
+                            }
+                            _ = write!(s, "and `{}`", fields.last().unwrap());
+                            s
+                        }
+                    };
+                    let def = span.map(|span| ("struct defined here".to_owned(), span));
+                    (s, def)
+                }
                 E::Todo(msg) => (format!("not yet implemented: {msg}"), None),
             };
             let mut e = Snippet::source(&src)

@@ -78,6 +78,37 @@ impl<'a> TypeChecker<'a> {
         use StoreKind as Sk;
         let ty = match *sk {
             Sk::Int(_, kind) => TyKind::Int(kind),
+            Sk::Struct {
+                ref name,
+                ref fields,
+            } => {
+                let real_fields = self
+                    .ty_map
+                    .inner
+                    .values()
+                    .find_map(|tk| match tk {
+                        TyKind::Struct {
+                            name: struct_name,
+                            fields,
+                        } => (name == struct_name).then_some(fields),
+                        _ => None,
+                    })
+                    .unwrap();
+                assert_eq!(fields.len(), real_fields.len());
+                TyKind::Struct {
+                    name: name.clone(),
+                    fields: fields
+                        .iter()
+                        .zip(real_fields)
+                        .map(|((name, reg), (real_name, real_ty))| {
+                            assert_eq!(name, real_name);
+                            let ty = self.tys[reg];
+                            self.expect(*reg, &self.ty_map[*real_ty])?;
+                            Ok((name.clone(), ty))
+                        })
+                        .collect::<Result<_>>()?,
+                }
+            }
             Sk::IntCast(int, kind) => {
                 self.int(int)?;
                 TyKind::Int(kind)

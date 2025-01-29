@@ -587,6 +587,14 @@ impl Inst {
                     }
                     Sk::Phi(_) => (), // Don't visit phi node arguments because they conceptually live in the predecessor block.
                     Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => {}
+                    Sk::Struct {
+                        ref fields,
+                        name: _,
+                    } => {
+                        for &(_, value) in fields {
+                            f(value, false);
+                        }
+                    }
                 }
             }
             &Self::Write(r1, r2) => {
@@ -639,6 +647,10 @@ impl Inst {
                 | Sk::FieldOffset(r, _) => r == reg,
                 Sk::Phi(ref srcs) => count_phi && srcs.iter().any(|(_, r)| *r == reg),
                 Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => false,
+                Sk::Struct {
+                    ref fields,
+                    name: _,
+                } => fields.iter().any(|&(_, r)| r == reg),
             },
             &Self::Write(r1, r2) => r1 == reg || r2 == reg,
             Self::Call {
@@ -656,6 +668,13 @@ impl Inst {
 pub enum StoreKind {
     /// An integer constant.
     Int(i128, IntKind),
+    /// A struct constant.
+    Struct {
+        /// The name of the struct type.
+        name: Str,
+        /// The name and provided value for each field.
+        fields: Vec<(Str, Register)>,
+    },
     /// A copy of another register's value.
     Copy(Register),
     /// A choice of values based on the immediately preceding block.
