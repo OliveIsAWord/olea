@@ -1,14 +1,1 @@
-struct Foo:
-    fah u8
-    # bar Bar
-    baz Baz
-
-struct Bar:
-    foo Foo
-    uwu usize
-
-struct Baz:
-    awa Bar^
-    uwu Baz^
-    meow fn(Foo) Bar
-    a_dog_walks_into_a Bar # comment this out to make the program compile
+extern fn named(param1 u8, param2 u8) u32^

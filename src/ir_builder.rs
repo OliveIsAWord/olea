@@ -126,13 +126,13 @@ impl<'a> IrBuilder<'a> {
 
     fn build_function(
         mut self,
-        ast::Function {
+        ast::Function { signature, body }: &ast::Function,
+    ) -> Result<Function> {
+        let ast::FunctionSignature {
             name: _,
             parameters,
             returns,
-            body,
-        }: &ast::Function,
-    ) -> Result<Function> {
+        } = signature;
         for (p_name, p_ty) in parameters {
             let ir_ty = self.build_ty(p_ty)?;
             let reg = self.new_reg(ir_ty, p_name.span.clone());
@@ -679,34 +679,18 @@ pub fn build(program: &ast::Program) -> Result<Program> {
     for ast::Decl { kind, span: _ } in &program.decls {
         let mut build_ty = |t| defined_tys.build_ty(t, &mut program_tys);
         match kind {
-            D::Function(ast::Function {
-                name,
-                parameters,
-                returns,
-                body: _,
-            }) => {
+            D::Function(ast::Function { signature, .. }) | D::ExternFunction(signature) => {
+                let ast::FunctionSignature {
+                    name,
+                    parameters,
+                    returns,
+                } = signature;
                 function_tys.insert(
                     name.kind.clone(),
                     (
                         parameters
                             .iter()
                             .map(|(_, t)| build_ty(t))
-                            .collect::<Result<_>>()?,
-                        returns.as_ref().map(build_ty).transpose()?,
-                    ),
-                );
-            }
-            D::ExternFunction(ast::ExternFunction {
-                name,
-                parameters,
-                returns,
-            }) => {
-                function_tys.insert(
-                    name.kind.clone(),
-                    (
-                        parameters
-                            .iter()
-                            .map(&mut build_ty)
                             .collect::<Result<_>>()?,
                         returns.as_ref().map(build_ty).transpose()?,
                     ),
@@ -722,7 +706,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
             D::Function(fn_decl) => {
                 let builder = IrBuilder::new(&function_tys, &defined_tys, &mut program_tys);
                 let function = builder.build_function(fn_decl)?;
-                functions.insert(fn_decl.name.kind.clone(), function);
+                functions.insert(fn_decl.signature.name.kind.clone(), function);
             }
             D::ExternFunction(_) | D::Struct(_) => {}
         }

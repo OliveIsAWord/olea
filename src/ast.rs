@@ -21,32 +21,28 @@ pub type Decl = Spanned<DeclKind>;
 pub enum DeclKind {
     /// See [`Function`].
     Function(Function),
-    /// See [`ExternFunction`].
-    ExternFunction(ExternFunction),
+    /// A reference to a callable function not defined in this program, to be linked after compilation terminates.
+    ExternFunction(FunctionSignature),
     /// See [`Struct`].
     Struct(Struct),
 }
 
-/// A named body of code that can be called with a list of arguments and yield a return value.
+/// A named body of code that can be entered during execution.
 #[derive(Clone, Debug)]
 pub struct Function {
-    /// The name of the function.
-    pub name: Name,
-    /// The list of parameters and their types that the function accepts.
-    pub parameters: Vec<(Name, Ty)>,
-    /// The type of value the function returns, if any.
-    pub returns: Option<Ty>,
+    /// The signature of the function.
+    pub signature: FunctionSignature,
     /// The body of code that is executed when the function is called.
     pub body: Block,
 }
 
-/// A reference to a callable function not defined in this program, to be linked after compilation terminates.
+/// The signature for a function, containing everything needed for program validation.
 #[derive(Clone, Debug)]
-pub struct ExternFunction {
+pub struct FunctionSignature {
     /// The name of the function.
     pub name: Name,
-    /// The list of the types of each parameter that the function accepts.
-    pub parameters: Vec<Ty>,
+    /// The list of parameters and their types that the function accepts.
+    pub parameters: Vec<(Name, Ty)>,
     /// The type of value the function returns, if any.
     pub returns: Option<Ty>,
 }

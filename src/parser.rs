@@ -505,6 +505,29 @@ impl<'src> Parser<'src> {
         self.block(Self::stmt, stmts, start_span, end_span)
             .map(|x| Some(Block(x)))
     }
+    fn function_signature(&mut self) -> Result<FunctionSignature> {
+        let name = self
+            .name()
+            .ok_or_else(|| self.err("expected function name"))?;
+        // use .peek() so we get the correct span for the error
+        let Some(Spanned {
+            kind: Tt::Paren(params, _),
+            span,
+        }) = self.peek()
+        else {
+            return Err(self.err("expected paren list of function parameters"));
+        };
+        self.next().unwrap();
+        let start_span = span.start + 1..span.start + 1;
+        let end_span = span.end - 1..span.end - 1;
+        let parameters = self.block(Self::param, params, start_span, end_span)?;
+        let returns = self.ty()?;
+        Ok(FunctionSignature {
+            name,
+            parameters,
+            returns,
+        })
+    }
     fn decl(&mut self) -> Parsed<Decl> {
         self.spanned2(Self::decl_kind)
     }
@@ -514,62 +537,15 @@ impl<'src> Parser<'src> {
         };
         let decl = match kind {
             Tt::Plain(P::Fn) => {
-                let name = self
-                    .name()
-                    .ok_or_else(|| self.err("expected function name"))?;
-                // use .peek() so we get the correct span for the error
-                let Some(Spanned {
-                    kind: Tt::Paren(params, _),
-                    span,
-                }) = self.peek()
-                else {
-                    return Err(self.err("expected paren list of function parameters"));
-                };
-                self.next().unwrap();
-                let start_span = span.start + 1..span.start + 1;
-                let end_span = span.end - 1..span.end - 1;
-                let parameters = self.block(Self::param, params, start_span, end_span)?;
-                let returns = self.ty()?;
+                let signature = self.function_signature()?;
                 let body = self.colon_block()?;
-                DeclKind::Function(Function {
-                    name,
-                    parameters,
-                    returns,
-                    body,
-                })
+                DeclKind::Function(Function { signature, body })
             }
             Tt::Plain(P::Extern) => {
                 self.just(P::Fn)
                     .ok_or_else(|| self.err("expected fn keyword after extern"))?;
-                let name = self
-                    .name()
-                    .ok_or_else(|| self.err("expected extern function name"))?;
-                let Some(Spanned {
-                    kind: Tt::Paren(params, _),
-                    span,
-                }) = self.peek()
-                else {
-                    return Err(self.err("expected paren list of extern function parameters"));
-                };
-                self.next().unwrap();
-                let start_span = span.start + 1..span.start + 1;
-                let end_span = span.end - 1..span.end - 1;
-                let parameters = self.block(
-                    |this| {
-                        this.ty().and_then(|x| {
-                            x.ok_or_else(|| this.err("expected extern function parameter type"))
-                        })
-                    },
-                    params,
-                    start_span,
-                    end_span,
-                )?;
-                let returns = self.ty()?;
-                DeclKind::ExternFunction(ExternFunction {
-                    name,
-                    parameters,
-                    returns,
-                })
+                let signature = self.function_signature()?;
+                DeclKind::ExternFunction(signature)
             }
             Tt::Plain(P::Struct) => {
                 let name = self
