@@ -299,17 +299,18 @@ impl<'a> IrBuilder<'a> {
             E::As(value, ty) => {
                 let value_reg = self.build_expr_unvoid(value, span.clone())?;
                 let ir_ty = self.build_ty(ty)?;
-                let kind = match self.program_tys[ir_ty] {
-                    TyKind::Int(k) => k,
+                match self.program_tys[ir_ty] {
+                    TyKind::Int(kind) => self.push_store(Sk::IntCast(value_reg, kind), span).some(),
+                    TyKind::Pointer(kind) => {
+                        self.push_store(Sk::PtrCast(value_reg, kind), span).some()
+                    }
                     ref t => {
                         return Err(Error {
                             kind: ErrorKind::CantCastToTy(self.program_tys.format_kind(t)),
-                            // Should we annotate the span of the type or the entire `as` expression?
                             span: ty.span.clone(),
                         });
                     }
-                };
-                self.push_store(Sk::IntCast(value_reg, kind), span).some()
+                }
             }
             // NOTE: When building Paren and Block, we forget their spans, which means subsequent error diagnostics will only ever point to the inner expression. Is this good or bad? We could change this by creating a Copy of the inner register, assigning the copy the outer span.
             E::Paren(inner) => self.build_expr(inner.as_ref(), unvoid)?,
@@ -490,6 +491,7 @@ impl<'a> IrBuilder<'a> {
         let t = |r| *self.tys.get(r).unwrap();
         match sk {
             &Sk::Int(_, kind) | &Sk::IntCast(_, kind) => self.program_tys.insert(TyKind::Int(kind)),
+            &Sk::PtrCast(_, kind) => self.program_tys.insert(TyKind::Pointer(kind)),
             Sk::Phi(regs) => t(regs.first_key_value().expect("empty phi").1),
             Sk::BinOp(_, lhs, _rhs) => t(lhs),
             Sk::PtrOffset(ptr, _) => t(ptr),

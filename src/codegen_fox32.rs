@@ -405,6 +405,10 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                             let min_size = size.min(get_size.of_ty(f.tys[inner]));
                             write_inst!(code, "movz{min_size} {}, {}", reg.foo(), inner_reg.foo());
                         }
+                        Sk::PtrCast(pointer, _kind) => {
+                            let pointer_reg = &regs[pointer];
+                            write_inst!(code, "mov {}, {}", reg.foo(), pointer_reg.foo());
+                        }
                         Sk::PtrOffset(lhs, rhs) => {
                             let stride = get_size.of_inner_in_bytes(f.tys[lhs]);
                             let lhs_reg = regs.get(lhs).unwrap();

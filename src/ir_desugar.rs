@@ -212,6 +212,7 @@ fn desugar_block(
                     // we could `do_not_visit` all of these, but that would be annoying
                     Sk::Int(..)
                     | Sk::IntCast(..)
+                    | Sk::PtrCast(..)
                     | Sk::PtrOffset(..)
                     | Sk::FieldOffset(..)
                     | Sk::StackAlloc(_)

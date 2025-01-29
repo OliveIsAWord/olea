@@ -577,6 +577,7 @@ impl Inst {
                 match *sk {
                     Sk::UnaryOp(_, r)
                     | Sk::IntCast(r, _)
+                    | Sk::PtrCast(r, _)
                     | Sk::Read(r)
                     | Sk::Copy(r)
                     | Sk::FieldOffset(r, _) => f(r, false),
@@ -632,6 +633,7 @@ impl Inst {
                 Sk::BinOp(_, r1, r2) | Sk::PtrOffset(r1, r2) => r1 == reg || r2 == reg,
                 Sk::UnaryOp(_, r)
                 | Sk::IntCast(r, _)
+                | Sk::PtrCast(r, _)
                 | Sk::Read(r)
                 | Sk::Copy(r)
                 | Sk::FieldOffset(r, _) => r == reg,
@@ -664,6 +666,8 @@ pub enum StoreKind {
     BinOp(BinOp, Register, Register),
     /// Casting an integer value to another integer type.
     IntCast(Register, IntKind),
+    /// Casting an pointer inner type to a different type.
+    PtrCast(Register, Ty),
     /// A pointer offset from the first register by a number of elements according to the second register. Equivalent to `r1[r2]@`.
     PtrOffset(Register, Register),
     /// A pointer offset to a field of the pointed struct.

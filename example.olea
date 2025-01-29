@@ -1,4 +1,2 @@
-struct Unit
-
-fn main(x Unit) Unit:
-    x
+fn biter(x u32^) u8:
+    (x as u8^)[3]

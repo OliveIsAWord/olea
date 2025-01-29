@@ -82,6 +82,10 @@ impl<'a> TypeChecker<'a> {
                 self.int(int)?;
                 TyKind::Int(kind)
             }
+            Sk::PtrCast(pointer, kind) => {
+                self.pointer(pointer)?;
+                TyKind::Pointer(kind)
+            }
             Sk::Copy(r) => self.t(r).clone(),
             Sk::BinOp(op, lhs, rhs) => {
                 match op {
