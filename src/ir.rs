@@ -121,7 +121,7 @@ impl TyMap {
         use TyKind as T;
         // exhaustiveness check; if this errors then you should probably update this function!
         match a {
-            T::Int(_) | T::Pointer(_) | T::Function(..) | T::Struct{..} => {}
+            T::Int(_) | T::Pointer(_) | T::Function(..) | T::Struct { .. } => {}
         }
         match (a, b) {
             (T::Int(a), T::Int(b)) => a == b,
@@ -142,8 +142,8 @@ impl TyMap {
                 }
                 true
             }
-            (T::Struct{name: a, ..}, T::Struct{name: b, ..}) => a == b,
-            _ => false
+            (T::Struct { name: a, .. }, T::Struct { name: b, .. }) => a == b,
+            _ => false,
         }
     }
 }
