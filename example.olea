@@ -1,9 +1,8 @@
 struct Foo:
     a u8
-    b usize
+    b u16
 
 fn main() Foo:
     Foo:
-        b 1 + 1000
+        b 1u16 + 1000u16
         a 2u8 + 2u8
-        # c main

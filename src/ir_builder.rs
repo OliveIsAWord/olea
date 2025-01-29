@@ -2,6 +2,13 @@ use crate::ast;
 use crate::compiler_types::{Map, Name, Set, Span, Spanned, Str};
 use crate::ir::*;
 
+const INT_TYPES: &[(&str, IntKind)] = &[
+    ("u8", IntKind::U8),
+    ("u16", IntKind::U16),
+    ("u32", IntKind::U32),
+    ("usize", IntKind::Usize),
+];
+
 /// This trait defines a helper method for transforming a `T` into an `Option<T>` with a postfix syntax.
 trait ToSome {
     fn some(self) -> Option<Self>
@@ -243,16 +250,13 @@ impl<'a> IrBuilder<'a> {
             }
             E::Int(int, suffix) => {
                 let int_ty = if let Some(suffix) = suffix {
-                    match suffix.kind.as_ref() {
-                        "usize" => IntKind::Usize,
-                        "u8" => IntKind::U8,
-                        _ => {
-                            return Err(Error {
-                                kind: ErrorKind::UnknownIntLiteralSuffix,
-                                span: suffix.span.clone(),
-                            });
-                        }
-                    }
+                    INT_TYPES
+                        .iter()
+                        .find_map(|(name, int_kind)| (**name == *suffix.kind).then_some(*int_kind))
+                        .ok_or_else(|| Error {
+                            kind: ErrorKind::UnknownIntLiteralSuffix,
+                            span: suffix.span.clone(),
+                        })?
                 } else {
                     IntKind::Usize
                 };
@@ -630,12 +634,6 @@ impl<'a> IrBuilder<'a> {
 }
 
 pub fn build(program: &ast::Program) -> Result<Program> {
-    const INT_TYPES: &[(&str, IntKind)] = &[
-        ("u8", IntKind::U8),
-        ("u16", IntKind::U16),
-        ("u32", IntKind::U32),
-        ("usize", IntKind::Usize),
-    ];
     use ast::DeclKind as D;
     let mut program_tys = TyMap::new();
     // Global type construction first pass: register all type names in `defined_tys`. Type declarations can reference structs declared after themselves, even cyclically.
