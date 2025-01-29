@@ -284,6 +284,7 @@ fn desugar_block(
                                 add_copy(literal_reg);
                             }
                         }
+                        assert_eq!(fields.next(), None);
                     }
                     &mut Sk::Read(src) => {
                         i -= 1;
