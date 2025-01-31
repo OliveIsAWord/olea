@@ -1,8 +1,6 @@
-struct Foo:
-    a u8
-    b u16
+struct Event:
+    event_type u32
 
-fn main() Foo:
-    Foo:
-        b 1u16 + 1000u16
-        a 2u8 + 2u8
+fn main(e Event):
+    while (e):
+        0

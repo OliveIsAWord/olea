@@ -210,7 +210,7 @@ impl<'a> TypeChecker<'a> {
         for inst in &block.insts {
             self.visit_inst(inst)?;
         }
-        match &block.exit {
+        match dbg!(&block.exit) {
             Exit::Jump(_) => Ok(()),
             Exit::CondJump(cond, _, _) => match cond {
                 &Condition::NonZero(r) => self.int(r).map(|_| ()),
@@ -240,8 +240,7 @@ impl<'a> TypeChecker<'a> {
             tys: &f.tys,
             name,
         };
-        for i in f.cfg.dom_iter() {
-            let block = f.blocks.get(&i).unwrap();
+        for block in f.blocks.values() {
             this.visit_block(block)?;
         }
         Ok(())
