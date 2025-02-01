@@ -209,6 +209,10 @@ impl Arborizer<'_> {
                         has_separator = true;
                         let _ = self.consume_if(C::Newline);
                     }
+                } else if let Token::Control(C::Newline | C::Dedent) =
+                    self.tokens.get(self.i - 1).unwrap().kind
+                {
+                    break;
                 }
             }
             let multi = has_separator || block.len() != 1;
