@@ -255,10 +255,29 @@ impl<'src> Parser<'src> {
         let Some(name) = self.name() else {
             return Err(self.err("expected function parameter"));
         };
+        let Some(Spanned {
+            kind: Tt::IndentedBlock(ty_block),
+            span,
+        }) = self.peek()
+        else {
+            return Err(self.err("expected function parameter type annotation"));
+        };
+        if ty_block.len() != 1 {
+            return Err(self.err("function parameter type annotation must be a single item"));
+        }
+        self.next().unwrap();
         let ty = self
-            .ty()
-            .transpose()
-            .unwrap_or_else(|| Err(self.err("expected function parameter type")))?;
+            .block(
+                |this| {
+                    this.ty()
+                        .transpose()
+                        .unwrap_or_else(|| Err(self.err("expected function parameter type")))
+                },
+                ty_block,
+                span.start..span.start,
+                span.end..span.end,
+            )?
+            .remove(0);
         Ok((name, ty))
     }
     fn expr(&mut self) -> Result<Expr> {

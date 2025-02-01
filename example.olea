@@ -1,17 +1,10 @@
-a: a
- a2
-b: b
+fn f(
+  name1:
+      u8
+  name2: u16
+) u16:
+    name1 as u16 + name2
 
-f
- (
-  a:a
-  b:b
-  c
-  d:d
- )
-a
- :
- b
- c
-d
-a: aa
+struct Foo:
+    field1: Foo^
+    field2: Foo^^
