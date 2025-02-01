@@ -280,6 +280,31 @@ impl<'src> Parser<'src> {
             .remove(0);
         Ok((name, ty))
     }
+    fn function_argument(&mut self) -> Result<(Name, Expr)> {
+        let Some(name) = self.name() else {
+            return Err(self.err("expected function argument name"));
+        };
+        let Some(Spanned {
+            kind: Tt::IndentedBlock(arg_body),
+            span,
+        }) = self.peek()
+        else {
+            return Err(self.err("expected function argument body"));
+        };
+        if arg_body.len() != 1 {
+            return Err(self.err("function argument must be a single item"));
+        }
+        self.next().unwrap();
+        let arg = self
+            .block(
+                Self::expr,
+                arg_body,
+                span.start..span.start,
+                span.end..span.end,
+            )?
+            .remove(0);
+        Ok((name, arg))
+    }
     fn expr(&mut self) -> Result<Expr> {
         self.expr_at(Level::Min)
     }
@@ -314,28 +339,7 @@ impl<'src> Parser<'src> {
             let block = self.colon_block()?;
             ExprKind::Block(block)
         } else if let Some(name) = self.name() {
-            if let Some(Spanned {
-                kind: Tt::IndentedBlock(fields),
-                span: fields_span,
-            }) = self.peek()
-            {
-                self.next().unwrap();
-                let fields = self.block(
-                    |this| {
-                        Ok((
-                            this.name()
-                                .ok_or_else(|| this.err("expected struct field name"))?,
-                            this.expr()?,
-                        ))
-                    },
-                    fields,
-                    fields_span.start..fields_span.start,
-                    fields_span.end..fields_span.end,
-                )?;
-                ExprKind::Struct(name, fields)
-            } else {
-                ExprKind::Place(PlaceKind::Var(name))
-            }
+            ExprKind::Place(PlaceKind::Var(name))
         } else if let Some((int, suffix)) = self.int() {
             ExprKind::Int(int, suffix)
         } else if self.just(P::If).is_some() {
@@ -426,7 +430,7 @@ impl<'src> Parser<'src> {
             {
                 self.next().unwrap();
                 let args = self.block(
-                    Self::expr,
+                    Self::function_argument,
                     args,
                     args_span.start + 1..args_span.start + 1,
                     args_span.end - 1..args_span.end - 1,

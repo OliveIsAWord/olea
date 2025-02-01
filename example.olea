@@ -1,10 +1,8 @@
-fn f(
-  name1:
-      u8
-  name2: u16
-) u16:
-    name1 as u16 + name2
+fn sub(a: usize, b: usize) usize: a - b
 
 struct Foo:
-    field1: Foo^
-    field2: Foo^^
+    field1: usize^
+    field2: u8^^
+
+fn main():
+    sub(a: 42, b: 24)

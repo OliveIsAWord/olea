@@ -471,11 +471,11 @@ impl<'a> IrBuilder<'a> {
                         // dummy return
                         vec![self.new_reg(self.dummy_ty, span.clone())]
                     }
-                };
+                                    };
                 let return_reg = returns.first().copied();
                 let args = args
                     .iter()
-                    .map(|arg| self.build_expr_unvoid(arg, span.clone()))
+                    .map(|(_, arg)| self.build_expr_unvoid(arg, span.clone()))
                     .collect::<Result<_>>()?;
                 self.push_inst(Inst::Call {
                     callee,
