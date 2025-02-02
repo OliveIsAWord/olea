@@ -62,16 +62,19 @@ struct IrBuilder<'a> {
     scopes: Vec<Map<Str, Register>>,
     next_reg_id: u128,
     program_tys: &'a mut TyMap,
-    function_tys: &'a Map<Str, (Vec<Ty>, Option<Ty>)>,
+    // a map from function ty ids to its (mostly) typeless Olea signature
+    // return is Some(ty) for convenience, or None if void
+    function_tys: &'a Map<Ty, (Vec<Str>, Option<Ty>)>,
+    function_ty_ids: &'a Map<Str, Ty>,
     defined_tys: &'a DefinedTys,
     dummy_ty: Ty,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum MaybeVar {
-    // A register containing the value we're accessing.
+    /// A register containing the value we're accessing.
     Constant(Register),
-    // A register containing a pointer to the value we're accessing.
+    /// A register containing a pointer to the value we're accessing.
     Variable(Register),
 }
 
@@ -112,7 +115,8 @@ impl DefinedTys {
 
 impl<'a> IrBuilder<'a> {
     fn new(
-        function_tys: &'a Map<Str, (Vec<Ty>, Option<Ty>)>,
+        function_tys: &'a Map<Ty, (Vec<Str>, Option<Ty>)>,
+        function_ty_ids: &'a Map<Str, Ty>,
         defined_tys: &'a DefinedTys,
         program_tys: &'a mut TyMap,
     ) -> Self {
@@ -128,6 +132,7 @@ impl<'a> IrBuilder<'a> {
             next_reg_id: 0,
             dummy_ty: program_tys.insert(TyKind::Int(IntKind::U8)),
             function_tys,
+            function_ty_ids,
             defined_tys,
             program_tys,
         }
@@ -262,72 +267,6 @@ impl<'a> IrBuilder<'a> {
                 };
                 self.push_store(Sk::Int((*int).into(), int_ty), span).some()
             }
-            E::Struct(name, fields) => {
-                const DUMMY_REG: Register = Register(u128::MAX);
-                let mut evaled_fields: Map<Str, (Span, Register)> = Map::new();
-                for (field, expr) in fields {
-                    if let Some((prev_span, _)) = evaled_fields.get(&field.kind) {
-                        return Err(Error {
-                            kind: ErrorKind::NameConflict("struct field", prev_span.clone().some()),
-                            span: field.span.clone(),
-                        });
-                    }
-                    let evaled = self.build_expr_unvoid(expr, span.clone())?;
-                    evaled_fields.insert(field.kind.clone(), (field.span.clone(), evaled));
-                }
-                let Some((struct_ty, struct_span)) = self.defined_tys.tys.get(&name.kind) else {
-                    return Err(Error {
-                        kind: ErrorKind::NotFound("struct type", name.kind.clone()),
-                        span: name.span.clone(),
-                    });
-                };
-                let TyKind::Struct {
-                    name: type_name,
-                    fields: type_fields,
-                } = &self.program_tys[*struct_ty]
-                else {
-                    return Err(Error {
-                        kind: ErrorKind::NotStruct(name.kind.clone()),
-                        span: name.span.clone(),
-                    });
-                };
-                assert_eq!(&name.kind, type_name);
-                let mut filled_fields: Vec<(Str, Register)> = type_fields
-                    .iter()
-                    .map(|(name, _)| (name.clone(), DUMMY_REG))
-                    .collect();
-                for (name, (span, r)) in evaled_fields {
-                    let Some(dummy_r) = filled_fields
-                        .iter_mut()
-                        .find_map(|(field_name, r)| (&name == field_name).then_some(r))
-                    else {
-                        return Err(Error {
-                            kind: ErrorKind::NotFound("struct field", name),
-                            span,
-                        });
-                    };
-                    *dummy_r = r;
-                }
-                let missing_fields: Vec<_> = filled_fields
-                    .iter()
-                    .filter(|(_, r)| *r == DUMMY_REG)
-                    .map(|(name, _)| name.clone())
-                    .collect();
-                if !missing_fields.is_empty() {
-                    return Err(Error {
-                        kind: ErrorKind::MissingFields(missing_fields, struct_span.clone()),
-                        span,
-                    });
-                }
-                self.push_store(
-                    Sk::Struct {
-                        name: name.kind.clone(),
-                        fields: filled_fields,
-                    },
-                    span,
-                )
-                .some()
-            }
             E::UnaryOp(op, e) => {
                 use UnaryOp as B;
                 use ast::UnaryOpKind as A;
@@ -456,33 +395,74 @@ impl<'a> IrBuilder<'a> {
                 None
             }
             E::Call(callee, args) => {
+                const DUMMY_REG: Register = Register(u128::MAX);
+                dbg!(args);
                 let callee = self.build_expr_unvoid(callee, span.clone())?;
-                let returns: Vec<_> = match &self.program_tys[self.tys[&callee]] {
-                    TyKind::Function(_, returns) => {
-                        assert!(matches!(returns.len(), 0 | 1));
-                        // somewhat silly clone because we need mutable access to `self` for `new_reg`.
-                        returns
-                            .clone()
-                            .into_iter()
-                            .map(|ty| self.new_reg(ty, span.clone()))
-                            .collect()
-                    }
-                    _ => {
-                        // dummy return
-                        vec![self.new_reg(self.dummy_ty, span.clone())]
-                    }
-                                    };
-                let return_reg = returns.first().copied();
-                let args = args
+                let Some((arg_names, returns)) = self.function_tys.get(&self.tys[&callee]) else {
+                    todo!("error diagnostic: not a function");
+                };
+                dbg!(arg_names);
+                dbg!(returns);
+                let evaled_args: Vec<Register> = args
                     .iter()
-                    .map(|(_, arg)| self.build_expr_unvoid(arg, span.clone()))
+                    .map(|(_, expr)| self.build_expr_unvoid(expr, span.clone()))
                     .collect::<Result<_>>()?;
-                self.push_inst(Inst::Call {
-                    callee,
-                    args,
-                    returns,
-                });
-                return_reg
+                dbg!(evaled_args);
+                todo!()
+                /*
+                let Some((struct_ty, struct_span)) = self.defined_tys.tys.get(&name.kind) else {
+                    return Err(Error {
+                        kind: ErrorKind::NotFound("struct type", name.kind.clone()),
+                        span: name.span.clone(),
+                    });
+                };
+                let TyKind::Struct {
+                    name: type_name,
+                    fields: type_fields,
+                } = &self.program_tys[*struct_ty]
+                else {
+                    return Err(Error {
+                        kind: ErrorKind::NotStruct(name.kind.clone()),
+                        span: name.span.clone(),
+                    });
+                };
+                assert_eq!(&name.kind, type_name);
+                let mut filled_fields: Vec<(Str, Register)> = type_fields
+                    .iter()
+                    .map(|(name, _)| (name.clone(), DUMMY_REG))
+                    .collect();
+                for (name, (span, r)) in evaled_fields {
+                    let Some(dummy_r) = filled_fields
+                        .iter_mut()
+                        .find_map(|(field_name, r)| (&name == field_name).then_some(r))
+                    else {
+                        return Err(Error {
+                            kind: ErrorKind::NotFound("struct field", name),
+                            span,
+                        });
+                    };
+                    *dummy_r = r;
+                }
+                let missing_fields: Vec<_> = filled_fields
+                    .iter()
+                    .filter(|(_, r)| *r == DUMMY_REG)
+                    .map(|(name, _)| name.clone())
+                    .collect();
+                if !missing_fields.is_empty() {
+                    return Err(Error {
+                        kind: ErrorKind::MissingFields(missing_fields, struct_span.clone()),
+                        span,
+                    });
+                }
+                self.push_store(
+                    Sk::Struct {
+                        name: name.kind.clone(),
+                        fields: filled_fields,
+                    },
+                    span,
+                )
+                .some()
+                */
             }
         };
         // println!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");
@@ -493,10 +473,17 @@ impl<'a> IrBuilder<'a> {
         use ast::PlaceKind as Pk;
         match kind {
             Pk::Var(name) => self
-                .get_var(name)
-                .map(MaybeVar::Variable)
+                .scopes
+                .iter()
+                .rev()
+                .find_map(|scope| {
+                    scope
+                        .get(name.kind.as_ref())
+                        .copied()
+                        .map(MaybeVar::Variable)
+                })
                 .or_else(|| {
-                    self.function_tys
+                    self.function_ty_ids
                         .contains_key(&name.kind)
                         .then(|| self.push_store(StoreKind::Function(name.kind.clone()), span))
                         .map(MaybeVar::Constant)
@@ -540,13 +527,6 @@ impl<'a> IrBuilder<'a> {
         reg
     }
 
-    fn get_var(&self, name: &Name) -> Option<Register> {
-        self.scopes
-            .iter()
-            .rev()
-            .find_map(|scope| scope.get(name.kind.as_ref()).copied())
-    }
-
     fn push_write(&mut self, dst: Register, src: Register) {
         self.push_inst(Inst::Write(dst, src));
     }
@@ -588,15 +568,7 @@ impl<'a> IrBuilder<'a> {
                 TyKind::Pointer(inner) => inner,
                 _ => dummy_ty,
             },
-            Sk::Function(name) => {
-                let (args, returns) = self
-                    .function_tys
-                    .get(name)
-                    .expect("constructed function instruction to unknown function")
-                    .clone();
-                self.program_tys
-                    .insert(TyKind::Function(args, returns.into_iter().collect()))
-            }
+            Sk::Function(name) => self.function_ty_ids[name],
             Sk::Struct { name, .. } => self.defined_tys.tys[name].0,
         }
     }
@@ -744,49 +716,53 @@ pub fn build(program: &ast::Program) -> Result<Program> {
         }
         drop(value_cycles);
     }
-    let mut function_tys = Map::new();
+    let mut function_tys: Map<Ty, (Vec<Str>, Option<Ty>)> = Map::new();
+    let mut ir_function_tys = Map::new();
+    let mut consts: Map<Str, Ty> = Map::new();
     for ast::Decl { kind, span: _ } in &program.decls {
-        let mut build_ty = |t| defined_tys.build_ty(t, &mut program_tys);
         match kind {
             D::Function(ast::Function { signature, .. }) | D::ExternFunction(signature) => {
+                let mut build_ty = |t| defined_tys.build_ty(t, &mut program_tys);
                 let ast::FunctionSignature {
                     name,
                     parameters,
                     returns,
                 } = signature;
-                function_tys.insert(
-                    name.kind.clone(),
-                    (
-                        parameters
-                            .iter()
-                            .map(|(_, t)| build_ty(t))
-                            .collect::<Result<_>>()?,
-                        returns.as_ref().map(build_ty).transpose()?,
-                    ),
-                );
+                let parameter_tys = parameters
+                    .iter()
+                    .map(|(_, ty)| build_ty(ty))
+                    .collect::<Result<Vec<_>>>()?;
+                let return_ty = returns.as_ref().map(build_ty).transpose()?;
+                let ir_sig = (parameter_tys, return_ty.into_iter().collect());
+                ir_function_tys.insert(name.kind.clone(), ir_sig.clone());
+                let ty_id = program_tys.insert(TyKind::Function(ir_sig.0, ir_sig.1));
+                consts.insert(name.kind.clone(), ty_id);
+                let parameter_names = parameters
+                    .iter()
+                    .map(|(name, _)| name.kind.clone())
+                    .collect();
+                function_tys.insert(ty_id, (parameter_names, return_ty));
             }
             D::Struct(_) => {}
         }
     }
     let function_tys = function_tys;
+    let consts = consts;
     let mut functions = Map::new();
     for decl in &program.decls {
         match &decl.kind {
             D::Function(fn_decl) => {
-                let builder = IrBuilder::new(&function_tys, &defined_tys, &mut program_tys);
+                let builder =
+                    IrBuilder::new(&function_tys, &consts, &defined_tys, &mut program_tys);
                 let function = builder.build_function(fn_decl)?;
                 functions.insert(fn_decl.signature.name.kind.clone(), function);
             }
             D::ExternFunction(_) | D::Struct(_) => {}
         }
     }
-    let function_tys = function_tys
-        .into_iter()
-        .map(|(name, (params, returns))| (name, (params, returns.into_iter().collect())))
-        .collect();
     Ok(Program {
         functions,
-        function_tys,
+        function_tys: ir_function_tys,
         tys: program_tys,
     })
 }

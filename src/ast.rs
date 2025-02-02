@@ -100,8 +100,6 @@ pub type Expr = Spanned<ExprKind>;
 pub enum ExprKind {
     /// An integer constant with an optional suffix, such as `42usize`.
     Int(u64, Option<Name>),
-    /// A struct literal consisting of the name of the struct types, and the names and values for all of its fields.
-    Struct(Name, Vec<(Name, Expr)>),
     /// A calculation taking the value of one expression to yield another.
     UnaryOp(UnaryOp, Box<Expr>),
     /// A calculation taking the values of two expressions to yield another.
