@@ -5,4 +5,7 @@ struct Foo:
     field2: u8^^
 
 fn main():
-    sub(a: 42, b: 24)
+    sub(
+        b: 24
+        # a: 42
+    )

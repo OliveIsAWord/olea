@@ -39,7 +39,7 @@ pub enum ErrorKind {
     CantCastToTy(String),
     InfiniteType(Vec<Str>),
     NotStruct(Str),
-    MissingFields(Vec<Str>, Option<Span>),
+    MissingArgs(Vec<Str>, Option<Span>),
     #[allow(
         dead_code,
         reason = "This variant is often used sporadically and temporarily, and only serves to give better diagnostics in the presence of future language direction. It may come in and out of use over the lifetime of the compiler."
@@ -398,71 +398,58 @@ impl<'a> IrBuilder<'a> {
                 const DUMMY_REG: Register = Register(u128::MAX);
                 dbg!(args);
                 let callee = self.build_expr_unvoid(callee, span.clone())?;
-                let Some((arg_names, returns)) = self.function_tys.get(&self.tys[&callee]) else {
+                let Some((param_names, returns)) = self.function_tys.get(&self.tys[&callee]) else {
                     todo!("error diagnostic: not a function");
                 };
-                dbg!(arg_names);
+                dbg!(param_names);
                 dbg!(returns);
                 let evaled_args: Vec<Register> = args
                     .iter()
                     .map(|(_, expr)| self.build_expr_unvoid(expr, span.clone()))
                     .collect::<Result<_>>()?;
-                dbg!(evaled_args);
-                todo!()
-                /*
-                let Some((struct_ty, struct_span)) = self.defined_tys.tys.get(&name.kind) else {
-                    return Err(Error {
-                        kind: ErrorKind::NotFound("struct type", name.kind.clone()),
-                        span: name.span.clone(),
-                    });
-                };
-                let TyKind::Struct {
-                    name: type_name,
-                    fields: type_fields,
-                } = &self.program_tys[*struct_ty]
-                else {
-                    return Err(Error {
-                        kind: ErrorKind::NotStruct(name.kind.clone()),
-                        span: name.span.clone(),
-                    });
-                };
-                assert_eq!(&name.kind, type_name);
-                let mut filled_fields: Vec<(Str, Register)> = type_fields
+                dbg!(&evaled_args);
+                let mut param_regs = vec![DUMMY_REG; param_names.len()];
+                args.iter()
+                    .map(|(name, _)| name)
+                    .zip(evaled_args)
+                    .map(|(name, r)| {
+                        let span = name.span.clone();
+                        let param_i = param_names
+                            .iter()
+                            .position(|n| &name.kind == n)
+                            .ok_or_else(|| Error {
+                                kind: ErrorKind::NotFound("function argument", name.kind.clone()),
+                                span: span.clone(),
+                            })?;
+                        let param_reg = &mut param_regs[param_i];
+                        if *param_reg != DUMMY_REG {
+                            return Err(Error {
+                                kind: ErrorKind::NameConflict("function argument", None),
+                                span,
+                            });
+                        }
+                        *param_reg = r;
+                        Ok(())
+                    })
+                    .collect::<Result<()>>()?;
+                let missing_args: Vec<_> = param_names
                     .iter()
-                    .map(|(name, _)| (name.clone(), DUMMY_REG))
+                    .zip(&param_regs)
+                    .filter_map(|(name, &r)| (r == DUMMY_REG).then(|| name.clone()))
                     .collect();
-                for (name, (span, r)) in evaled_fields {
-                    let Some(dummy_r) = filled_fields
-                        .iter_mut()
-                        .find_map(|(field_name, r)| (&name == field_name).then_some(r))
-                    else {
-                        return Err(Error {
-                            kind: ErrorKind::NotFound("struct field", name),
-                            span,
-                        });
-                    };
-                    *dummy_r = r;
-                }
-                let missing_fields: Vec<_> = filled_fields
-                    .iter()
-                    .filter(|(_, r)| *r == DUMMY_REG)
-                    .map(|(name, _)| name.clone())
-                    .collect();
-                if !missing_fields.is_empty() {
+                if !missing_args.is_empty() {
                     return Err(Error {
-                        kind: ErrorKind::MissingFields(missing_fields, struct_span.clone()),
+                        kind: ErrorKind::MissingArgs(missing_args, None),
                         span,
                     });
                 }
-                self.push_store(
-                    Sk::Struct {
-                        name: name.kind.clone(),
-                        fields: filled_fields,
-                    },
-                    span,
-                )
-                .some()
-                */
+                let return_reg = returns.map(|return_ty| self.new_reg(return_ty, span));
+                self.push_inst(Inst::Call {
+                    callee,
+                    returns: return_reg.into_iter().collect(),
+                    args: param_regs,
+                });
+                return_reg
             }
         };
         // println!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");

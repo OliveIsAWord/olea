@@ -215,8 +215,8 @@ fn main() -> ExitCode {
                     format!("struct literal with non-struct type {type_name}"),
                     None,
                 ),
-                E::MissingFields(fields, span) => {
-                    const START: &str = "struct literal has missing field";
+                E::MissingArgs(fields, span) => {
+                    const START: &str = "function call has missing argument";
                     let s = match fields.len() {
                         0 => unreachable!(),
                         1 => format!("{START} `{}`", fields[0]),
