@@ -399,13 +399,20 @@ impl<'a> IrBuilder<'a> {
                 dbg!(args);
                 let callee = self.build_expr_unvoid(callee, span.clone())?;
                 let Some((param_names, returns)) = self.function_tys.get(&self.tys[&callee]) else {
-                    todo!("error diagnostic: not a function");
+                    // if we need to do anything important after this big `match`, perhaps we should replace this with a named break
+                    // add a dummy instruction to defer the error to typechecking
+                    self.push_inst(Inst::Call {
+                        callee,
+                        args: vec![],
+                        returns: vec![],
+                    });
+                    return Ok(Some(callee));
                 };
                 dbg!(param_names);
                 dbg!(returns);
                 let evaled_args: Vec<Register> = args
                     .iter()
-                    .map(|(_, expr)| self.build_expr_unvoid(expr, span.clone()))
+                    .map(|(name, body)| self.build_block_unvoid(body, name.span.clone()))
                     .collect::<Result<_>>()?;
                 dbg!(&evaled_args);
                 let mut param_regs = vec![DUMMY_REG; param_names.len()];

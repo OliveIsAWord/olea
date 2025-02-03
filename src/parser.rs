@@ -280,30 +280,12 @@ impl<'src> Parser<'src> {
             .remove(0);
         Ok((name, ty))
     }
-    fn function_argument(&mut self) -> Result<(Name, Expr)> {
-        let Some(name) = self.name() else {
-            return Err(self.err("expected function argument name"));
-        };
-        let Some(Spanned {
-            kind: Tt::IndentedBlock(arg_body),
-            span,
-        }) = self.peek()
-        else {
-            return Err(self.err("expected function argument body"));
-        };
-        if arg_body.len() != 1 {
-            return Err(self.err("function argument must be a single item"));
-        }
-        self.next().unwrap();
-        let arg = self
-            .block(
-                Self::expr,
-                arg_body,
-                span.start..span.start,
-                span.end..span.end,
-            )?
-            .remove(0);
-        Ok((name, arg))
+    fn function_argument(&mut self) -> Result<(Name, Block)> {
+        let name = self
+            .name()
+            .ok_or_else(|| self.err("expected function name"))?;
+        let body = self.colon_block()?;
+        Ok((name, body))
     }
     fn expr(&mut self) -> Result<Expr> {
         self.expr_at(Level::Min)

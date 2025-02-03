@@ -117,7 +117,7 @@ pub enum ExprKind {
     /// See [`Block`].
     Block(Block),
     /// A function call, composed of a function and a list of arguments to pass to it.
-    Call(Box<Expr>, Vec<(Name, Expr)>),
+    Call(Box<Expr>, Vec<(Name, Block)>),
     /// See [`PlaceKind`].
     Place(PlaceKind),
 }

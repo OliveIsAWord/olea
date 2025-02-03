@@ -5,7 +5,11 @@ struct Foo:
     field2: u8^^
 
 fn main():
+    let x = 0
     sub(
-        b: 24
-        # a: 42
+        b:
+            x = x + 1
+        a:
+            x = x + 1
+            x
     )
