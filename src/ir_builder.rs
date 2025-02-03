@@ -9,6 +9,12 @@ const INT_TYPES: &[(&str, IntKind)] = &[
     ("usize", IntKind::Usize),
 ];
 
+enum OleaTy {
+    Int(IntKind),
+    Pointer(Arc<Self>),
+    Function(Arc<[Self]>, Option<Arc<Self>>),
+}
+
 /// This trait defines a helper method for transforming a `T` into an `Option<T>` with a postfix syntax.
 trait ToSome {
     fn some(self) -> Option<Self>
