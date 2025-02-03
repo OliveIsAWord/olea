@@ -54,8 +54,9 @@ pub fn desugar_program(program: &mut Program) {
     }
     // TODO: update `function_tys` and the function `tys`
     // For each `Vec<Ty>` (params and returns), we need to expand any struct `Ty` into a list of its fields.
-    for (params, returns) in function_tys.values_mut() {
-        desugar_struct_in_list(params, tys);
+    for (_params, returns) in function_tys.values_mut() {
+        // TODO
+        // desugar_struct_in_list(params, tys);
         desugar_struct_in_list(returns, tys);
     }
     // 1. for each ty in the ty map
@@ -65,9 +66,10 @@ pub fn desugar_program(program: &mut Program) {
         // 2. if it's a function, mem::take its params and returns
         if let TyKind::Function(params, returns) = kind {
             use std::mem::take;
-            let mut params = take(params);
+            let params = take(params);
             let mut returns = take(returns);
-            desugar_struct_in_list(&mut params, tys);
+            // TODO
+            // desugar_struct_in_list(&mut params, tys);
             desugar_struct_in_list(&mut returns, tys);
             tys.inner.insert(ty, TyKind::Function(params, returns));
         }

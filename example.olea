@@ -1,4 +1,4 @@
-fn sub(a: usize, b: usize) usize: a - b
+fn sub(c: u8, a: usize, b: usize) usize: a - b
 
 struct Foo:
     field1: usize^
@@ -7,9 +7,11 @@ struct Foo:
 fn main():
     let x = 0
     sub(
-        b:
-            x = x + 1
         a:
+            x = x + 1
+            x
+        c: x as u8
+        b:
             x = x + 1
             x
     )

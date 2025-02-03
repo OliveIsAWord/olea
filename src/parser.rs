@@ -211,27 +211,9 @@ impl<'src> Parser<'src> {
     }
     fn ty(&mut self) -> Parsed<Ty> {
         if let Some(fn_span) = self.just(P::Fn) {
-            let Some(Spanned {
-                kind: Tt::Paren(params, _),
-                span,
-            }) = self.peek()
-            else {
-                return Err(self.err("expected function type parameters"));
-            };
-            self.next().unwrap();
-            let params = self.block(
-                |this| {
-                    this.ty()
-                        .transpose()
-                        .unwrap_or_else(|| Err(this.err("expected parameter type")))
-                },
-                params,
-                span.start..span.start,
-                span.end..span.end,
-            )?;
-            let returns = self.ty()?.map(Box::new);
+            let (params, returns) = self.function_parameters()?;
             return Ok(Some(Spanned {
-                kind: TyKind::Function(params, returns),
+                kind: TyKind::Function(params, returns.map(Box::new)),
                 span: fn_span.start..self.get_previous_span().end,
             }));
         }
@@ -535,6 +517,14 @@ impl<'src> Parser<'src> {
         let name = self
             .name()
             .ok_or_else(|| self.err("expected function name"))?;
+        let (parameters, returns) = self.function_parameters()?;
+        Ok(FunctionSignature {
+            name,
+            parameters,
+            returns,
+        })
+    }
+    fn function_parameters(&mut self) -> Result<(Vec<(Name, Ty)>, Option<Ty>)> {
         // use .peek() so we get the correct span for the error
         let Some(Spanned {
             kind: Tt::Paren(params, _),
@@ -548,11 +538,7 @@ impl<'src> Parser<'src> {
         let end_span = span.end - 1..span.end - 1;
         let parameters = self.block(Self::param, params, start_span, end_span)?;
         let returns = self.ty()?;
-        Ok(FunctionSignature {
-            name,
-            parameters,
-            returns,
-        })
+        Ok((parameters, returns))
     }
     fn decl(&mut self) -> Parsed<Decl> {
         self.spanned2(Self::decl_kind)

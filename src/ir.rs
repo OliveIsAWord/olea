@@ -8,7 +8,7 @@ pub struct Program {
     /// The functions composing this program.
     pub functions: Map<Str, Function>,
     /// The type signature of every function including extern functions.
-    pub function_tys: Map<Str, (Vec<Ty>, Vec<Ty>)>,
+    pub function_tys: Map<Str, (Map<Str, Ty>, Vec<Ty>)>,
     /// All the types used in this program, indexed by `Ty`s.
     pub tys: TyMap,
 }
@@ -79,11 +79,13 @@ impl TyMap {
             &TyKind::Pointer(inner) => format!("{}^", self.format(inner)),
             TyKind::Function(params, returns) => {
                 let mut string = "fn(".to_owned();
-                for (i, &param) in params.iter().enumerate() {
+                for (i, (name, ty)) in params.iter().enumerate() {
                     if i != 0 {
                         string.push_str(", ");
                     }
-                    string.push_str(&self.format(param));
+                    string.push_str(name);
+                    string.push_str(": ");
+                    string.push_str(&self.format(*ty));
                 }
                 string.push(')');
                 match returns.len() {
@@ -130,8 +132,8 @@ impl TyMap {
                 if a_params.len() != b_params.len() || a_returns.len() != b_returns.len() {
                     return false;
                 }
-                for (&a, &b) in a_params.iter().zip(b_params) {
-                    if !self.equals(a, b) {
+                for ((a_name, a_ty), (b_name, b_ty)) in a_params.iter().zip(b_params) {
+                    if a_name != b_name || !self.equals(*a_ty, *b_ty) {
                         return false;
                     }
                 }
@@ -471,7 +473,7 @@ pub enum TyKind {
     /// A pointer into memory storing a value of a given type.
     Pointer(Ty),
     /// A function pointer accepting and returning some values.
-    Function(Vec<Ty>, Vec<Ty>),
+    Function(Map<Str, Ty>, Vec<Ty>),
     /// A named collection of named values.
     Struct {
         /// The name of the struct type.

@@ -21,7 +21,7 @@ type Error = (Str, ErrorKind);
 type Result<T = ()> = std::result::Result<T, Error>;
 
 type Tys = Map<Register, Ty>;
-type FunctionTys<'a> = &'a Map<Str, (Vec<Ty>, Vec<Ty>)>;
+type FunctionTys<'a> = &'a Map<Str, (Map<Str, Ty>, Vec<Ty>)>;
 
 #[derive(Debug)]
 struct TypeChecker<'a> {
@@ -181,14 +181,18 @@ impl<'a> TypeChecker<'a> {
                 args,
                 returns,
             } => {
-                match self.t(*callee) {
-                    TyKind::Function(..) => {}
-                    _ => return Err((self.name.into(), ErrorKind::NotFunction(*callee))),
+                let callee = *callee;
+                let TyKind::Function(fn_params, fn_returns) = self.t(callee) else {
+                    return Err((self.name.into(), ErrorKind::NotFunction(callee)));
+                };
+                assert_eq!(fn_params.len(), args.len());
+                for (&expected, &r) in fn_params.values().zip(args) {
+                    self.expect(r, &self.ty_map[expected])?;
                 }
-                let arg_tys = args.iter().map(|r| self.tys[r]).collect();
-                let return_tys = returns.iter().map(|r| self.tys[r]).collect();
-                let fn_ty = TyKind::Function(arg_tys, return_tys);
-                self.expect(*callee, &fn_ty)
+                for (&expected, &r) in fn_returns.iter().zip(returns) {
+                    self.expect(r, &self.ty_map[expected])?;
+                }
+                Ok(())
             }
         }
     }

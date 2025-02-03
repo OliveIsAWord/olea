@@ -67,7 +67,7 @@ pub enum TyKind {
     /// A pointer to a value of a given type.
     Pointer(Box<Ty>),
     /// A function accepting and returning values of given types.
-    Function(Vec<Ty>, Option<Box<Ty>>),
+    Function(Vec<(Name, Ty)>, Option<Box<Ty>>),
 }
 
 /// The builtin integer types.
