@@ -1,17 +1,6 @@
-fn sub(c: u8, a: usize, b: usize) usize: a - b
-
 struct Foo:
-    field1: usize^
-    field2: u8^^
+    x: u32
+    y: u16
 
-fn main():
-    let x = 0
-    sub(
-        a:
-            x = x + 1
-            x
-        c: x as u8
-        b:
-            x = x + 1
-            x
-    )
+fn main() Foo:
+    Foo(y: 42u16, x: 8008135u32)
