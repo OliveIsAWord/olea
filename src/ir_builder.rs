@@ -38,7 +38,6 @@ pub enum ErrorKind {
     UnknownIntLiteralSuffix,
     CantCastToTy(String),
     InfiniteType(Vec<Str>),
-    NotStruct(Str),
     MissingArgs(Vec<Str>, Option<Span>),
     #[allow(
         dead_code,
@@ -163,9 +162,8 @@ impl<'a> IrBuilder<'a> {
                                 ),
                                 span,
                             });
-                        } else {
-                            prev_span = Some(span);
                         }
+                        prev_span = Some(span);
                     }
                 }
             }
@@ -205,7 +203,7 @@ impl<'a> IrBuilder<'a> {
     fn build_struct_constructor(
         mut self,
         ast::Struct { name, fields }: &ast::Struct,
-    ) -> Result<Function> {
+    ) -> Function {
         let TyKind::Struct {
             fields: ir_fields, ..
         } = self.program_tys[self.defined_tys.tys[&name.kind].0].clone()
@@ -232,13 +230,13 @@ impl<'a> IrBuilder<'a> {
             name.span.clone(),
         );
         self.switch_to_new_block(Exit::Return(vec![struct_reg]), BlockId::DUMMY);
-        Ok(Function::new(
+        Function::new(
             self.parameters,
             self.blocks,
             self.tys,
             self.spans,
             self.next_reg_id,
-        ))
+        )
     }
 
     fn build_block_unvoid(&mut self, block: &ast::Block, outer: Span) -> Result<Register> {
@@ -478,7 +476,7 @@ impl<'a> IrBuilder<'a> {
                 };
                 let mut evaled_args: Map<Str, (Span, Register)> = Map::new();
                 for (name, body) in args {
-                    use std::collections::btree_map::Entry::*;
+                    use std::collections::btree_map::Entry::{Occupied, Vacant};
                     let entry = match evaled_args.entry(name.kind.clone()) {
                         Occupied(e) => {
                             return Err(Error {
@@ -517,7 +515,7 @@ impl<'a> IrBuilder<'a> {
                 }
                 assert!(returns.len() < 2);
                 let return_reg = returns
-                    .get(0)
+                    .first()
                     .map(|&return_ty| self.new_reg(return_ty, span));
                 self.push_inst(Inst::Call {
                     callee,
@@ -791,7 +789,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                     span: span.clone(),
                     kind: ast::TyKind::Function(
                         parameters.clone(),
-                        returns.as_ref().cloned().map(Box::new),
+                        returns.clone().map(Box::new),
                     ),
                 };
                 let ty = defined_tys.build_ty(&ast_ty, &mut program_tys)?;
@@ -821,7 +819,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                         | D::ExternFunction(signature) => &signature.name,
                         D::Struct(ast::Struct { name, .. }) => name,
                     };
-                    (&name.kind == &prev_name.kind).then(|| prev_name.span.clone())
+                    (name.kind == prev_name.kind).then(|| prev_name.span.clone())
                 })
                 .unwrap();
             return Err(Error {
@@ -842,7 +840,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
             }
             D::Struct(s) => {
                 let builder = IrBuilder::new(&ir_function_tys, &defined_tys, &mut program_tys);
-                let function = builder.build_struct_constructor(s)?;
+                let function = builder.build_struct_constructor(s);
                 functions.insert(s.name.kind.clone(), function);
             }
             D::ExternFunction(_) => {}

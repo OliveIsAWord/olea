@@ -211,10 +211,6 @@ fn main() -> ExitCode {
                     };
                     (s, None)
                 }
-                E::NotStruct(type_name) => (
-                    format!("struct literal with non-struct type {type_name}"),
-                    None,
-                ),
                 E::MissingArgs(fields, span) => {
                     const START: &str = "function call has missing argument";
                     let s = match fields.len() {
