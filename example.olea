@@ -1,6 +1,10 @@
-struct Foo:
-    x: u32
-    y: u16
+fn foo(
+    b: usize
+    a: u8
+) usize: a as usize + b
 
-fn main() Foo:
-    Foo(y: 42u16, x: 8008135u32)
+fn main() usize:
+    foo(
+        a: 1u8
+        b: 2
+    )

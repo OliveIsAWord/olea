@@ -1,5 +1,5 @@
 use crate::ast;
-use crate::compiler_types::{Map, Name, Set, Span, Spanned, Str};
+use crate::compiler_types::{IndexMap, Map, Name, Set, Span, Spanned, Str};
 use crate::ir::*;
 
 const INT_TYPES: &[(&str, IntKind)] = &[
@@ -39,6 +39,7 @@ pub enum ErrorKind {
     CantCastToTy(String),
     InfiniteType(Vec<Str>),
     MissingArgs(Vec<Str>, Option<Span>),
+    InvalidArgs(Vec<Str>),
     #[allow(
         dead_code,
         reason = "This variant is often used sporadically and temporarily, and only serves to give better diagnostics in the presence of future language direction. It may come in and out of use over the lifetime of the compiler."
@@ -95,20 +96,49 @@ impl DefinedTys {
                 Ok(program_tys.insert(TyKind::Pointer(inner_kind)))
             }
             T::Function(params, returns) => {
-                let params = params
-                    .iter()
-                    .map(|(name, t)| {
-                        self.build_ty(t, program_tys)
-                            .map(|t| (name.kind.clone(), t))
-                    })
-                    .collect::<Result<_>>()?;
-                let returns = returns
-                    .iter()
-                    .map(|t| self.build_ty(t, program_tys))
-                    .collect::<Result<_>>()?;
-                Ok(program_tys.insert(TyKind::Function(params, returns)))
+                self.build_function_ty(params, returns.as_ref().map(|v| &**v), program_tys)
             }
         }
+    }
+    fn build_function_ty(
+        &self,
+        params: &[(Name, ast::Ty)],
+        returns: Option<&ast::Ty>,
+        program_tys: &mut TyMap,
+    ) -> Result<Ty> {
+        let ir_params: IndexMap<_, _> = params
+            .iter()
+            .map(|(name, t)| {
+                self.build_ty(t, program_tys)
+                    .map(|t| (name.kind.clone(), t))
+            })
+            .collect::<Result<_>>()?;
+        if params.len() != ir_params.len() {
+            for name in ir_params.keys() {
+                let mut prev_span = None;
+                for (n, _) in params {
+                    let span = n.span.clone();
+                    if &n.kind == name {
+                        if let Some(prev_span) = prev_span.clone() {
+                            return Err(Error {
+                                kind: ErrorKind::NameConflict(
+                                    "function parameter",
+                                    Some(prev_span),
+                                ),
+                                span,
+                            });
+                        }
+                        prev_span = Some(span);
+                    }
+                }
+            }
+            unreachable!()
+        }
+        let returns = returns
+            .iter()
+            .map(|t| self.build_ty(t, program_tys))
+            .collect::<Result<_>>()?;
+        Ok(program_tys.insert(TyKind::Function(ir_params, returns)))
     }
 }
 
@@ -140,47 +170,21 @@ impl<'a> IrBuilder<'a> {
         ast::Function { signature, body }: &ast::Function,
     ) -> Result<Function> {
         let ast::FunctionSignature {
-            name: _,
+            name,
             parameters,
             returns,
         } = signature;
-        let sorted_parameters: Map<_, _> = parameters
-            .iter()
-            .map(|(a, b)| (a.kind.clone(), (a.span.clone(), b)))
-            .collect();
-        if parameters.len() != sorted_parameters.len() {
-            for name in sorted_parameters.keys() {
-                let mut prev_span = None;
-                for (n, _) in parameters {
-                    let span = n.span.clone();
-                    if &n.kind == name {
-                        if let Some(prev_span) = prev_span.clone() {
-                            return Err(Error {
-                                kind: ErrorKind::NameConflict(
-                                    "function parameter",
-                                    Some(prev_span),
-                                ),
-                                span,
-                            });
-                        }
-                        prev_span = Some(span);
-                    }
-                }
-            }
-            unreachable!()
-        }
-        for (p_name, (p_span, p_ty)) in sorted_parameters {
-            let ir_ty = self.build_ty(p_ty)?;
-            let reg = self.new_reg(ir_ty, p_span.clone());
+        let TyKind::Function(ir_params, _) =
+            self.program_tys[self.function_tys[&name.kind]].clone()
+        else {
+            unreachable!();
+        };
+        assert_eq!(parameters.len(), ir_params.len());
+        for ((p_name, _), (_, ir_ty)) in parameters.iter().zip(ir_params) {
+            let reg = self.new_reg(ir_ty, p_name.span.clone());
             self.parameters.push(reg);
             // Currently, we assume all variables are stack allocated, so we copy the argument to a stack allocation.
-            let var_reg = self.new_var(
-                Name {
-                    kind: p_name,
-                    span: p_span,
-                },
-                ir_ty,
-            );
+            let var_reg = self.new_var(p_name.clone(), ir_ty);
             self.push_write(var_reg, reg);
         }
         let return_regs = if let Some(returns) = returns.as_ref() {
@@ -200,10 +204,7 @@ impl<'a> IrBuilder<'a> {
         ))
     }
 
-    fn build_struct_constructor(
-        mut self,
-        ast::Struct { name, fields }: &ast::Struct,
-    ) -> Function {
+    fn build_struct_constructor(mut self, ast::Struct { name, fields }: &ast::Struct) -> Function {
         let TyKind::Struct {
             fields: ir_fields, ..
         } = self.program_tys[self.defined_tys.tys[&name.kind].0].clone()
@@ -474,9 +475,10 @@ impl<'a> IrBuilder<'a> {
                     });
                     return Ok(Some(callee));
                 };
-                let mut evaled_args: Map<Str, (Span, Register)> = Map::new();
+                // use `IndexMap` so that "invalid args" error is in the same order as the argument list
+                let mut evaled_args: IndexMap<Str, (Span, Register)> = IndexMap::new();
                 for (name, body) in args {
-                    use std::collections::btree_map::Entry::{Occupied, Vacant};
+                    use indexmap::map::Entry::{Occupied, Vacant};
                     let entry = match evaled_args.entry(name.kind.clone()) {
                         Occupied(e) => {
                             return Err(Error {
@@ -492,24 +494,26 @@ impl<'a> IrBuilder<'a> {
                     let r = self.build_block_unvoid(body, name.span.clone())?;
                     entry.insert((name.span.clone(), r));
                 }
-                let unknown_args: Vec<_> = evaled_args
-                    .keys()
-                    .filter(|name| !params.contains_key(name.as_ref()))
-                    .collect();
-                if !unknown_args.is_empty() {
-                    let name = unknown_args[0].clone();
-                    let span = evaled_args[&name].0.clone();
-                    let kind = ErrorKind::NotFound("function argument", name);
-                    return Err(Error { kind, span });
-                }
-                let missing_args: Vec<_> = params
-                    .keys()
-                    .filter(|name| !evaled_args.contains_key(name.as_ref()))
-                    .cloned()
+                let mut missing_args = vec![];
+                let args = params
+                    .iter()
+                    .map(|(name, _)| match evaled_args.shift_remove(name) {
+                        Some((_, r)) => r,
+                        None => {
+                            missing_args.push(name.clone());
+                            return Register(u128::MAX);
+                        }
+                    })
                     .collect();
                 if !missing_args.is_empty() {
                     return Err(Error {
                         kind: ErrorKind::MissingArgs(missing_args, None),
+                        span,
+                    });
+                }
+                if !evaled_args.is_empty() {
+                    return Err(Error {
+                        kind: ErrorKind::InvalidArgs(evaled_args.into_keys().collect()),
                         span,
                     });
                 }
@@ -520,7 +524,7 @@ impl<'a> IrBuilder<'a> {
                 self.push_inst(Inst::Call {
                     callee,
                     returns: return_reg.into_iter().collect(),
-                    args: evaled_args.into_iter().map(|(_, (_, r))| r).collect(),
+                    args,
                 });
                 return_reg
             }
@@ -777,7 +781,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
         drop(value_cycles);
     }
     let mut ir_function_tys: Map<Str, Ty> = Map::new();
-    for ast::Decl { kind, span } in &program.decls {
+    for ast::Decl { kind, .. } in &program.decls {
         let (name, ty) = match kind {
             D::Function(ast::Function { signature, .. }) | D::ExternFunction(signature) => {
                 let ast::FunctionSignature {
@@ -785,14 +789,11 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                     parameters,
                     returns,
                 } = signature;
-                let ast_ty = ast::Ty {
-                    span: span.clone(),
-                    kind: ast::TyKind::Function(
-                        parameters.clone(),
-                        returns.clone().map(Box::new),
-                    ),
-                };
-                let ty = defined_tys.build_ty(&ast_ty, &mut program_tys)?;
+                let ty = defined_tys.build_function_ty(
+                    parameters,
+                    returns.as_ref(),
+                    &mut program_tys,
+                )?;
                 (name, ty)
             }
             D::Struct(ast::Struct { name, .. }) => {

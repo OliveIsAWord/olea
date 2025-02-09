@@ -6,6 +6,14 @@ pub type Map<K, V> = std::collections::BTreeMap<K, V>;
 /// A sorted set.
 pub type Set<K> = std::collections::BTreeSet<K>;
 
+/// An insertion order preserving map.
+pub use indexmap::IndexMap;
+
+/// An insertion order preserving set.
+pub use indexmap::IndexSet;
+
+pub type Meow<T: Ord> = Vec<T>;
+
 /// An owned string type that is cheap to clone.
 pub type Str = std::rc::Rc<str>;
 

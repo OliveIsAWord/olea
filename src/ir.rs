@@ -1,6 +1,6 @@
 //! The Olea intermediate representation, a low level language that consists of [SSA](https://en.wikipedia.org/wiki/Static_single-assignment_form) registers and [basic blocks](https://en.wikipedia.org/wiki/Basic_block).
 
-use crate::compiler_types::{Map, Set, Span, Str};
+use crate::compiler_types::{IndexMap, Map, Set, Span, Str};
 
 /// A full or partial program.
 #[derive(Clone, Debug)]
@@ -8,7 +8,7 @@ pub struct Program {
     /// The functions composing this program.
     pub functions: Map<Str, Function>,
     /// The type signature of every function including extern functions.
-    pub function_tys: Map<Str, (Map<Str, Ty>, Vec<Ty>)>,
+    pub function_tys: Map<Str, (IndexMap<Str, Ty>, Vec<Ty>)>,
     /// All the types used in this program, indexed by `Ty`s.
     pub tys: TyMap,
 }
@@ -473,7 +473,7 @@ pub enum TyKind {
     /// A pointer into memory storing a value of a given type.
     Pointer(Ty),
     /// A function pointer accepting and returning some values.
-    Function(Map<Str, Ty>, Vec<Ty>),
+    Function(IndexMap<Str, Ty>, Vec<Ty>),
     /// A named collection of named values.
     Struct {
         /// The name of the struct type.

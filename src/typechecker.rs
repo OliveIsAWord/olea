@@ -1,4 +1,4 @@
-use crate::compiler_types::{Map, Str};
+use crate::compiler_types::{IndexMap, Map, Str};
 use crate::ir::*;
 
 #[derive(Clone, Debug)]
@@ -21,7 +21,7 @@ type Error = (Str, ErrorKind);
 type Result<T = ()> = std::result::Result<T, Error>;
 
 type Tys = Map<Register, Ty>;
-type FunctionTys<'a> = &'a Map<Str, (Map<Str, Ty>, Vec<Ty>)>;
+type FunctionTys<'a> = &'a Map<Str, (IndexMap<Str, Ty>, Vec<Ty>)>;
 
 #[derive(Debug)]
 struct TypeChecker<'a> {

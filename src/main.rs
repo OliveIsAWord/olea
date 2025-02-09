@@ -179,7 +179,7 @@ fn main() -> ExitCode {
         Err(Spanned { kind, span }) => {
             use ir_builder::ErrorKind as E;
             let (title, note) = match kind {
-                E::NotFound(kind, v) => (format!("could not find {kind} `{v}`"), None),
+                E::NotFound(kind, name) => (format!("could not find {kind} `{name}`"), None),
                 E::NameConflict(kind, span) => (
                     format!("a {kind} with this name has already been defined"),
                     span.map(|span| ("previously defined here".to_owned(), span)),
@@ -229,6 +229,26 @@ fn main() -> ExitCode {
                     };
                     let def = span.map(|span| ("struct defined here".to_owned(), span));
                     (s, def)
+                }
+                E::InvalidArgs(names) => {
+                    let msg = match names.len() {
+                        0 => panic!(),
+                        1 => format!("invalid function argument `{}`", names[0]),
+                        2 => format!(
+                            "invalid function arguments `{}` and `{}`",
+                            names[0], names[1]
+                        ),
+                        _ => {
+                            use std::fmt::Write;
+                            let mut s = "invalid function arguments ".to_owned();
+                            for name in &names[0..names.len() - 1] {
+                                _ = write!(s, "`{name}`, ");
+                            }
+                            _ = write!(s, "and `{}`", names.last().unwrap());
+                            s
+                        }
+                    };
+                    (msg, None)
                 }
                 E::Todo(msg) => (format!("not yet implemented: {msg}"), None),
             };
