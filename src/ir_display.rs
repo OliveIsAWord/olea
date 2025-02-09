@@ -238,7 +238,11 @@ impl Display for TyKind {
                 write!(
                     f,
                     "fn({}){}",
-                    Commas(params.iter().map(|(name, ty)| format!("{name}: {ty}"))),
+                    Commas(params.iter().map(|(name, (anon, ty))| if anon.into() {
+                        format!("anon {name}: {ty}")
+                    } else {
+                        format!("{name}: {ty}")
+                    })),
                     ReturnsSpace(returns)
                 )
             }

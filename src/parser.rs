@@ -6,6 +6,7 @@
 use crate::arborist::{self as a, PlainToken as P, TokenTree as Tt};
 use crate::ast::*;
 use crate::compiler_types::{Name, Span, Spanned};
+use crate::language_types::IsAnon;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
@@ -233,7 +234,8 @@ impl<'src> Parser<'src> {
         }
         Ok(Some(ty))
     }
-    fn param(&mut self) -> Result<(Name, Ty)> {
+    fn param(&mut self) -> Result<(IsAnon, Name, Ty)> {
+        let is_anon = self.just(P::Anon).is_some().into();
         let Some(name) = self.name() else {
             return Err(self.err("expected function parameter"));
         };
@@ -260,15 +262,22 @@ impl<'src> Parser<'src> {
                 span.end..span.end,
             )?
             .remove(0);
-        Ok((name, ty))
+        Ok((is_anon, name, ty))
     }
     fn function_argument(&mut self) -> Result<FunctionArg> {
         let span_start = self.peek().unwrap().span.start;
         let name = self.name();
         let body = self.colon_block()?;
-        let kind = match name {
-            Some(name) => FunctionArgKind::Named(name, body),
-            None => FunctionArgKind::Punned(body),
+        let kind = match (name, body) {
+            (Some(name), Some(body)) => FunctionArgKind::Named(name, body),
+            (None, Some(body)) => FunctionArgKind::Punned(body),
+            (name, None) => {
+                if name.is_some() {
+                    self.i -= 1;
+                }
+                let arg = self.expr()?;
+                FunctionArgKind::Anon(arg)
+            }
         };
         let span = span_start..self.tokens[self.i - 1].span.end;
         Ok(FunctionArg { span, kind })
@@ -299,12 +308,7 @@ impl<'src> Parser<'src> {
             let end_span = span.end - 1..span.end - 1;
             let expr = self.item(Self::expr, &block[0], start_span, end_span)?;
             ExprKind::Paren(Box::new(expr))
-        } else if let Some(Spanned {
-            kind: Tt::IndentedBlock(_),
-            ..
-        }) = self.peek()
-        {
-            let block = self.colon_block()?;
+        } else if let Some(block) = self.colon_block()? {
             ExprKind::Block(block)
         } else if let Some(name) = self.name() {
             ExprKind::Place(PlaceKind::Var(name))
@@ -312,12 +316,16 @@ impl<'src> Parser<'src> {
             ExprKind::Int(int, suffix)
         } else if self.just(P::If).is_some() {
             let condition = self.expr()?;
-            let then_block = self.colon_block()?;
+            let Some(then_block) = self.colon_block()? else {
+                return Err(self.err("expected beginning of block"));
+            };
             let else_block = self.else_block()?;
             ExprKind::If(Box::new(condition), then_block, else_block)
         } else if self.just(P::While).is_some() {
             let condition = self.expr()?;
-            let body = self.colon_block()?;
+            let Some(body) = self.colon_block()? else {
+                return Err(self.err("expected beginning of block"));
+            };
             if matches!(
                 self.peek(),
                 Some(Spanned {
@@ -489,19 +497,19 @@ impl<'src> Parser<'src> {
             self.expr().map(StmtKind::Expr)
         }
     }
-    fn colon_block(&mut self) -> Result<Block> {
+    fn colon_block(&mut self) -> Parsed<Block> {
         let Some(Spanned {
             kind: Tt::IndentedBlock(stmts),
             span,
         }) = self.peek()
         else {
-            return Err(self.err("expected beginning of block"));
+            return Ok(None);
         };
         self.next().unwrap();
         let start_span = span.start + 1..span.start + 1;
         let end_span = span.end..span.end;
         self.block(Self::stmt, stmts, start_span, end_span)
-            .map(Block)
+            .map(|b| Some(Block(b)))
     }
     fn else_block(&mut self) -> Parsed<Block> {
         let Some(Spanned {
@@ -528,7 +536,7 @@ impl<'src> Parser<'src> {
             returns,
         })
     }
-    fn function_parameters(&mut self) -> Result<(Vec<(Name, Ty)>, Option<Ty>)> {
+    fn function_parameters(&mut self) -> Result<(Vec<(IsAnon, Name, Ty)>, Option<Ty>)> {
         // use .peek() so we get the correct span for the error
         let Some(Spanned {
             kind: Tt::Paren(params, _),
@@ -554,7 +562,9 @@ impl<'src> Parser<'src> {
         let decl = match kind {
             Tt::Plain(P::Fn) => {
                 let signature = self.function_signature()?;
-                let body = self.colon_block()?;
+                let Some(body) = self.colon_block()? else {
+                    return Err(self.err("expected beginning of block"));
+                };
                 DeclKind::Function(Function { signature, body })
             }
             Tt::Plain(P::Extern) => {

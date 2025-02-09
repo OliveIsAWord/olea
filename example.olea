@@ -1,6 +1,6 @@
 fn foo(
     b: usize
-    a: u8
+    anon a: u8
 ) usize: a as usize + b
 
 struct Meow:
@@ -9,4 +9,4 @@ struct Meow:
 fn main() usize:
     let meow = Meow(a: 42u8)
     let b = 2
-    foo(:meow@.a, :b)
+    foo(meow@.a, :b)

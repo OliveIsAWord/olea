@@ -5,6 +5,7 @@
 //! The types in this module represent the syntactic forms that comprise the Olea grammar. We use a convention for each category of item of an enum `FooKind` representing the element itself, and a `Foo` which contains a `FooKind` as well as the source span of the element.
 
 use crate::compiler_types::{Name, Span, Spanned};
+use crate::language_types::IsAnon;
 
 /// A full source program, made of a list of declarations.
 #[derive(Clone, Debug)]
@@ -41,8 +42,8 @@ pub struct Function {
 pub struct FunctionSignature {
     /// The name of the function.
     pub name: Name,
-    /// The list of parameters and their types that the function accepts.
-    pub parameters: Vec<(Name, Ty)>,
+    /// The list of parameters and their types that the function accepts, as well as whether each parameter can be passed "anonymously" by position.
+    pub parameters: Vec<(IsAnon, Name, Ty)>,
     /// The type of value the function returns, if any.
     pub returns: Option<Ty>,
 }
@@ -53,7 +54,7 @@ pub struct Struct {
     /// The name of the struct.
     pub name: Name,
     /// The fields of the struct.
-    pub fields: Vec<(Name, Ty)>,
+    pub fields: Vec<(IsAnon, Name, Ty)>,
 }
 
 /// See [`TyKind`].
@@ -67,7 +68,7 @@ pub enum TyKind {
     /// A pointer to a value of a given type.
     Pointer(Box<Ty>),
     /// A function accepting and returning values of given types.
-    Function(Vec<(Name, Ty)>, Option<Box<Ty>>),
+    Function(Vec<(IsAnon, Name, Ty)>, Option<Box<Ty>>),
 }
 
 /// The builtin integer types.
@@ -128,10 +129,12 @@ pub type FunctionArg = Spanned<FunctionArgKind>;
 /// Every form that a value can be passed to a function.
 #[derive(Clone, Debug)]
 pub enum FunctionArgKind {
-    /// Explicitly by name, e.g. `a: 42`.
+    /// Passed by name, e.g. `a: 42`.
     Named(Name, Block),
     /// Name-punned argument, e.g. `: a`.
     Punned(Block),
+    /// Passed by position, e.g. `a`.
+    Anon(Expr),
 }
 
 /// See [`PlaceKind`].

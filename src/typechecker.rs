@@ -21,7 +21,7 @@ type Error = (Str, ErrorKind);
 type Result<T = ()> = std::result::Result<T, Error>;
 
 type Tys = Map<Register, Ty>;
-type FunctionTys<'a> = &'a Map<Str, (IndexMap<Str, Ty>, Vec<Ty>)>;
+type FunctionTys<'a> = &'a Map<Str, (IndexMap<Str, (IsAnon, Ty)>, Vec<Ty>)>;
 
 #[derive(Debug)]
 struct TypeChecker<'a> {
@@ -186,7 +186,7 @@ impl<'a> TypeChecker<'a> {
                     return Err((self.name.into(), ErrorKind::NotFunction(callee)));
                 };
                 assert_eq!(fn_params.len(), args.len());
-                for (&expected, &r) in fn_params.values().zip(args) {
+                for (&(_, expected), &r) in fn_params.values().zip(args) {
                     self.expect(r, &self.ty_map[expected])?;
                 }
                 for (&expected, &r) in fn_returns.iter().zip(returns) {

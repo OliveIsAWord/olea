@@ -22,6 +22,7 @@ mod ir_builder;
 mod ir_desugar;
 mod ir_display;
 pub mod ir_liveness;
+pub mod language_types;
 // TODO: rewrite to account for `used_regs` not including phi arguments.
 // mod ir_optimizer;
 mod ir_opt;

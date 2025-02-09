@@ -98,21 +98,21 @@ impl DefinedTys {
     }
     fn build_function_ty(
         &self,
-        params: &[(Name, ast::Ty)],
+        params: &[(IsAnon, Name, ast::Ty)],
         returns: Option<&ast::Ty>,
         program_tys: &mut TyMap,
     ) -> Result<Ty> {
         let ir_params: IndexMap<_, _> = params
             .iter()
-            .map(|(name, t)| {
+            .map(|(is_anon, name, t)| {
                 self.build_ty(t, program_tys)
-                    .map(|t| (name.kind.clone(), t))
+                    .map(|t| (name.kind.clone(), (*is_anon, t)))
             })
             .collect::<Result<_>>()?;
         if params.len() != ir_params.len() {
             for name in ir_params.keys() {
                 let mut prev_span = None;
-                for (n, _) in params {
+                for (_, n, _) in params {
                     let span = n.span.clone();
                     if &n.kind == name {
                         if let Some(prev_span) = prev_span.clone() {
@@ -176,7 +176,7 @@ impl<'a> IrBuilder<'a> {
             unreachable!();
         };
         assert_eq!(parameters.len(), ir_params.len());
-        for ((p_name, _), (_, ir_ty)) in parameters.iter().zip(ir_params) {
+        for ((_, p_name, _), (_, (_, ir_ty))) in parameters.iter().zip(ir_params) {
             let reg = self.new_reg(ir_ty, p_name.span.clone());
             self.parameters.push(reg);
             // Currently, we assume all variables are stack allocated, so we copy the argument to a stack allocation.
@@ -212,7 +212,7 @@ impl<'a> IrBuilder<'a> {
             .iter()
             .zip(fields)
             .map(|((name, ty), ast_field)| {
-                let span = ast_field.0.span.clone();
+                let span = ast_field.1.span.clone();
                 let reg = self.new_reg(*ty, span);
                 parameters.insert(name, reg);
                 (name.clone(), reg)
@@ -473,13 +473,19 @@ impl<'a> IrBuilder<'a> {
                 };
                 // use `IndexMap` so that "invalid args" error is in the same order as the argument list
                 let mut evaled_args: IndexMap<Str, (Span, Register)> = IndexMap::new();
+                let mut evaled_anon: Vec<Register> = vec![];
                 for arg in args {
                     use ast::FunctionArgKind as Arg;
+                    use indexmap::map::Entry::{Occupied, Vacant};
                     let (name, body) = match &arg.kind {
                         Arg::Named(name, body) => (name.clone(), body),
                         Arg::Punned(body) => (self.pun(body, arg.span.clone())?, body),
+                        Arg::Anon(expr) => {
+                            let reg = self.build_expr_unvoid(expr, span.clone())?;
+                            evaled_anon.push(reg);
+                            continue;
+                        }
                     };
-                    use indexmap::map::Entry::{Occupied, Vacant};
                     let entry = match evaled_args.entry(name.kind.clone()) {
                         Occupied(e) => {
                             return Err(Error {
@@ -495,14 +501,27 @@ impl<'a> IrBuilder<'a> {
                     let r = self.build_block_unvoid(body, name.span.clone())?;
                     entry.insert((name.span.clone(), r));
                 }
+                let mut evaled_anon = evaled_anon.into_iter();
                 let mut missing_args = vec![];
                 let args = params
                     .iter()
-                    .map(|(name, _)| match evaled_args.shift_remove(name) {
-                        Some((_, r)) => r,
-                        None => {
-                            missing_args.push(name.clone());
-                            return Register(u128::MAX);
+                    .map(|(name, (is_anon, _))| {
+                        if let Some((_, r)) = evaled_args.shift_remove(name) {
+                            r
+                        } else {
+                            let is_anon = bool::from(is_anon);
+                            is_anon
+                                .then(|| evaled_anon.next())
+                                .flatten()
+                                .unwrap_or_else(|| {
+                                    let missing = if is_anon {
+                                        format!("anon {name}").into()
+                                    } else {
+                                        name.clone()
+                                    };
+                                    missing_args.push(missing);
+                                    Register(u128::MAX)
+                                })
                         }
                     })
                     .collect();
@@ -583,7 +602,9 @@ impl<'a> IrBuilder<'a> {
             return err;
         };
         let name = match &e.kind {
-            ast::ExprKind::Place(ast::PlaceKind::Var(name) | ast::PlaceKind::Field(_, name)) => name.clone(),
+            ast::ExprKind::Place(ast::PlaceKind::Var(name) | ast::PlaceKind::Field(_, name)) => {
+                name.clone()
+            }
             _ => return err,
         };
         Ok(name)
@@ -740,7 +761,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 let mut ir_fields: Vec<(Str, Ty)> = Vec::with_capacity(fields.len());
                 let mut names = Map::new();
                 let mut fields_stored_by_value = vec![];
-                for (field_name, field_ty) in fields {
+                for (_is_anon, field_name, field_ty) in fields {
                     let ty = defined_tys.build_ty(field_ty, &mut program_tys)?;
                     ir_fields.push((field_name.kind.clone(), ty));
                     if let Some(previous_span) =
@@ -823,7 +844,10 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 )?;
                 (name, ty)
             }
-            D::Struct(ast::Struct { name, .. }) => {
+            D::Struct(ast::Struct {
+                name,
+                fields: ast_fields,
+            }) => {
                 let struct_ty = defined_tys.tys[&name.kind].0;
                 let TyKind::Struct { fields, .. } = &program_tys[struct_ty] else {
                     unreachable!(
@@ -831,8 +855,12 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                         program_tys.format(struct_ty)
                     );
                 };
-                let constructor_ty =
-                    TyKind::Function(fields.iter().cloned().collect(), vec![struct_ty]);
+                let fields = ast_fields
+                    .iter()
+                    .zip(fields.iter().cloned())
+                    .map(|(&(is_anon, _, _), (name, ty))| (name, (is_anon, ty)))
+                    .collect();
+                let constructor_ty = TyKind::Function(fields, vec![struct_ty]);
                 let ty = program_tys.insert(constructor_ty);
                 (name, ty)
             }
