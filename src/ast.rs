@@ -117,9 +117,21 @@ pub enum ExprKind {
     /// See [`Block`].
     Block(Block),
     /// A function call, composed of a function and a list of arguments to pass to it.
-    Call(Box<Expr>, Vec<(Name, Block)>),
+    Call(Box<Expr>, Vec<FunctionArg>),
     /// See [`PlaceKind`].
     Place(PlaceKind),
+}
+
+/// See [`FunctionArgKind`].
+pub type FunctionArg = Spanned<FunctionArgKind>;
+
+/// Every form that a value can be passed to a function.
+#[derive(Clone, Debug)]
+pub enum FunctionArgKind {
+    /// Explicitly by name, e.g. `a: 42`.
+    Named(Name, Block),
+    /// Name-punned argument, e.g. `: a`.
+    Punned(Block),
 }
 
 /// See [`PlaceKind`].

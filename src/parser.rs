@@ -262,12 +262,16 @@ impl<'src> Parser<'src> {
             .remove(0);
         Ok((name, ty))
     }
-    fn function_argument(&mut self) -> Result<(Name, Block)> {
-        let name = self
-            .name()
-            .ok_or_else(|| self.err("expected function name"))?;
+    fn function_argument(&mut self) -> Result<FunctionArg> {
+        let span_start = self.peek().unwrap().span.start;
+        let name = self.name();
         let body = self.colon_block()?;
-        Ok((name, body))
+        let kind = match name {
+            Some(name) => FunctionArgKind::Named(name, body),
+            None => FunctionArgKind::Punned(body),
+        };
+        let span = span_start..self.tokens[self.i - 1].span.end;
+        Ok(FunctionArg { span, kind })
     }
     fn expr(&mut self) -> Result<Expr> {
         self.expr_at(Level::Min)

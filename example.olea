@@ -3,8 +3,10 @@ fn foo(
     a: u8
 ) usize: a as usize + b
 
+struct Meow:
+    a: u8
+
 fn main() usize:
-    foo(
-        a: 1u8
-        b: 2
-    )
+    let meow = Meow(a: 42u8)
+    let b = 2
+    foo(:meow@.a, :b)

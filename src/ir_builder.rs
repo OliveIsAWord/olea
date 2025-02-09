@@ -40,10 +40,6 @@ pub enum ErrorKind {
     InfiniteType(Vec<Str>),
     MissingArgs(Vec<Str>, Option<Span>),
     InvalidArgs(Vec<Str>),
-    #[allow(
-        dead_code,
-        reason = "This variant is often used sporadically and temporarily, and only serves to give better diagnostics in the presence of future language direction. It may come in and out of use over the lifetime of the compiler."
-    )]
     Todo(&'static str),
 }
 
@@ -477,7 +473,12 @@ impl<'a> IrBuilder<'a> {
                 };
                 // use `IndexMap` so that "invalid args" error is in the same order as the argument list
                 let mut evaled_args: IndexMap<Str, (Span, Register)> = IndexMap::new();
-                for (name, body) in args {
+                for arg in args {
+                    use ast::FunctionArgKind as Arg;
+                    let (name, body) = match &arg.kind {
+                        Arg::Named(name, body) => (name.clone(), body),
+                        Arg::Punned(body) => (self.pun(body, arg.span.clone())?, body),
+                    };
                     use indexmap::map::Entry::{Occupied, Vacant};
                     let entry = match evaled_args.entry(name.kind.clone()) {
                         Occupied(e) => {
@@ -573,6 +574,21 @@ impl<'a> IrBuilder<'a> {
         }
     }
 
+    fn pun(&self, block: &ast::Block, span: Span) -> Result<Name> {
+        let Some(last) = block.0.last() else {
+            return Err(self.todo("empty pun", span));
+        };
+        let err = Err(self.todo("not a valid pun", last.span.clone()));
+        let ast::StmtKind::Expr(e) = &last.kind else {
+            return err;
+        };
+        let name = match &e.kind {
+            ast::ExprKind::Place(ast::PlaceKind::Var(name) | ast::PlaceKind::Field(_, name)) => name.clone(),
+            _ => return err,
+        };
+        Ok(name)
+    }
+
     fn enter_scope(&mut self) {
         self.scopes.push(Map::new());
     }
@@ -666,6 +682,17 @@ impl<'a> IrBuilder<'a> {
             .checked_add(1)
             .expect("block allocation overflow");
         id
+    }
+
+    #[allow(
+        dead_code,
+        reason = "This diagnostic is often used sporadically and temporarily, and only serves to give better diagnostics in the presence of future language direction or in-development features. It may come in and out of use over the lifetime of the compiler."
+    )]
+    fn todo(&self, message: &'static str, span: Span) -> Error {
+        Error {
+            kind: ErrorKind::Todo(message),
+            span,
+        }
     }
 }
 

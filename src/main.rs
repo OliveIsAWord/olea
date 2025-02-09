@@ -120,14 +120,12 @@ fn main() -> ExitCode {
     // eprintln!("# Source code:\n{src}");
 
     let tokens = lexer::tokenize(&src);
+
     /*
     dbg!(tokens.has_error);
-    for i in 0..tokens.len() {
-        let lexer::Spanned {
-            token,
-            span: lexer::Span { start, len },
-        } = tokens.get(i).unwrap();
-        eprintln!("{:?} {:?}", &src[start..start + len], token);
+    for i in 0..tokens.kinds.len() {
+        let Spanned { kind, span } = tokens.get(i).unwrap();
+        eprintln!("{:?} {:?} {:?}", &src[span.clone()], kind, span);
     }
     */
 

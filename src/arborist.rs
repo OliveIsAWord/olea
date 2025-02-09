@@ -155,7 +155,7 @@ impl Arborizer<'_> {
             }
         };
         if parse_indented {
-            let span_start = self.get_span().start;
+            let span_start = self.get_previous_span().start;
             let (inner, _) = self.inner_block(indented, None)?;
             let span_end = self.get_previous_span().end;
             item.push(Spanned {
