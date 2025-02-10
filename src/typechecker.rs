@@ -33,19 +33,6 @@ struct TypeChecker<'a> {
 }
 
 impl<'a> TypeChecker<'a> {
-    /*
-    fn expect(&self, r: Register, ty: &'a Ty) -> Result {
-        Self::expect_ty(self.tys.get_mut(&r).unwrap(), ty)
-            .ok_or_else(|| self.err(ErrorKind::Expected(r, ty.clone())))
-    }
-    fn expect_ty(dst: &mut Ty, ty: &Ty) -> Option<()> {
-        if dst == ty {
-            Some(())
-        } else {
-            None
-        }
-    }
-    */
     fn t(&self, r: Register) -> &'a TyKind {
         &self.ty_map[self.tys[&r]]
     }
@@ -244,6 +231,15 @@ impl<'a> TypeChecker<'a> {
             tys: &f.tys,
             name,
         };
+        assert_eq!(
+            f.parameters.len(),
+            function_tys[name].0.len(),
+            "mismatch in parameter count"
+        );
+        f.parameters
+            .iter()
+            .zip(function_tys[name].0.values())
+            .try_for_each(|(&r, &(_, ty))| this.expect(r, &ty_map[ty]))?;
         for block in f.blocks.values() {
             this.visit_block(block)?;
         }

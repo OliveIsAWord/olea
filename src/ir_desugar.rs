@@ -1,8 +1,6 @@
 //! An IR stage deconstructing struct values into its individual fields.
 
-// TODO: Desugar function types with struct arguments/returns.
-
-use crate::compiler_types::{Map, Set, Str};
+use crate::compiler_types::{IndexMap, Map, Set, Str};
 use crate::ir::*;
 
 type StructFields = Map<Register, (Ty, Vec<Str>)>;
@@ -52,12 +50,10 @@ pub fn desugar_program(program: &mut Program) {
     for f in functions.values_mut() {
         desugar_function(f, tys);
     }
-    // TODO: update `function_tys` and the function `tys`
     // For each `Vec<Ty>` (params and returns), we need to expand any struct `Ty` into a list of its fields.
-    for (_params, returns) in function_tys.values_mut() {
-        // TODO
-        // desugar_struct_in_list(params, tys);
-        desugar_struct_in_list(returns, tys);
+    for (params, returns) in function_tys.values_mut() {
+        desugar_struct_in_params(params, tys);
+        desugar_struct_in_returns(returns, tys);
     }
     // 1. for each ty in the ty map
     #[expect(clippy::needless_collect, reason = "False positive")]
@@ -66,11 +62,10 @@ pub fn desugar_program(program: &mut Program) {
         // 2. if it's a function, mem::take its params and returns
         if let TyKind::Function(params, returns) = kind {
             use std::mem::take;
-            let params = take(params);
+            let mut params = take(params);
             let mut returns = take(returns);
-            // TODO
-            // desugar_struct_in_list(&mut params, tys);
-            desugar_struct_in_list(&mut returns, tys);
+            desugar_struct_in_params(&mut params, tys);
+            desugar_struct_in_returns(&mut returns, tys);
             tys.inner.insert(ty, TyKind::Function(params, returns));
         }
         // pass it to desugar_ty_vec (which no longer has to be recursive) maybe call it desugar_struct_in_function_signature
@@ -325,7 +320,25 @@ fn desugar_block(
     }
 }
 
-fn desugar_struct_in_list(ty_list: &mut Vec<Ty>, ty_map: &TyMap) {
+fn desugar_struct_in_params(ty_list: &mut IndexMap<Str, (IsAnon, Ty)>, ty_map: &TyMap) {
+    let mut i = 0;
+    while let Some((_, &(is_anon, ty))) = ty_list.get_index(i) {
+        match &ty_map[ty] {
+            TyKind::Struct { fields, .. } => {
+                let (name, _) = ty_list.shift_remove_index(i).unwrap();
+                let mut field_i = i;
+                for (field_name, field_ty) in fields {
+                    let new_name = format!("{name}.{field_name}").into();
+                    ty_list.shift_insert(field_i, new_name, (is_anon, *field_ty));
+                    field_i += 1;
+                }
+            }
+            _ => i += 1,
+        }
+    }
+}
+
+fn desugar_struct_in_returns(ty_list: &mut Vec<Ty>, ty_map: &TyMap) {
     let mut i = 0;
     while let Some(&ty) = ty_list.get(i) {
         match &ty_map[ty] {

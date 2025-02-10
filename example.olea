@@ -1,12 +1,5 @@
-fn foo(
-    b: usize
-    anon a: u8
-) usize: a as usize + b
-
-struct Meow:
+struct Foo:
     a: u8
+    b: u16
 
-fn main() usize:
-    let meow = Meow(a: 42u8)
-    let b = 2
-    foo(:1,b)
+fn mraow(f: Foo) Foo: f
