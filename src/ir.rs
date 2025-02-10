@@ -1,6 +1,7 @@
 //! The Olea intermediate representation, a low level language that consists of [SSA](https://en.wikipedia.org/wiki/Static_single-assignment_form) registers and [basic blocks](https://en.wikipedia.org/wiki/Basic_block).
 
-use crate::compiler_types::{Map, Set, Span, Str};
+use crate::compiler_types::{IndexMap, Map, Set, Span, Str};
+pub use crate::language_types::IsAnon;
 
 /// A full or partial program.
 #[derive(Clone, Debug)]
@@ -8,7 +9,7 @@ pub struct Program {
     /// The functions composing this program.
     pub functions: Map<Str, Function>,
     /// The type signature of every function including extern functions.
-    pub function_tys: Map<Str, (Vec<Ty>, Vec<Ty>)>,
+    pub function_tys: Map<Str, (IndexMap<Str, (IsAnon, Ty)>, Vec<Ty>)>,
     /// All the types used in this program, indexed by `Ty`s.
     pub tys: TyMap,
 }
@@ -79,11 +80,16 @@ impl TyMap {
             &TyKind::Pointer(inner) => format!("{}^", self.format(inner)),
             TyKind::Function(params, returns) => {
                 let mut string = "fn(".to_owned();
-                for (i, &param) in params.iter().enumerate() {
+                for (i, (name, (is_anon, ty))) in params.iter().enumerate() {
                     if i != 0 {
                         string.push_str(", ");
                     }
-                    string.push_str(&self.format(param));
+                    if is_anon.into() {
+                        string.push_str("anon ");
+                    }
+                    string.push_str(name);
+                    string.push_str(": ");
+                    string.push_str(&self.format(*ty));
                 }
                 string.push(')');
                 match returns.len() {
@@ -130,8 +136,10 @@ impl TyMap {
                 if a_params.len() != b_params.len() || a_returns.len() != b_returns.len() {
                     return false;
                 }
-                for (&a, &b) in a_params.iter().zip(b_params) {
-                    if !self.equals(a, b) {
+                for ((a_name, (a_is_anon, a_ty)), (b_name, (b_is_anon, b_ty))) in
+                    a_params.iter().zip(b_params)
+                {
+                    if a_is_anon != b_is_anon || a_name != b_name || !self.equals(*a_ty, *b_ty) {
                         return false;
                     }
                 }
@@ -471,7 +479,7 @@ pub enum TyKind {
     /// A pointer into memory storing a value of a given type.
     Pointer(Ty),
     /// A function pointer accepting and returning some values.
-    Function(Vec<Ty>, Vec<Ty>),
+    Function(IndexMap<Str, (IsAnon, Ty)>, Vec<Ty>),
     /// A named collection of named values.
     Struct {
         /// The name of the struct type.

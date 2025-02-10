@@ -5,6 +5,7 @@
 //! The types in this module represent the syntactic forms that comprise the Olea grammar. We use a convention for each category of item of an enum `FooKind` representing the element itself, and a `Foo` which contains a `FooKind` as well as the source span of the element.
 
 use crate::compiler_types::{Name, Span, Spanned};
+use crate::language_types::IsAnon;
 
 /// A full source program, made of a list of declarations.
 #[derive(Clone, Debug)]
@@ -41,8 +42,8 @@ pub struct Function {
 pub struct FunctionSignature {
     /// The name of the function.
     pub name: Name,
-    /// The list of parameters and their types that the function accepts.
-    pub parameters: Vec<(Name, Ty)>,
+    /// The list of parameters and their types that the function accepts, as well as whether each parameter can be passed "anonymously" by position.
+    pub parameters: Vec<(IsAnon, Name, Ty)>,
     /// The type of value the function returns, if any.
     pub returns: Option<Ty>,
 }
@@ -53,7 +54,7 @@ pub struct Struct {
     /// The name of the struct.
     pub name: Name,
     /// The fields of the struct.
-    pub fields: Vec<(Name, Ty)>,
+    pub fields: Vec<(IsAnon, Name, Ty)>,
 }
 
 /// See [`TyKind`].
@@ -67,7 +68,7 @@ pub enum TyKind {
     /// A pointer to a value of a given type.
     Pointer(Box<Ty>),
     /// A function accepting and returning values of given types.
-    Function(Vec<Ty>, Option<Box<Ty>>),
+    Function(Vec<(IsAnon, Name, Ty)>, Option<Box<Ty>>),
 }
 
 /// The builtin integer types.
@@ -100,8 +101,6 @@ pub type Expr = Spanned<ExprKind>;
 pub enum ExprKind {
     /// An integer constant with an optional suffix, such as `42usize`.
     Int(u64, Option<Name>),
-    /// A struct literal consisting of the name of the struct types, and the names and values for all of its fields.
-    Struct(Name, Vec<(Name, Expr)>),
     /// A calculation taking the value of one expression to yield another.
     UnaryOp(UnaryOp, Box<Expr>),
     /// A calculation taking the values of two expressions to yield another.
@@ -119,9 +118,23 @@ pub enum ExprKind {
     /// See [`Block`].
     Block(Block),
     /// A function call, composed of a function and a list of arguments to pass to it.
-    Call(Box<Expr>, Vec<Expr>),
+    Call(Box<Expr>, Vec<FunctionArg>),
     /// See [`PlaceKind`].
     Place(PlaceKind),
+}
+
+/// See [`FunctionArgKind`].
+pub type FunctionArg = Spanned<FunctionArgKind>;
+
+/// Every form that a value can be passed to a function.
+#[derive(Clone, Debug)]
+pub enum FunctionArgKind {
+    /// Passed by name, e.g. `a: 42`.
+    Named(Name, Block),
+    /// Name-punned argument, e.g. `: a`.
+    Punned(Block),
+    /// Passed by position, e.g. `a`.
+    Anon(Expr),
 }
 
 /// See [`PlaceKind`].

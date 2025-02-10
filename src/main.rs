@@ -22,6 +22,7 @@ mod ir_builder;
 mod ir_desugar;
 mod ir_display;
 pub mod ir_liveness;
+pub mod language_types;
 // TODO: rewrite to account for `used_regs` not including phi arguments.
 // mod ir_optimizer;
 mod ir_opt;
@@ -120,14 +121,12 @@ fn main() -> ExitCode {
     // eprintln!("# Source code:\n{src}");
 
     let tokens = lexer::tokenize(&src);
+
     /*
     dbg!(tokens.has_error);
-    for i in 0..tokens.len() {
-        let lexer::Spanned {
-            token,
-            span: lexer::Span { start, len },
-        } = tokens.get(i).unwrap();
-        eprintln!("{:?} {:?}", &src[start..start + len], token);
+    for i in 0..tokens.kinds.len() {
+        let Spanned { kind, span } = tokens.get(i).unwrap();
+        eprintln!("{:?} {:?} {:?}", &src[span.clone()], kind, span);
     }
     */
 
@@ -179,7 +178,7 @@ fn main() -> ExitCode {
         Err(Spanned { kind, span }) => {
             use ir_builder::ErrorKind as E;
             let (title, note) = match kind {
-                E::NotFound(kind, v) => (format!("could not find {kind} `{v}`"), None),
+                E::NotFound(kind, name) => (format!("could not find {kind} `{name}`"), None),
                 E::NameConflict(kind, span) => (
                     format!("a {kind} with this name has already been defined"),
                     span.map(|span| ("previously defined here".to_owned(), span)),
@@ -211,12 +210,8 @@ fn main() -> ExitCode {
                     };
                     (s, None)
                 }
-                E::NotStruct(type_name) => (
-                    format!("struct literal with non-struct type {type_name}"),
-                    None,
-                ),
-                E::MissingFields(fields, span) => {
-                    const START: &str = "struct literal has missing field";
+                E::MissingArgs(fields, span) => {
+                    const START: &str = "function call has missing argument";
                     let s = match fields.len() {
                         0 => unreachable!(),
                         1 => format!("{START} `{}`", fields[0]),
@@ -234,6 +229,27 @@ fn main() -> ExitCode {
                     let def = span.map(|span| ("struct defined here".to_owned(), span));
                     (s, def)
                 }
+                E::InvalidArgs(names) => {
+                    let msg = match names.len() {
+                        0 => panic!(),
+                        1 => format!("invalid function argument `{}`", names[0]),
+                        2 => format!(
+                            "invalid function arguments `{}` and `{}`",
+                            names[0], names[1]
+                        ),
+                        _ => {
+                            use std::fmt::Write;
+                            let mut s = "invalid function arguments ".to_owned();
+                            for name in &names[0..names.len() - 1] {
+                                _ = write!(s, "`{name}`, ");
+                            }
+                            _ = write!(s, "and `{}`", names.last().unwrap());
+                            s
+                        }
+                    };
+                    (msg, None)
+                }
+                E::BadPun => ("this expression can't be name punned".to_owned(), None),
                 E::Todo(msg) => (format!("not yet implemented: {msg}"), None),
             };
             let mut e = Snippet::source(&src)

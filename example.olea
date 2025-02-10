@@ -1,10 +1,11 @@
-fn f(
-  name1:
-      u8
-  name2: u16
-) u16:
-    name1 as u16 + name2
-
 struct Foo:
-    field1: Foo^
-    field2: Foo^^
+    a: u8
+    anon b: u16
+
+extern fn fun(name1: usize)
+
+fn main():
+    fun(name1: 123456)
+    let a = 42_u8
+    let foo = Foo(b: 1000_u16, :a)
+    let foo = Foo(a: 0_u8, 65432_u16)

@@ -1,4 +1,4 @@
-use crate::compiler_types::{Map, Str};
+use crate::compiler_types::{IndexMap, Map, Str};
 use crate::ir::*;
 
 #[derive(Clone, Debug)]
@@ -21,7 +21,7 @@ type Error = (Str, ErrorKind);
 type Result<T = ()> = std::result::Result<T, Error>;
 
 type Tys = Map<Register, Ty>;
-type FunctionTys<'a> = &'a Map<Str, (Vec<Ty>, Vec<Ty>)>;
+type FunctionTys<'a> = &'a Map<Str, (IndexMap<Str, (IsAnon, Ty)>, Vec<Ty>)>;
 
 #[derive(Debug)]
 struct TypeChecker<'a> {
@@ -33,19 +33,6 @@ struct TypeChecker<'a> {
 }
 
 impl<'a> TypeChecker<'a> {
-    /*
-    fn expect(&self, r: Register, ty: &'a Ty) -> Result {
-        Self::expect_ty(self.tys.get_mut(&r).unwrap(), ty)
-            .ok_or_else(|| self.err(ErrorKind::Expected(r, ty.clone())))
-    }
-    fn expect_ty(dst: &mut Ty, ty: &Ty) -> Option<()> {
-        if dst == ty {
-            Some(())
-        } else {
-            None
-        }
-    }
-    */
     fn t(&self, r: Register) -> &'a TyKind {
         &self.ty_map[self.tys[&r]]
     }
@@ -181,14 +168,18 @@ impl<'a> TypeChecker<'a> {
                 args,
                 returns,
             } => {
-                match self.t(*callee) {
-                    TyKind::Function(..) => {}
-                    _ => return Err((self.name.into(), ErrorKind::NotFunction(*callee))),
+                let callee = *callee;
+                let TyKind::Function(fn_params, fn_returns) = self.t(callee) else {
+                    return Err((self.name.into(), ErrorKind::NotFunction(callee)));
+                };
+                assert_eq!(fn_params.len(), args.len());
+                for (&(_, expected), &r) in fn_params.values().zip(args) {
+                    self.expect(r, &self.ty_map[expected])?;
                 }
-                let arg_tys = args.iter().map(|r| self.tys[r]).collect();
-                let return_tys = returns.iter().map(|r| self.tys[r]).collect();
-                let fn_ty = TyKind::Function(arg_tys, return_tys);
-                self.expect(*callee, &fn_ty)
+                for (&expected, &r) in fn_returns.iter().zip(returns) {
+                    self.expect(r, &self.ty_map[expected])?;
+                }
+                Ok(())
             }
         }
     }
@@ -240,6 +231,15 @@ impl<'a> TypeChecker<'a> {
             tys: &f.tys,
             name,
         };
+        assert_eq!(
+            f.parameters.len(),
+            function_tys[name].0.len(),
+            "mismatch in parameter count"
+        );
+        f.parameters
+            .iter()
+            .zip(function_tys[name].0.values())
+            .try_for_each(|(&r, &(_, ty))| this.expect(r, &ty_map[ty]))?;
         for block in f.blocks.values() {
             this.visit_block(block)?;
         }
