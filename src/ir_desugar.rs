@@ -6,18 +6,18 @@ use crate::ir::*;
 type StructFields = Map<Register, (Ty, Vec<Str>)>;
 
 fn make_struct_fields(
-    fields: &[(Str, Ty)],
+    fields: &IndexMap<Str, Ty>,
     next_register: &mut u128,
     ty_map: &TyMap,
 ) -> StructFields {
     fn visit(
         this: &mut StructFields,
         prefix: &[Str],
-        fields: &[(Str, Ty)],
+        fields: &IndexMap<Str, Ty>,
         next_register: &mut u128,
         ty_map: &TyMap,
     ) {
-        for &(ref field, ty) in fields {
+        for (field, &ty) in fields {
             let mut path = prefix.to_vec();
             path.push(field.clone());
             match &ty_map[ty] {
@@ -272,7 +272,7 @@ fn desugar_block(
                             insts.insert(i, Inst::Store(r, Sk::Copy(from_reg)));
                             i += 1;
                         };
-                        for (_, literal_reg) in literal_fields {
+                        for literal_reg in literal_fields {
                             if let Some(inner_fields) = struct_regs.get(&literal_reg) {
                                 for &inner_reg in inner_fields.keys() {
                                     add_copy(inner_reg);
@@ -345,7 +345,7 @@ fn desugar_struct_in_returns(ty_list: &mut Vec<Ty>, ty_map: &TyMap) {
             TyKind::Struct { fields, .. } => {
                 ty_list.remove(i);
                 let mut field_i = i;
-                for &(_, field_ty) in fields {
+                for &field_ty in fields.values() {
                     ty_list.insert(field_i, field_ty);
                     field_i += 1;
                 }

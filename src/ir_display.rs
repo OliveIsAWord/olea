@@ -165,13 +165,13 @@ impl DisplayWithName for Function {
                             ),
 
                             Sk::Function(name) => write!(f, "{name}"),
-                            Sk::Struct { name, fields } => {
-                                write!(f, "struct {name}(")?;
-                                for (i, (field, val)) in fields.iter().enumerate() {
+                            Sk::Struct { ty, fields } => {
+                                write!(f, "struct {ty}(")?;
+                                for (i, val) in fields.iter().enumerate() {
                                     if i != 0 {
                                         write!(f, ", ")?;
                                     }
-                                    write!(f, "{field}: {val}")?;
+                                    write!(f, "{val}")?;
                                 }
                                 write!(f, ")")
                             }

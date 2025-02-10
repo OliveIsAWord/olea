@@ -1,11 +1,20 @@
 struct Foo:
     a: u8
     anon b: u16
+    c: Bar
+
+struct Zon:
+    x: Foo
+
+struct Bar:
+    # x: Zon
+    anon y: u32
+
 
 extern fn fun(name1: usize)
 
 fn main():
     fun(name1: 123456)
     let a = 42_u8
-    let foo = Foo(b: 1000_u16, :a)
-    let foo = Foo(a: 0_u8, 65432_u16)
+    let foo = Foo(b: 1000_u16, :a, c: Bar(999_999_u32))
+    let foo = Foo(a: 0_u8, 65432_u16, c: Bar(987_654_321_u32))

@@ -202,9 +202,10 @@ impl<'a> IrBuilder<'a> {
     }
 
     fn build_struct_constructor(mut self, ast::Struct { name, fields }: &ast::Struct) -> Function {
+        let ty = self.defined_tys.tys[&name.kind].0;
         let TyKind::Struct {
             fields: ir_fields, ..
-        } = self.program_tys[self.defined_tys.tys[&name.kind].0].clone()
+        } = self.program_tys[ty].clone()
         else {
             unreachable!();
         };
@@ -216,13 +217,13 @@ impl<'a> IrBuilder<'a> {
                 let span = ast_field.1.span.clone();
                 let reg = self.new_reg(*ty, span);
                 parameters.insert(name, reg);
-                (name.clone(), reg)
+                reg
             })
             .collect();
         self.parameters.extend(parameters.values());
         let struct_reg = self.push_store(
             StoreKind::Struct {
-                name: name.kind.clone(),
+                ty,
                 fields: field_args,
             },
             name.span.clone(),
@@ -680,7 +681,7 @@ impl<'a> IrBuilder<'a> {
                 _ => dummy_ty,
             },
             Sk::Function(name) => self.function_tys[name],
-            Sk::Struct { name, .. } => self.defined_tys.tys[name].0,
+            &Sk::Struct { ty, .. } => ty,
         }
     }
 
@@ -762,18 +763,18 @@ pub fn build(program: &ast::Program) -> Result<Program> {
     // Global type construction second pass: fill out actual type information we skipped in the first pass.
     // also track value size dependencies to detect and reject infinite size types
     // this is a map from named types to the named types this type stores by value, as well as a span for diagnostics
-    let mut value_cycles: Map<Str, (Span, Vec<Str>)> = Map::new();
+    let mut value_cycles: IndexMap<Str, (Span, Vec<Str>)> = IndexMap::new();
     for ast::Decl { kind, span: _ } in &program.decls {
         match kind {
             D::Function(_) | D::ExternFunction(_) => {}
             D::Struct(ast::Struct { name, fields }) => {
                 use ast::TyKind as Tk;
-                let mut ir_fields: Vec<(Str, Ty)> = Vec::with_capacity(fields.len());
+                let mut ir_fields: IndexMap<Str, Ty> = IndexMap::with_capacity(fields.len());
                 let mut names = Map::new();
                 let mut fields_stored_by_value = vec![];
                 for (_is_anon, field_name, field_ty) in fields {
                     let ty = defined_tys.build_ty(field_ty, &mut program_tys)?;
-                    ir_fields.push((field_name.kind.clone(), ty));
+                    ir_fields.insert(field_name.kind.clone(), ty);
                     if let Some(previous_span) =
                         names.insert(field_name.kind.clone(), field_name.span.clone())
                     {
@@ -805,34 +806,32 @@ pub fn build(program: &ast::Program) -> Result<Program> {
     // detect infinite size types
     {
         // each item on the stack is a visited type and all the types it is going to visit
-        let mut stack: Vec<(&Str, &[Str])> = vec![];
+        let mut stack: IndexMap<&Str, &[Str]> = IndexMap::new();
         // all the types we know don't form infinite size loops
-        let mut closed: Set<Str> = Set::new();
+        let mut closed: Set<&Str> = Set::new();
         for (name, (_, fields)) in &value_cycles {
-            stack.push((name, fields));
+            stack.insert(name, fields);
             while let Some((_, fields)) = stack.last_mut() {
                 let Some(field) = fields.first() else {
                     let (old_field, _) = stack.pop().unwrap();
-                    closed.insert(old_field.clone());
+                    closed.insert(old_field);
                     continue;
                 };
                 *fields = &fields[1..];
                 if closed.contains(field) {
                     continue;
                 }
-                for (i, (prior, _)) in stack.iter().enumerate().rev() {
-                    if field == *prior {
-                        let cycle = stack[i..].iter().map(|&(n, _)| n.clone()).collect();
-                        return Err(Error {
-                            kind: ErrorKind::InfiniteType(cycle),
-                            span: value_cycles[*prior].0.clone(),
-                        });
-                    }
+                if let Some((i, prior, _)) = stack.get_full(field) {
+                    let cycle = stack.as_slice()[i..].keys().copied().cloned().collect();
+                    return Err(Error {
+                        kind: ErrorKind::InfiniteType(cycle),
+                        span: value_cycles[*prior].0.clone(),
+                    });
                 }
                 if let Some((_, recursive_fields)) = value_cycles.get(field) {
-                    stack.push((field, recursive_fields));
+                    stack.insert(field, recursive_fields);
                 } else {
-                    closed.insert(field.clone());
+                    closed.insert(field);
                 }
             }
         }
@@ -867,8 +866,8 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 };
                 let fields = ast_fields
                     .iter()
-                    .zip(fields.iter().cloned())
-                    .map(|(&(is_anon, _, _), (name, ty))| (name, (is_anon, ty)))
+                    .zip(fields)
+                    .map(|(&(is_anon, _, _), (name, &ty))| (name.clone(), (is_anon, ty)))
                     .collect();
                 let constructor_ty = TyKind::Function(fields, vec![struct_ty]);
                 let ty = program_tys.insert(constructor_ty);
