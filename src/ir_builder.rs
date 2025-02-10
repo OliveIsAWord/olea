@@ -40,6 +40,7 @@ pub enum ErrorKind {
     InfiniteType(Vec<Str>),
     MissingArgs(Vec<Str>, Option<Span>),
     InvalidArgs(Vec<Str>),
+    BadPun,
     Todo(&'static str),
 }
 
@@ -479,7 +480,7 @@ impl<'a> IrBuilder<'a> {
                     use indexmap::map::Entry::{Occupied, Vacant};
                     let (name, body) = match &arg.kind {
                         Arg::Named(name, body) => (name.clone(), body),
-                        Arg::Punned(body) => (self.pun(body, arg.span.clone())?, body),
+                        Arg::Punned(body) => (Self::pun(body)?, body),
                         Arg::Anon(expr) => {
                             let reg = self.build_expr_unvoid(expr, span.clone())?;
                             evaled_anon.push(reg);
@@ -493,7 +494,7 @@ impl<'a> IrBuilder<'a> {
                                     "function argument",
                                     e.get().0.clone().some(),
                                 ),
-                                span: name.span.clone(),
+                                span: name.span,
                             });
                         }
                         Vacant(e) => e,
@@ -593,11 +594,12 @@ impl<'a> IrBuilder<'a> {
         }
     }
 
-    fn pun(&self, block: &ast::Block, span: Span) -> Result<Name> {
-        let Some(last) = block.0.last() else {
-            return Err(self.todo("empty pun", span));
-        };
-        let err = Err(self.todo("not a valid pun", last.span.clone()));
+    fn pun(block: &ast::Block) -> Result<Name> {
+        let last = block.0.last().unwrap();
+        let err = Err(Error {
+            kind: ErrorKind::BadPun,
+            span: last.span.clone(),
+        });
         let ast::StmtKind::Expr(e) = &last.kind else {
             return err;
         };
@@ -709,7 +711,7 @@ impl<'a> IrBuilder<'a> {
         dead_code,
         reason = "This diagnostic is often used sporadically and temporarily, and only serves to give better diagnostics in the presence of future language direction or in-development features. It may come in and out of use over the lifetime of the compiler."
     )]
-    fn todo(&self, message: &'static str, span: Span) -> Error {
+    const fn _todo(message: &'static str, span: Span) -> Error {
         Error {
             kind: ErrorKind::Todo(message),
             span,

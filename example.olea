@@ -9,4 +9,4 @@ struct Meow:
 fn main() usize:
     let meow = Meow(a: 42u8)
     let b = 2
-    foo(meow@.a, :b)
+    foo(:1,b)

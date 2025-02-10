@@ -267,20 +267,23 @@ impl<'src> Parser<'src> {
     fn function_argument(&mut self) -> Result<FunctionArg> {
         let span_start = self.peek().unwrap().span.start;
         let name = self.name();
-        let body = self.colon_block()?;
-        let kind = match (name, body) {
-            (Some(name), Some(body)) => FunctionArgKind::Named(name, body),
-            (None, Some(body)) => FunctionArgKind::Punned(body),
-            (name, None) => {
-                if name.is_some() {
-                    self.i -= 1;
-                }
-                let arg = self.expr()?;
-                FunctionArgKind::Anon(arg)
+        let kind = if let Some(body) = self.colon_block()? {
+            if body.0.is_empty() {
+                return Err(self.err_previous("expected punned argument"));
             }
+            match name {
+                Some(name) => FunctionArgKind::Named(name, body),
+                None => FunctionArgKind::Punned(body),
+            }
+        } else {
+            if name.is_some() {
+                self.i -= 1;
+            }
+            let arg = self.expr()?;
+            FunctionArgKind::Anon(arg)
         };
         let span = span_start..self.tokens[self.i - 1].span.end;
-        Ok(FunctionArg { span, kind })
+        Ok(FunctionArg { kind, span })
     }
     fn expr(&mut self) -> Result<Expr> {
         self.expr_at(Level::Min)

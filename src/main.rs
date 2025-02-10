@@ -249,6 +249,7 @@ fn main() -> ExitCode {
                     };
                     (msg, None)
                 }
+                E::BadPun => ("this expression can't be name punned".to_owned(), None),
                 E::Todo(msg) => (format!("not yet implemented: {msg}"), None),
             };
             let mut e = Snippet::source(&src)
