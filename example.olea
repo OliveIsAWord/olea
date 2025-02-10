@@ -1,5 +1,11 @@
 struct Foo:
     a: u8
-    b: u16
+    anon b: u16
 
-fn mraow(f: Foo) Foo: f
+extern fn fun(name1: usize)
+
+fn main():
+    fun(name1: 123456)
+    let a = 42_u8
+    let foo = Foo(b: 1000_u16, :a)
+    let foo = Foo(a: 0_u8, 65432_u16)

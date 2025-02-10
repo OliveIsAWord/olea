@@ -275,13 +275,6 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    eprintln!("#Desugaring phase");
-    ir_desugar::desugar_program(&mut ir);
-    eprintln!("{ir}\n");
-    if typecheck(&ir, &src, file_path, ErrorMode::Internal) {
-        return ExitCode::FAILURE;
-    }
-
     if false {
         eprintln!("#Optimizer phase");
         ir_opt::STACK_TO_REGISTER.run_program(&mut ir);
