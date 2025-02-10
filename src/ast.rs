@@ -71,15 +71,6 @@ pub enum TyKind {
     Function(Vec<(IsAnon, Name, Ty)>, Option<Box<Ty>>),
 }
 
-/// The builtin integer types.
-#[derive(Clone, Copy, Debug)]
-pub enum IntKind {
-    /// A machine word-sized unsigned integer.
-    Usize,
-    /// An 8-bit unsigned integer.
-    U8,
-}
-
 /// See [`StmtKind`].
 pub type Stmt = Spanned<StmtKind>;
 
@@ -150,8 +141,8 @@ pub enum PlaceKind {
     Deref(Box<Expr>, Span),
     /// An index operation, consisting of the indexee, the index, and the span of the index (including square brackets).
     Index(Box<Expr>, Box<Expr>, Span),
-    /// A field of a struct value.
-    Field(Box<Expr>, Name),
+    /// A field of a struct value, and the span of the dot.
+    Field(Box<Expr>, Name, Span),
 }
 
 /// See [`UnaryOpKind`].

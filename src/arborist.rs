@@ -146,7 +146,6 @@ impl Arborizer<'_> {
                     });
                 }
                 Co(C::Colon) => break true,
-
                 Co(t @ C::Indent) => self.unexpected(t)?,
                 Co(C::Else | C::ParenClose | C::SquareClose | C::Dedent | C::Comma) => {
                     self.i -= 1;

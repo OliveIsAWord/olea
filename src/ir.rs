@@ -189,7 +189,7 @@ pub struct Function {
 /// Information about the control flow graph, including successors, predecessors, and dominance.
 #[derive(Clone, Debug)]
 pub struct Cfg {
-    /// Map directly from [`BlockId`] to [`CfgNodes`].
+    /// Map directly from [`BlockId`] to [`CfgNode`]s.
     pub map: Map<BlockId, CfgNode>,
 }
 

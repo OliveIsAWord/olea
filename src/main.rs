@@ -14,18 +14,16 @@
 )]
 
 mod arborist;
-pub mod ast;
+pub(crate) mod ast;
 mod codegen_fox32;
-pub mod compiler_types;
-pub mod ir;
+pub(crate) mod compiler_types;
+pub(crate) mod ir;
 mod ir_builder;
 mod ir_desugar;
 mod ir_display;
 pub mod ir_liveness;
-pub mod language_types;
-// TODO: rewrite to account for `used_regs` not including phi arguments.
-// mod ir_optimizer;
 mod ir_opt;
+pub(crate) mod language_types;
 mod lexer;
 mod parser;
 mod ttree_visualize;
