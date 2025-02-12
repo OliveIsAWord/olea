@@ -550,7 +550,7 @@ impl<'a> IrBuilder<'a> {
                 return_reg
             }
         };
-        // println!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");
+        // eprintln!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");
         Ok(reg)
     }
     // This function returns a MaybeVar because not all syntactic place expressions are semantic place expressions. For example, we can't assign a value to a function. Different code paths we expect a place expression will have to properly handle these cases.

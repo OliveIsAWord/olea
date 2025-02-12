@@ -87,12 +87,14 @@ pub fn desugar_function(f: &mut Function, ty_map: &mut TyMap) {
             TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. } => None,
         })
         .collect();
+    /*
     for (r, fields) in &struct_regs {
         eprintln!("{r}:");
         for (r, (ty, accesses)) in fields {
             eprintln!("    {r}: {accesses:?} {ty}");
         }
     }
+    */
     let Function {
         parameters,
         blocks,

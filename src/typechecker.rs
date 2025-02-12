@@ -137,7 +137,7 @@ impl<'a> TypeChecker<'a> {
         Ok(ty)
     }
     fn visit_inst(&self, inst: &Inst) -> Result {
-        eprintln!("visit {inst:?}");
+        // eprintln!("visit {inst:?}");
         match inst {
             &Inst::Store(r, ref sk) => {
                 let got = self.infer_storekind(sk)?;
@@ -186,7 +186,7 @@ impl<'a> TypeChecker<'a> {
         for inst in &block.insts {
             self.visit_inst(inst)?;
         }
-        match dbg!(&block.exit) {
+        match &block.exit {
             Exit::Jump(_) => Ok(()),
             Exit::CondJump(cond, _, _) => match cond {
                 &Condition::NonZero(r) => self.int(r).map(|_| ()),
@@ -233,12 +233,12 @@ impl<'a> TypeChecker<'a> {
 }
 
 pub fn typecheck(program: &Program) -> Result {
-    eprintln!("{:?}", program.tys);
+    // eprintln!("{:?}", program.tys);
     for (fn_name, f) in &program.functions {
         /*
-        println!("typechecking {fn_name}");
+        eprintln!("typechecking {fn_name}");
         for (r, ty) in &f.tys {
-            println!("  {r} {ty}");
+            eprintln!("  {r} {ty}");
         }
         */
         TypeChecker::visit_function(f, fn_name, &program.function_tys, &program.tys)?;

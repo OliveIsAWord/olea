@@ -148,7 +148,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    if true {
+    if false {
         eprintln!("# Token tree:");
         ttree_visualize::visualize(&ttree, &src);
         eprintln!();
@@ -261,14 +261,14 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    eprintln!("#IR:\n{ir}\n");
+    // eprintln!("#IR:\n{ir}\n");
     if typecheck(&ir, &src, file_path, ErrorMode::User) {
         return ExitCode::FAILURE;
     }
 
-    eprintln!("#Desugaring phase");
+    // eprintln!("#Desugaring phase");
     ir_desugar::desugar_program(&mut ir);
-    eprintln!("{ir}\n");
+    // eprintln!("{ir}\n");
     if typecheck(&ir, &src, file_path, ErrorMode::Internal) {
         return ExitCode::FAILURE;
     }
@@ -282,15 +282,17 @@ fn main() -> ExitCode {
     }
 
     if true {
+        /*
         for (name, f) in &ir.functions {
             let live = ir_liveness::calculate_liveness(f);
             eprintln!("{name}:");
             live.pretty_print();
         }
         eprintln!();
+        */
 
         let asm = codegen_fox32::gen_program(&ir);
-        eprintln!("#Codegen");
+        // eprintln!("#Codegen");
         print!("{asm}");
     }
     ExitCode::SUCCESS
