@@ -21,7 +21,7 @@ fn make_struct_fields(
             let mut path = prefix.to_vec();
             path.push(field.clone());
             match &ty_map[ty] {
-                // Types that don't need desugaring
+                // Types that don't need destructureing
                 TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. } => {
                     let r = Register(*next_register);
                     *next_register += 1;
@@ -41,19 +41,19 @@ fn make_struct_fields(
     this
 }
 
-pub fn desugar_program(program: &mut Program) {
+pub fn destructure_program(program: &mut Program) {
     let Program {
         functions,
         function_tys,
         tys,
     } = program;
     for f in functions.values_mut() {
-        desugar_function(f, tys);
+        destructure_function(f, tys);
     }
     // For each `Vec<Ty>` (params and returns), we need to expand any struct `Ty` into a list of its fields.
     for (params, returns) in function_tys.values_mut() {
-        desugar_struct_in_params(params, tys);
-        desugar_struct_in_returns(returns, tys);
+        destructure_struct_in_params(params, tys);
+        destructure_struct_in_returns(returns, tys);
     }
     // 1. for each ty in the ty map
     #[expect(clippy::needless_collect, reason = "False positive")]
@@ -64,11 +64,11 @@ pub fn desugar_program(program: &mut Program) {
             use std::mem::take;
             let mut params = take(params);
             let mut returns = take(returns);
-            desugar_struct_in_params(&mut params, tys);
-            desugar_struct_in_returns(&mut returns, tys);
+            destructure_struct_in_params(&mut params, tys);
+            destructure_struct_in_returns(&mut returns, tys);
             tys.inner.insert(ty, TyKind::Function(params, returns));
         }
-        // pass it to desugar_ty_vec (which no longer has to be recursive) maybe call it desugar_struct_in_function_signature
+        // pass it to destructure_ty_vec (which no longer has to be recursive) maybe call it destructure_struct_in_function_signature
     }
 
     // dsifs:
@@ -76,7 +76,7 @@ pub fn desugar_program(program: &mut Program) {
     // 2. if struct, expand to fields and retape
 }
 
-pub fn desugar_function(f: &mut Function, ty_map: &mut TyMap) {
+pub fn destructure_function(f: &mut Function, ty_map: &mut TyMap) {
     let struct_regs: Map<Register, StructFields> = f
         .tys
         .iter()
@@ -104,12 +104,12 @@ pub fn desugar_function(f: &mut Function, ty_map: &mut TyMap) {
         next_register,
     } = f;
 
-    desugar_vec(&struct_regs, parameters);
+    destructure_vec(&struct_regs, parameters);
     for block in blocks.values_mut() {
-        desugar_block(&struct_regs, block, tys, next_register, ty_map);
+        destructure_block(&struct_regs, block, tys, next_register, ty_map);
     }
     for (r, fields) in &struct_regs {
-        // NOTE: `desugar_block` relies on getting the type of `r`
+        // NOTE: `destructure_block` relies on getting the type of `r`
         tys.remove(r);
         let span = spans.remove(r).unwrap();
         for (&field_r, (field_ty, _)) in fields {
@@ -119,7 +119,7 @@ pub fn desugar_function(f: &mut Function, ty_map: &mut TyMap) {
     }
 }
 
-fn desugar_block(
+fn destructure_block(
     struct_regs: &Map<Register, StructFields>,
     block: &mut Block,
     tys: &mut Map<Register, Ty>,
@@ -133,12 +133,12 @@ fn desugar_block(
         used_regs,
     } = block;
     for (r, fields) in struct_regs {
-        let desugar_set = |set: &mut Set<Register>| {
+        let destructure_set = |set: &mut Set<Register>| {
             set.remove(r);
             set.extend(fields.keys());
         };
-        desugar_set(defined_regs);
-        desugar_set(used_regs);
+        destructure_set(defined_regs);
+        destructure_set(used_regs);
     }
     // sanity check function: it would be a type error for this register to be a struct
     let do_not_visit = |r: Register| {
@@ -152,7 +152,7 @@ fn desugar_block(
         Exit::CondJump(cond, _, _) => match cond {
             Condition::NonZero(r) => do_not_visit(*r),
         },
-        Exit::Return(regs) => desugar_vec(struct_regs, regs),
+        Exit::Return(regs) => destructure_vec(struct_regs, regs),
     }
     let mut i = 0;
     while let Some(inst) = insts.get_mut(i) {
@@ -166,8 +166,8 @@ fn desugar_block(
                 args,
             } => {
                 do_not_visit(*callee);
-                desugar_vec(struct_regs, returns);
-                desugar_vec(struct_regs, args);
+                destructure_vec(struct_regs, returns);
+                destructure_vec(struct_regs, args);
             }
             &mut Inst::Write(dst, src) => {
                 let Some(fields) = struct_regs.get(&src) else {
@@ -322,7 +322,7 @@ fn desugar_block(
     }
 }
 
-fn desugar_struct_in_params(ty_list: &mut IndexMap<Str, (IsAnon, Ty)>, ty_map: &TyMap) {
+fn destructure_struct_in_params(ty_list: &mut IndexMap<Str, (IsAnon, Ty)>, ty_map: &TyMap) {
     let mut i = 0;
     while let Some((_, &(is_anon, ty))) = ty_list.get_index(i) {
         match &ty_map[ty] {
@@ -340,7 +340,7 @@ fn desugar_struct_in_params(ty_list: &mut IndexMap<Str, (IsAnon, Ty)>, ty_map: &
     }
 }
 
-fn desugar_struct_in_returns(ty_list: &mut Vec<Ty>, ty_map: &TyMap) {
+fn destructure_struct_in_returns(ty_list: &mut Vec<Ty>, ty_map: &TyMap) {
     let mut i = 0;
     while let Some(&ty) = ty_list.get(i) {
         match &ty_map[ty] {
@@ -357,7 +357,7 @@ fn desugar_struct_in_returns(ty_list: &mut Vec<Ty>, ty_map: &TyMap) {
     }
 }
 
-fn desugar_vec(struct_regs: &Map<Register, StructFields>, regs: &mut Vec<Register>) {
+fn destructure_vec(struct_regs: &Map<Register, StructFields>, regs: &mut Vec<Register>) {
     // we could write some unsafe code here if this becomes a bottleneck
     let mut i = 0;
     while i < regs.len() {

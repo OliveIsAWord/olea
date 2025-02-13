@@ -19,7 +19,7 @@ mod codegen_fox32;
 pub(crate) mod compiler_types;
 pub(crate) mod ir;
 mod ir_builder;
-mod ir_desugar;
+mod ir_destructure;
 mod ir_display;
 pub mod ir_liveness;
 mod ir_opt;
@@ -267,7 +267,7 @@ fn main() -> ExitCode {
     }
 
     // eprintln!("#Desugaring phase");
-    ir_desugar::desugar_program(&mut ir);
+    ir_destructure::destructure_program(&mut ir);
     // eprintln!("{ir}\n");
     if typecheck(&ir, &src, file_path, ErrorMode::Internal) {
         return ExitCode::FAILURE;
