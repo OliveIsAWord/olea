@@ -1,2 +1,5 @@
-fn meow(f: fn()^):
+struct Foo:
+    a: Foo[0]
+
+fn meow(f: fn()[0]):
     f^()

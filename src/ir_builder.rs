@@ -9,6 +9,16 @@ const INT_TYPES: &[(&str, IntKind)] = &[
     ("usize", IntKind::Usize),
 ];
 
+fn get_int_kind_from_suffix(suffix: &Name) -> Result<IntKind> {
+    INT_TYPES
+        .iter()
+        .find_map(|(name, int_kind)| (**name == *suffix.kind).then_some(*int_kind))
+        .ok_or_else(|| Error {
+            kind: ErrorKind::UnknownIntLiteralSuffix,
+            span: suffix.span.clone(),
+        })
+}
+
 /// This trait defines a helper method for transforming a `T` into an `Option<T>` with a postfix syntax.
 trait ToSome {
     fn some(self) -> Option<Self>
@@ -92,6 +102,13 @@ impl DefinedTys {
                 let inner_kind = self.build_ty(inner, program_tys)?;
                 Ok(program_tys.insert(TyKind::Pointer(inner_kind)))
             }
+            T::Array(inner, count) => {
+                let inner_kind = self.build_ty(inner, program_tys)?;
+                let count = self.eval_const(count)?;
+                dbg!(&inner_kind);
+                dbg!(&count);
+                Err(todo("array types", ty.span.clone()))
+            }
             T::Function(params, returns) => {
                 self.build_function_ty(params, returns.as_ref().map(|v| &**v), program_tys)
             }
@@ -136,6 +153,22 @@ impl DefinedTys {
             .map(|t| self.build_ty(t, program_tys))
             .collect::<Result<_>>()?;
         Ok(program_tys.insert(TyKind::Function(ir_params, returns)))
+    }
+    fn eval_const(&self, expr: &ast::Expr) -> Result<u128> {
+        use ast::ExprKind as E;
+        _ = self;
+        match &expr.kind {
+            E::Int(i, suffix) => {
+                if let Some(suffix) = suffix {
+                    get_int_kind_from_suffix(suffix)?;
+                };
+                Ok(u128::from(*i))
+            }
+            _ => Err(todo(
+                "const evaluation. Try using a plain integer literal instead!",
+                expr.span.clone(),
+            )),
+        }
     }
 }
 
@@ -318,29 +351,21 @@ impl<'a> IrBuilder<'a> {
                 None
             }
             E::Int(int, suffix) => {
-                let int_ty = if let Some(suffix) = suffix {
-                    INT_TYPES
-                        .iter()
-                        .find_map(|(name, int_kind)| (**name == *suffix.kind).then_some(*int_kind))
-                        .ok_or_else(|| Error {
-                            kind: ErrorKind::UnknownIntLiteralSuffix,
-                            span: suffix.span.clone(),
-                        })?
-                } else {
-                    IntKind::Usize
-                };
+                let int_ty = suffix
+                    .as_ref()
+                    .map_or(Ok(IntKind::Usize), get_int_kind_from_suffix)?;
                 self.push_store(Sk::Int((*int).into(), int_ty), span).some()
             }
             E::String(string) => {
                 dbg!(string);
-                return Err(Self::todo("string literals", span));
+                return Err(todo("string literals", span));
             }
             E::Tuple(items) => {
                 let _regs = items
                     .iter()
                     .map(|item| self.build_expr_unvoid(item, span.clone()))
                     .collect::<Result<Vec<_>>>()?;
-                return Err(Self::todo("tuples", span));
+                return Err(todo("tuples", span));
             }
             E::UnaryOp(op, e) => {
                 use UnaryOp as B;
@@ -542,7 +567,7 @@ impl<'a> IrBuilder<'a> {
                 assert_eq!(had_self, None);
                 dbg!(evaled_named, evaled_anon);
                 _ = evaled_anon;
-                return Err(Self::todo("method calls", span));
+                return Err(todo("method calls", span));
             }
         };
         // eprintln!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");
@@ -587,7 +612,7 @@ impl<'a> IrBuilder<'a> {
                     .map(|index| self.build_expr_unvoid(index, index_span.clone()))
                     .collect::<Result<Vec<_>>>()?;
                 if index_regs.len() != 1 {
-                    return Err(Self::todo("multidimensional indexing", index_span.clone()));
+                    return Err(todo("multidimensional indexing", index_span.clone()));
                 }
                 let index_reg = index_regs[0];
                 let span = indexee.span.start..index_span.end;
@@ -755,16 +780,16 @@ impl<'a> IrBuilder<'a> {
             .expect("block allocation overflow");
         id
     }
+}
 
-    #[allow(
-        dead_code,
-        reason = "This diagnostic is often used sporadically and temporarily, and only serves to give better diagnostics in the presence of future language direction or in-development features. It may come in and out of use over the lifetime of the compiler."
-    )]
-    const fn todo(message: &'static str, span: Span) -> Error {
-        Error {
-            kind: ErrorKind::Todo(message),
-            span,
-        }
+#[allow(
+    dead_code,
+    reason = "This diagnostic is often used sporadically and temporarily, and only serves to give better diagnostics in the presence of future language direction or in-development features. It may come in and out of use over the lifetime of the compiler."
+)]
+const fn todo(message: &'static str, span: Span) -> Error {
+    Error {
+        kind: ErrorKind::Todo(message),
+        span,
     }
 }
 
@@ -813,6 +838,17 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 let mut names = Map::new();
                 let mut fields_stored_by_value = vec![];
                 for (_is_anon, field_name, field_ty) in fields {
+                    fn recursively_stores(field_kind: &ast::TyKind) -> Option<Str> {
+                        // does this field store a possibly recursive type by value?
+                        match &field_kind {
+                            Tk::Pointer(_) | Tk::Function(_, _) => None,
+                            Tk::Name(name) => Some(name.kind.clone()),
+                            Tk::Array(item_ty, _count) => {
+                                // Open question: Do we consider arrays of length 0? Rust has an open issue for it: https://github.com/rust-lang/rust/issues/11924
+                                recursively_stores(&item_ty.kind)
+                            }
+                        }
+                    }
                     let ty = defined_tys.build_ty(field_ty, &mut program_tys)?;
                     ir_fields.insert(field_name.kind.clone(), ty);
                     if let Some(previous_span) =
@@ -823,11 +859,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                             span: field_name.span.clone(),
                         });
                     }
-                    // does this field store a possibly recursive type by value?
-                    match &field_ty.kind {
-                        Tk::Pointer(_) | Tk::Function(_, _) => {}
-                        Tk::Name(name) => fields_stored_by_value.push(name.kind.clone()),
-                    }
+                    fields_stored_by_value.extend(recursively_stores(&field_ty.kind));
                 }
                 let kind = TyKind::Struct {
                     name: name.kind.clone(),

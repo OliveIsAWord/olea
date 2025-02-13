@@ -259,12 +259,39 @@ impl<'src> Parser<'src> {
         } else {
             return Ok(None);
         };
-        while let Some(deref_span) = self.just(P::Hat) {
-            let span = ty.span.start..deref_span.end;
-            ty = Ty {
-                kind: TyKind::Pointer(Box::new(ty)),
-                span,
-            };
+        loop {
+            if let Some(deref_span) = self.just(P::Hat) {
+                let span = ty.span.start..deref_span.end;
+                ty = Ty {
+                    kind: TyKind::Pointer(Box::new(ty)),
+                    span,
+                };
+            } else if let Some(Spanned {
+                kind: Tt::Square(lengths, multi),
+                span: index_span,
+            }) = self.peek()
+            {
+                self.next().unwrap();
+                let span = ty.span.start..index_span.end;
+                if *multi {
+                    return Err(Error {
+                        kind: ErrorKind::Custom("not yet implemented: multidimensional arrays"),
+                        span: index_span,
+                    });
+                }
+                let length = self.item(
+                    Self::expr,
+                    &lengths[0],
+                    index_span.start..index_span.start,
+                    index_span.end..index_span.end,
+                )?;
+                ty = Ty {
+                    kind: TyKind::Array(Box::new(ty), Box::new(length)),
+                    span,
+                };
+            } else {
+                break;
+            }
         }
         Ok(Some(ty))
     }

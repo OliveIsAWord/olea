@@ -67,6 +67,8 @@ pub enum TyKind {
     Name(Name),
     /// A pointer to a value of a given type.
     Pointer(Box<Ty>),
+    /// A contiguous collection of elements of a known length.
+    Array(Box<Ty>, Box<Expr>),
     /// A function accepting and returning values of given types.
     Function(Vec<(IsAnon, Name, Ty)>, Option<Box<Ty>>),
 }
