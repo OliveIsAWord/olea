@@ -245,19 +245,19 @@ impl<'src> Parser<'src> {
         Self::parse_block(item_parser, block, self.source, start_span, end_span)
     }
     fn ty(&mut self) -> Parsed<Ty> {
-        if let Some(fn_span) = self.just(P::Fn) {
+        let mut ty = if let Some(fn_span) = self.just(P::Fn) {
             let (params, returns) = self.function_parameters()?;
-            return Ok(Some(Spanned {
+            Ty {
                 kind: TyKind::Function(params, returns.map(Box::new)),
                 span: fn_span.start..self.get_previous_span().end,
-            }));
-        }
-        let Some(name) = self.name() else {
+            }
+        } else if let Some(name) = self.name() {
+            Ty {
+                span: name.span.clone(),
+                kind: TyKind::Name(name),
+            }
+        } else {
             return Ok(None);
-        };
-        let mut ty = Ty {
-            span: name.span.clone(),
-            kind: TyKind::Name(name),
         };
         while let Some(deref_span) = self.just(P::Hat) {
             let span = ty.span.start..deref_span.end;

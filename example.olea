@@ -1,10 +1,2 @@
-# We here at the Olea Foundation are passionate about secure software.
-fn strcpy(destination: u8^, source: u8^):
-    let i = 0
-    while source[i]:
-        destination[i] = source[i]
-
-fn give_me_hello_world(buffer: u8^):
-    buffer.heyo(a: 42, b: 24)
-    let pair = (1, 2)
-    strcpy(destination: buffer[1, 2], source: "Hello, w\to\nrl\rr\\d!")
+fn meow(f: fn()^):
+    f^()
