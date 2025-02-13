@@ -335,6 +335,13 @@ impl<'a> IrBuilder<'a> {
                 dbg!(string);
                 return Err(Self::todo("string literals", span));
             }
+            E::Tuple(items) => {
+                let _regs = items
+                    .iter()
+                    .map(|item| self.build_expr_unvoid(item, span.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+                return Err(Self::todo("tuples", span));
+            }
             E::UnaryOp(op, e) => {
                 use UnaryOp as B;
                 use ast::UnaryOpKind as A;
@@ -476,36 +483,8 @@ impl<'a> IrBuilder<'a> {
                     });
                     return Ok(Some(callee));
                 };
-                // use `IndexMap` so that "invalid args" error is in the same order as the argument list
-                let mut evaled_args: IndexMap<Str, (Span, Register)> = IndexMap::new();
-                let mut evaled_anon: Vec<Register> = vec![];
-                for arg in args {
-                    use ast::FunctionArgKind as Arg;
-                    use indexmap::map::Entry::{Occupied, Vacant};
-                    let (name, body) = match &arg.kind {
-                        Arg::Named(name, body) => (name.clone(), body),
-                        Arg::Punned(body) => (Self::pun(body)?, body),
-                        Arg::Anon(expr) => {
-                            let reg = self.build_expr_unvoid(expr, span.clone())?;
-                            evaled_anon.push(reg);
-                            continue;
-                        }
-                    };
-                    let entry = match evaled_args.entry(name.kind.clone()) {
-                        Occupied(e) => {
-                            return Err(Error {
-                                kind: ErrorKind::NameConflict(
-                                    "function argument",
-                                    e.get().0.clone().some(),
-                                ),
-                                span: name.span,
-                            });
-                        }
-                        Vacant(e) => e,
-                    };
-                    let r = self.build_block_unvoid(body, name.span.clone())?;
-                    entry.insert((name.span.clone(), r));
-                }
+                let (mut evaled_args, evaled_anon) =
+                    self.build_function_arguments(args, span.clone())?;
                 let mut evaled_anon = evaled_anon.into_iter();
                 let mut missing_args = vec![];
                 let args = params
@@ -553,6 +532,18 @@ impl<'a> IrBuilder<'a> {
                 });
                 return_reg
             }
+            E::MethodCall(receiver, method_name, args) => {
+                let receiver_span = receiver.span.clone();
+                let receiver = self.build_expr_unvoid(receiver, method_name.span.clone())?;
+                let (mut evaled_named, evaled_anon) =
+                    self.build_function_arguments(args, span.clone())?;
+                let had_self =
+                    evaled_named.insert("some unique self str".into(), (receiver_span, receiver));
+                assert_eq!(had_self, None);
+                dbg!(evaled_named, evaled_anon);
+                _ = evaled_anon;
+                return Err(Self::todo("method calls", span));
+            }
         };
         // eprintln!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");
         Ok(reg)
@@ -589,9 +580,16 @@ impl<'a> IrBuilder<'a> {
             Pk::Deref(e, deref_span) => self
                 .build_expr_unvoid(e, deref_span.clone())
                 .map(MaybeVar::Variable),
-            Pk::Index(indexee, index, index_span) => {
+            Pk::Index(indexee, indices, index_span) => {
                 let indexee_reg = self.build_expr_unvoid(indexee, index_span.clone())?;
-                let index_reg = self.build_expr_unvoid(index, index_span.clone())?;
+                let index_regs = indices
+                    .iter()
+                    .map(|index| self.build_expr_unvoid(index, index_span.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+                if index_regs.len() != 1 {
+                    return Err(Self::todo("multidimensional indexing", index_span.clone()));
+                }
+                let index_reg = index_regs[0];
                 let span = indexee.span.start..index_span.end;
                 let indexed_reg =
                     self.push_store(StoreKind::PtrOffset(indexee_reg, index_reg), span);
@@ -605,6 +603,44 @@ impl<'a> IrBuilder<'a> {
                 Ok(MaybeVar::Variable(field_ptr_reg))
             }
         }
+    }
+
+    // use `IndexMap` so that an "invalid args" error is in the same order as the argument list
+    fn build_function_arguments(
+        &mut self,
+        args: &[ast::FunctionArg],
+        span: Span,
+    ) -> Result<(IndexMap<Str, (Span, Register)>, Vec<Register>)> {
+        let mut evaled_args: IndexMap<Str, (Span, Register)> = IndexMap::new();
+        let mut evaled_anon: Vec<Register> = vec![];
+        for arg in args {
+            use ast::FunctionArgKind as Arg;
+            use indexmap::map::Entry::{Occupied, Vacant};
+            let (name, body) = match &arg.kind {
+                Arg::Named(name, body) => (name.clone(), body),
+                Arg::Punned(body) => (Self::pun(body)?, body),
+                Arg::Anon(expr) => {
+                    let reg = self.build_expr_unvoid(expr, span.clone())?;
+                    evaled_anon.push(reg);
+                    continue;
+                }
+            };
+            let entry = match evaled_args.entry(name.kind.clone()) {
+                Occupied(e) => {
+                    return Err(Error {
+                        kind: ErrorKind::NameConflict(
+                            "function argument",
+                            e.get().0.clone().some(),
+                        ),
+                        span: name.span,
+                    });
+                }
+                Vacant(e) => e,
+            };
+            let r = self.build_block_unvoid(body, name.span.clone())?;
+            entry.insert((name.span.clone(), r));
+        }
+        Ok((evaled_args, evaled_anon))
     }
 
     fn pun(block: &ast::Block) -> Result<Name> {

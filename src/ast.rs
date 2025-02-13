@@ -94,6 +94,8 @@ pub enum ExprKind {
     Int(u64, Option<Name>),
     /// A string literal.
     String(Str),
+    /// An anonymous list of values.
+    Tuple(Vec<Expr>),
     /// A calculation taking the value of one expression to yield another.
     UnaryOp(UnaryOp, Box<Expr>),
     /// A calculation taking the values of two expressions to yield another.
@@ -112,6 +114,8 @@ pub enum ExprKind {
     Block(Block),
     /// A function call, composed of a function and a list of arguments to pass to it.
     Call(Box<Expr>, Vec<FunctionArg>),
+    /// A method call, composed of a receiver, a method name, and a list of arguments.
+    MethodCall(Box<Expr>, Name, Vec<FunctionArg>),
     /// See [`PlaceKind`].
     Place(PlaceKind),
 }
@@ -141,8 +145,8 @@ pub enum PlaceKind {
     Var(Name),
     /// An access of a value from an expression which yields a pointer. The second field contains the source span of the deref operator `^` itself.
     Deref(Box<Expr>, Span),
-    /// An index operation, consisting of the indexee, the index, and the span of the index (including square brackets).
-    Index(Box<Expr>, Box<Expr>, Span),
+    /// An index operation, consisting of the indexee, the list of indices, and the span of the index (including square brackets). Note that multidimensional indexing is not yet supported.
+    Index(Box<Expr>, Vec<Expr>, Span),
     /// A field of a struct value, and the span of the dot.
     Field(Box<Expr>, Name, Span),
 }

@@ -5,4 +5,6 @@ fn strcpy(destination: u8^, source: u8^):
         destination[i] = source[i]
 
 fn give_me_hello_world(buffer: u8^):
-    strcpy(destination: buffer, source: "Hello, w\to\nrl\rr\\d!")
+    buffer.heyo(a: 42, b: 24)
+    let pair = (1, 2)
+    strcpy(destination: buffer[1, 2], source: "Hello, w\to\nrl\rr\\d!")

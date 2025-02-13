@@ -144,7 +144,7 @@ impl<'src> Parser<'src> {
                     _ => {
                         // get the span of the character and trailing backslash
                         let span_start = span.start + 1 + i;
-                        let span = span_start - 1 ..span_start + c.len_utf8();
+                        let span = span_start - 1..span_start + c.len_utf8();
                         return Err(Error {
                             kind: ErrorKind::Custom("unknown string literal escape"),
                             span,
@@ -319,6 +319,23 @@ impl<'src> Parser<'src> {
         let span = span_start..self.tokens[self.i - 1].span.end;
         Ok(FunctionArg { kind, span })
     }
+    fn function_arguments(&mut self) -> Parsed<(Vec<FunctionArg>, Span)> {
+        let Some(Spanned {
+            kind: Tt::Paren(args, _),
+            span: args_span,
+        }) = self.peek()
+        else {
+            return Ok(None);
+        };
+        self.next().unwrap();
+        let args = self.block(
+            Self::function_argument,
+            args,
+            args_span.start + 1..args_span.start + 1,
+            args_span.end - 1..args_span.end - 1,
+        )?;
+        Ok(Some((args, args_span)))
+    }
     fn expr(&mut self) -> Result<Expr> {
         self.expr_at(Level::Min)
     }
@@ -336,15 +353,16 @@ impl<'src> Parser<'src> {
             span,
         }) = self.peek()
         {
-            if *multi {
-                return Err(self.err("tuples are not yet implemented"));
-            }
-            assert_eq!(block.len(), 1);
             self.next().unwrap();
             let start_span = span.start + 1..span.start + 1;
             let end_span = span.end - 1..span.end - 1;
-            let expr = self.item(Self::expr, &block[0], start_span, end_span)?;
-            ExprKind::Paren(Box::new(expr))
+            if *multi {
+                let exprs = self.block(Self::expr, block, start_span, end_span)?;
+                ExprKind::Tuple(exprs)
+            } else {
+                let expr = self.item(Self::expr, &block[0], start_span, end_span)?;
+                ExprKind::Paren(Box::new(expr))
+            }
         } else if let Some(block) = self.colon_block()? {
             ExprKind::Block(block)
         } else if let Some(name) = self.name() {
@@ -421,52 +439,36 @@ impl<'src> Parser<'src> {
                 let field = self
                     .name()
                     .ok_or_else(|| self.err("expected field or method name after dot"))?;
-                if matches!(
-                    self.peek(),
-                    Some(Spanned {
-                        kind: Tt::Paren(..),
-                        span: _
-                    })
-                ) {
-                    return Err(self.err("not yet implemented: method calls"));
+                if let Some((method_args, args_span)) = self.function_arguments()? {
+                    span = e.span.start..args_span.end;
+                    kind = ExprKind::MethodCall(Box::new(e), field, method_args);
+                } else {
+                    span = e.span.start..field.span.end;
+                    kind = ExprKind::Place(PlaceKind::Field(Box::new(e), field, dot_span));
                 }
-                span = e.span.start..field.span.end;
-                kind = ExprKind::Place(PlaceKind::Field(Box::new(e), field, dot_span));
             } else if self.just(P::As).is_some() {
                 let Some(ty) = self.ty()? else {
                     return Err(self.err_previous("expected type after `as`"));
                 };
                 span = e.span.start..ty.span.end;
                 kind = ExprKind::As(Box::new(e), ty);
-            } else if let Some(Spanned {
-                kind: Tt::Paren(args, _),
-                span: args_span,
-            }) = self.peek()
-            {
-                self.next().unwrap();
-                let args = self.block(
-                    Self::function_argument,
-                    args,
-                    args_span.start + 1..args_span.start + 1,
-                    args_span.end - 1..args_span.end - 1,
-                )?;
+            } else if let Some((args, args_span)) = self.function_arguments()? {
                 span = e.span.start..args_span.end;
                 kind = ExprKind::Call(Box::new(e), args);
             } else if let Some(Spanned {
-                kind: Tt::Square(block, multi),
+                kind: Tt::Square(index_block, _multi),
                 span: index_span,
             }) = self.peek()
             {
-                if *multi {
-                    return Err(self.err("indexing cannot have multiple arguments"));
+                if index_block.is_empty() {
+                    return Err(self.err("missing index"));
                 }
-                assert_eq!(block.len(), 1);
                 self.next().unwrap();
                 let start_span = index_span.start + 1..index_span.start + 1;
                 let end_span = index_span.end - 1..index_span.end - 1;
-                let expr = self.item(Self::expr, &block[0], start_span, end_span)?;
+                let indices = self.block(Self::expr, index_block, start_span, end_span)?;
                 span = e.span.start..index_span.end;
-                kind = ExprKind::Place(PlaceKind::Index(Box::new(e), Box::new(expr), index_span));
+                kind = ExprKind::Place(PlaceKind::Index(Box::new(e), indices, index_span));
             } else {
                 break;
             }
