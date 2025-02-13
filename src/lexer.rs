@@ -21,6 +21,7 @@ pub enum PlainToken {
     Error,
     Name,
     Int,
+    String,
     As,
     If,
     Fn,
@@ -149,14 +150,28 @@ impl<'a> View<'a> {
         Some(c)
     }
 
-    fn consume_if(&mut self, predicate: fn(char) -> bool) -> Option<char> {
-        let c = self.peek().filter(|&c| predicate(c))?;
+    fn consume_if(&mut self, predicate: impl FnOnce(char) -> bool) -> Option<char> {
+        self.consume_map(|c| predicate(c).then_some(c))
+    }
+
+    fn consume_map<T>(&mut self, f: impl FnOnce(char) -> Option<T>) -> Option<T> {
+        // Don't consume the next character unless it matches the predicate.
+        let t = self.peek().and_then(f)?;
         self.consume().unwrap();
-        Some(c)
+        Some(t)
     }
 
     fn skip_while(&mut self, predicate: fn(char) -> bool) {
         while self.consume_if(predicate).is_some() {}
+    }
+
+    fn find<T>(&mut self, mut f: impl FnMut(char) -> Option<T>) -> Option<T> {
+        while let Some(c) = self.consume() {
+            if let Some(t) = f(c) {
+                return Some(t);
+            }
+        }
+        None
     }
 }
 
@@ -236,6 +251,27 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
             c if c.is_ascii_digit() => {
                 src.skip_while(is_continued);
                 Pl(P::Int)
+            }
+            '"' => {
+                enum StringState {
+                    End,
+                    Error,
+                    Escape,
+                }
+                use StringState as S;
+                loop {
+                    let state = src.find(|c| match c {
+                        '"' => Some(S::End),
+                        '\n' => Some(S::Error),
+                        '\\' => Some(S::Escape),
+                        _ => None,
+                    });
+                    match state {
+                        Some(S::End) => break Pl(P::String),
+                        Some(S::Escape) => _ = src.consume(),
+                        Some(S::Error) | None => break Pl(P::Error),
+                    }
+                }
             }
             '\n' => {
                 was_newline = true;

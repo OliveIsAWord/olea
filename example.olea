@@ -1,20 +1,8 @@
-struct Foo:
-    a: u8
-    anon b: u16
-    c: Bar
+# We here at the Olea Foundation are passionate about secure software.
+fn strcpy(destination: u8^, source: u8^):
+    let i = 0
+    while source[i]:
+        destination[i] = source[i]
 
-struct Zon:
-    x: Foo
-
-struct Bar:
-    # x: Zon
-    anon y: u32
-
-
-extern fn fun(name1: usize)
-
-fn main():
-    fun(name1: 123456)
-    let a = 42_u8
-    let foo = Foo(b: 1000_u16, :a, c: Bar(999_999_u32))
-    let foo = Foo(a: 0_u8, 65432_u16, c: Bar(987_654_321_u32))
+fn give_me_hello_world(buffer: u8^):
+    strcpy(destination: buffer, source: "Hello, w\to\nrl\rr\\d!")

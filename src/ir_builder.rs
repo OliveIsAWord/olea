@@ -331,6 +331,10 @@ impl<'a> IrBuilder<'a> {
                 };
                 self.push_store(Sk::Int((*int).into(), int_ty), span).some()
             }
+            E::String(string) => {
+                dbg!(string);
+                return Err(Self::todo("string literals", span));
+            }
             E::UnaryOp(op, e) => {
                 use UnaryOp as B;
                 use ast::UnaryOpKind as A;
@@ -720,7 +724,7 @@ impl<'a> IrBuilder<'a> {
         dead_code,
         reason = "This diagnostic is often used sporadically and temporarily, and only serves to give better diagnostics in the presence of future language direction or in-development features. It may come in and out of use over the lifetime of the compiler."
     )]
-    const fn _todo(message: &'static str, span: Span) -> Error {
+    const fn todo(message: &'static str, span: Span) -> Error {
         Error {
             kind: ErrorKind::Todo(message),
             span,

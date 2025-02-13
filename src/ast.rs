@@ -4,7 +4,7 @@
 //!
 //! The types in this module represent the syntactic forms that comprise the Olea grammar. We use a convention for each category of item of an enum `FooKind` representing the element itself, and a `Foo` which contains a `FooKind` as well as the source span of the element.
 
-use crate::compiler_types::{Name, Span, Spanned};
+use crate::compiler_types::{Name, Span, Spanned, Str};
 use crate::language_types::IsAnon;
 
 /// A full source program, made of a list of declarations.
@@ -92,6 +92,8 @@ pub type Expr = Spanned<ExprKind>;
 pub enum ExprKind {
     /// An integer constant with an optional suffix, such as `42usize`.
     Int(u64, Option<Name>),
+    /// A string literal.
+    String(Str),
     /// A calculation taking the value of one expression to yield another.
     UnaryOp(UnaryOp, Box<Expr>),
     /// A calculation taking the values of two expressions to yield another.

@@ -5,7 +5,7 @@
 
 use crate::arborist::{self as a, PlainToken as P, TokenTree as Tt};
 use crate::ast::*;
-use crate::compiler_types::{Name, Span, Spanned};
+use crate::compiler_types::{Name, Span, Spanned, Str};
 use crate::language_types::IsAnon;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -127,6 +127,40 @@ impl<'src> Parser<'src> {
             Some(Name { kind, span })
         };
         Some((int, suffix))
+    }
+    fn string(&mut self) -> Parsed<Str> {
+        let Some(span) = self.just(P::String) else {
+            return Ok(None);
+        };
+        let mut buffer = String::new();
+        let mut is_escape = false;
+        for (i, c) in self.source[span.start + 1..span.end - 1].char_indices() {
+            if is_escape {
+                let char_from_escaped = match c {
+                    '\\' | '"' => c,
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    _ => {
+                        // get the span of the character and trailing backslash
+                        let span_start = span.start + 1 + i;
+                        let span = span_start - 1 ..span_start + c.len_utf8();
+                        return Err(Error {
+                            kind: ErrorKind::Custom("unknown string literal escape"),
+                            span,
+                        });
+                    }
+                };
+                buffer.push(char_from_escaped);
+                is_escape = false;
+            } else {
+                match c {
+                    '\\' => is_escape = true,
+                    _ => buffer.push(c),
+                }
+            }
+        }
+        Ok(Some(buffer.into()))
     }
     fn spanned<O>(&mut self, f: impl FnOnce(&mut Self) -> Result<O>) -> Result<Spanned<O>> {
         let span_start = self.get_span().start;
@@ -317,6 +351,8 @@ impl<'src> Parser<'src> {
             ExprKind::Place(PlaceKind::Var(name))
         } else if let Some((int, suffix)) = self.int() {
             ExprKind::Int(int, suffix)
+        } else if let Some(string) = self.string()? {
+            ExprKind::String(string)
         } else if self.just(P::If).is_some() {
             let condition = self.expr()?;
             let Some(then_block) = self.colon_block()? else {
