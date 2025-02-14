@@ -249,6 +249,7 @@ impl Display for TyKind {
             Self::Struct { name, .. } => {
                 write!(f, "{name}")
             }
+            Self::Array(item, count) => write!(f, "{item}[{count}]"),
         }
     }
 }

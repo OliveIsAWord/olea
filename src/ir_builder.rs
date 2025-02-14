@@ -105,9 +105,7 @@ impl DefinedTys {
             T::Array(inner, count) => {
                 let inner_kind = self.build_ty(inner, program_tys)?;
                 let count = self.eval_const(count)?;
-                dbg!(&inner_kind);
-                dbg!(&count);
-                Err(todo("array types", ty.span.clone()))
+                Ok(program_tys.insert(TyKind::Array(inner_kind, count)))
             }
             T::Function(params, returns) => {
                 self.build_function_ty(params, returns.as_ref().map(|v| &**v), program_tys)

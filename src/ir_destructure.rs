@@ -1,4 +1,4 @@
-//! An IR stage deconstructing struct values into its individual fields.
+//! An IR stage deconstructing aggregate types into its individual "base" types.
 
 use crate::compiler_types::{IndexMap, Map, Set, Str};
 use crate::ir::*;
@@ -21,8 +21,10 @@ fn make_struct_fields(
             let mut path = prefix.to_vec();
             path.push(field.clone());
             match &ty_map[ty] {
-                // Types that don't need destructureing
-                TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. } => {
+                // Types that don't need destructuring
+                TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. }
+                | TyKind::Array(..) // TODO
+                => {
                     let r = Register(*next_register);
                     *next_register += 1;
                     this.insert(r, (ty, path));
@@ -84,7 +86,9 @@ pub fn destructure_function(f: &mut Function, ty_map: &mut TyMap) {
             TyKind::Struct { fields, .. } => {
                 Some((r, make_struct_fields(fields, &mut f.next_register, ty_map)))
             }
-            TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. } => None,
+            TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. }
+            | TyKind::Array(..) // TODO
+            => None,
         })
         .collect();
     /*

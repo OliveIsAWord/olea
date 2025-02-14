@@ -39,7 +39,7 @@ struct SizeFinder<'a>(&'a TyMap);
 impl SizeFinder<'_> {
     fn of_ty(self, ty: Ty) -> Size {
         self.of_ty_or(ty)
-            .unwrap_or_else(|_| unreachable!("struct type {ty} encountered during codegen"))
+            .unwrap_or_else(|_| unreachable!("aggregate type {ty} encountered during codegen"))
     }
     fn of_ty_or(self, ty: Ty) -> Result<Size, u32> {
         match &self.0[ty] {
@@ -50,6 +50,9 @@ impl SizeFinder<'_> {
             | TyKind::Function(..) => Ok(Size::Word),
             TyKind::Struct { fields, .. } => {
                 Err(fields.iter().map(|(_, ty)| self.of_in_bytes(*ty)).sum())
+            }
+            &TyKind::Array(item, count) => {
+                Err(self.of_in_bytes(item) * u32::try_from(count).unwrap())
             }
         }
     }

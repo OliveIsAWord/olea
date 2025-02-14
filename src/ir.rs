@@ -112,6 +112,9 @@ impl TyMap {
                 string
             }
             TyKind::Struct { name, .. } => name.as_ref().into(),
+            &TyKind::Array(item, count) => {
+                format!("{}[{count}]", self.format(item))
+            }
         }
     }
 
@@ -127,7 +130,7 @@ impl TyMap {
         use TyKind as T;
         // exhaustiveness check; if this errors then you should probably update this function!
         match a {
-            T::Int(_) | T::Pointer(_) | T::Function(..) | T::Struct { .. } => {}
+            T::Int(_) | T::Pointer(_) | T::Function(..) | T::Struct { .. } | T::Array(..) => {}
         }
         match (a, b) {
             (T::Int(a), T::Int(b)) => a == b,
@@ -151,6 +154,9 @@ impl TyMap {
                 true
             }
             (T::Struct { name: a, .. }, T::Struct { name: b, .. }) => a == b,
+            (&T::Array(a, a_count), &T::Array(b, b_count)) => {
+                a_count == b_count && self.equals(a, b)
+            }
             _ => false,
         }
     }
@@ -487,6 +493,8 @@ pub enum TyKind {
         /// The fields of the struct type.
         fields: IndexMap<Str, Ty>,
     },
+    /// A contiguous fixed-length list of values of a type.
+    Array(Ty, u128),
 }
 
 /// The sizes an integer type can be.
