@@ -65,18 +65,15 @@ impl SizeFinder<'_> {
     fn of_in_bytes(self, ty: Ty) -> u32 {
         self.of_ty_or(ty).map_or_else(|x| x, Size::in_bytes)
     }
-    fn of_inner_in_bytes(self, ty: Ty) -> u32 {
+    fn _of_inner_in_bytes(self, ty: Ty) -> u32 {
         match &self.0[ty] {
             &TyKind::Pointer(inner) => self.of_in_bytes(inner),
             t => unreachable!("accessing inner type of non-pointer type `{t}`"),
         }
     }
     fn field_offset(self, ty: Ty, accessed_field: &Str) -> u32 {
-        let TyKind::Pointer(value) = self.0[ty] else {
-            unreachable!("field offset");
-        };
-        let TyKind::Struct { fields, .. } = &self.0[value] else {
-            unreachable!("field offset");
+        let TyKind::Struct { fields, .. } = &self.0[ty] else {
+            unreachable!("field offset {ty} {} {accessed_field}", self.0[ty]);
         };
         let mut offset: u32 = 0;
         for (field_name, field_ty) in fields {
@@ -412,24 +409,47 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                             let pointer_reg = &regs[pointer];
                             write_inst!(code, "mov {}, {}", reg.foo(), pointer_reg.foo());
                         }
-                        Sk::PtrOffset(lhs, rhs) => {
-                            let stride = get_size.of_inner_in_bytes(f.tys[lhs]);
-                            let lhs_reg = regs.get(lhs).unwrap();
-                            let rhs_reg = regs.get(rhs).unwrap();
-                            if reg != lhs_reg {
-                                write_inst!(code, "mov {}, {}", reg.foo(), lhs_reg.foo());
+                        Sk::PtrOffset(pointer, accesses) => {
+                            {
+                                let pointer_reg = &regs[pointer];
+                                if reg != pointer_reg {
+                                    write_inst!(code, "mov {}, {}", reg.foo(), pointer_reg.foo());
+                                }
                             }
-                            write_inst!(code, "mov {}, {stride}", TEMP_REG.foo());
-                            write_inst!(code, "mul {}, {}", TEMP_REG.foo(), rhs_reg.foo());
-                            write_inst!(code, "add {}, {}", reg.foo(), TEMP_REG.foo());
-                        }
-                        Sk::FieldOffset(ptr, accessed_field) => {
-                            let offset = get_size.field_offset(f.tys[ptr], accessed_field);
-                            let ptr_reg = &regs[ptr];
-                            if reg != ptr_reg {
-                                write_inst!(code, "mov {}, {}", reg.foo(), ptr_reg.foo());
+                            let TyKind::Pointer(mut pointee_ty) = get_size.0[f.tys[pointer]] else {
+                                unreachable!();
+                            };
+                            for access in accesses {
+                                match access {
+                                    PtrOffset::Field(name) => {
+                                        let offset = get_size.field_offset(pointee_ty, name);
+                                        write_inst!(code, "add {}, {offset}", reg.foo());
+                                        let TyKind::Struct { fields, .. } = &get_size.0[pointee_ty]
+                                        else {
+                                            unreachable!();
+                                        };
+                                        pointee_ty = fields[name];
+                                    }
+                                    PtrOffset::Index(index) => {
+                                        // we could hypothetically do bounds checking if it's a pointer to an array
+                                        if let TyKind::Array(new_inner, _count) =
+                                            get_size.0[pointee_ty]
+                                        {
+                                            pointee_ty = new_inner;
+                                        };
+                                        let stride = get_size.of_in_bytes(pointee_ty);
+                                        write_inst!(code, "mov {}, {stride}", TEMP_REG.foo());
+                                        let index_reg = &regs[index];
+                                        write_inst!(
+                                            code,
+                                            "mul {}, {}",
+                                            TEMP_REG.foo(),
+                                            index_reg.foo(),
+                                        );
+                                        write_inst!(code, "add {}, {}", reg.foo(), TEMP_REG.foo());
+                                    }
+                                }
                             }
-                            write_inst!(code, "add {}, {offset}", reg.foo());
                         }
                         Sk::Int(..) | Sk::Function(_) => unreachable!(
                             "register store should have been optimized as a constant literal"

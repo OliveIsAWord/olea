@@ -613,16 +613,16 @@ impl<'a> IrBuilder<'a> {
                     return Err(todo("multidimensional indexing", index_span.clone()));
                 }
                 let index_reg = index_regs[0];
+                let access = vec![PtrOffset::Index(index_reg)];
                 let span = indexee.span.start..index_span.end;
-                let indexed_reg =
-                    self.push_store(StoreKind::PtrOffset(indexee_reg, index_reg), span);
+                let indexed_reg = self.push_store(StoreKind::PtrOffset(indexee_reg, access), span);
                 Ok(MaybeVar::Variable(indexed_reg))
             }
             Pk::Field(struct_value, field, dot_span) => {
                 let struct_reg = self.build_expr_unvoid(struct_value, dot_span.clone())?;
+                let access = vec![PtrOffset::Field(field.kind.clone())];
                 let span = struct_value.span.start..field.span.end;
-                let field_ptr_reg =
-                    self.push_store(StoreKind::FieldOffset(struct_reg, field.kind.clone()), span);
+                let field_ptr_reg = self.push_store(StoreKind::PtrOffset(struct_reg, access), span);
                 Ok(MaybeVar::Variable(field_ptr_reg))
             }
         }
@@ -721,21 +721,32 @@ impl<'a> IrBuilder<'a> {
             &Sk::PtrCast(_, kind) => self.program_tys.insert(TyKind::Pointer(kind)),
             Sk::Phi(regs) => t(regs.first_key_value().expect("empty phi").1),
             Sk::BinOp(_, lhs, _rhs) => t(lhs),
-            Sk::PtrOffset(ptr, _) => t(ptr),
-            Sk::FieldOffset(r, field) => {
-                let TyKind::Pointer(value) = self.program_tys[t(r)] else {
+            Sk::PtrOffset(ptr, accesses) => {
+                assert_eq!(accesses.len(), 1);
+                let access = &accesses[0];
+                let TyKind::Pointer(mut pointee_ty) = self.program_tys[t(ptr)] else {
                     return dummy_ty;
                 };
-                let TyKind::Struct { fields, .. } = &self.program_tys[value] else {
-                    return dummy_ty;
-                };
-                fields
-                    .clone()
-                    .into_iter()
-                    .find_map(|(name, ty)| {
-                        (&name == field).then(|| self.program_tys.insert(TyKind::Pointer(ty)))
-                    })
-                    .unwrap_or(dummy_ty)
+                match access {
+                    PtrOffset::Index(_) => {
+                        if let TyKind::Array(item, _count) = self.program_tys[pointee_ty] {
+                            pointee_ty = item;
+                        }
+                    }
+                    PtrOffset::Field(field) => {
+                        let TyKind::Struct { fields, .. } = &self.program_tys[pointee_ty] else {
+                            return dummy_ty;
+                        };
+                        let Some(item) = fields
+                            .iter()
+                            .find_map(|(name, &ty)| (name == field).then_some(ty))
+                        else {
+                            return dummy_ty;
+                        };
+                        pointee_ty = item;
+                    }
+                }
+                self.program_tys.insert(TyKind::Pointer(pointee_ty))
             }
             &Sk::StackAlloc(ty) => self.program_tys.insert(TyKind::Pointer(ty)),
             Sk::Copy(r) | Sk::UnaryOp(UnaryOp::Neg, r) => t(r),

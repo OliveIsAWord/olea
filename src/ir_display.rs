@@ -5,7 +5,7 @@ use std::fmt::{Display, Formatter, Result};
 
 type F<'a, 'b> = &'a mut Formatter<'b>;
 
-const DISPLAY_TYS: bool = false;
+const DISPLAY_TYS: bool = true;
 
 struct SepBy<'a, T, U: ?Sized>(T, &'a U);
 impl<T, U> Display for SepBy<'_, T, U>
@@ -153,8 +153,16 @@ impl DisplayWithName for Function {
                             }),
                             Sk::IntCast(inner, ty) => write!(f, "{inner} as {ty}"),
                             Sk::PtrCast(pointer, ty) => write!(f, "{pointer} as {ty}^"),
-                            Sk::PtrOffset(lhs, rhs) => write!(f, "{lhs}[{rhs}]@"),
-                            Sk::FieldOffset(inner, field) => write!(f, "{inner}.{field}@"),
+                            Sk::PtrOffset(pointer, accesses) => {
+                                write!(f, "{pointer}")?;
+                                for access in accesses {
+                                    match access {
+                                        PtrOffset::Field(field) => write!(f, ".{field}")?,
+                                        PtrOffset::Index(index) => write!(f, "[{index}]")?,
+                                    }
+                                }
+                                write!(f, "@")
+                            }
                             Sk::Phi(regs) => write!(
                                 f,
                                 "Phi({})",

@@ -3,7 +3,7 @@
 use crate::compiler_types::{IndexMap, Map, Set, Str};
 use crate::ir::*;
 
-type StructFields = Map<Register, (Ty, Vec<Str>)>;
+type StructFields = Map<Register, (Ty, Vec<PtrOffset>)>;
 
 fn make_struct_fields(
     fields: &IndexMap<Str, Ty>,
@@ -12,14 +12,14 @@ fn make_struct_fields(
 ) -> StructFields {
     fn visit(
         this: &mut StructFields,
-        prefix: &[Str],
+        prefix: &[PtrOffset],
         fields: &IndexMap<Str, Ty>,
         next_register: &mut u128,
         ty_map: &TyMap,
     ) {
         for (field, &ty) in fields {
             let mut path = prefix.to_vec();
-            path.push(field.clone());
+            path.push(PtrOffset::Field(field.clone()));
             match &ty_map[ty] {
                 // Types that don't need destructuring
                 TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. }
@@ -179,31 +179,15 @@ fn destructure_block(
                 };
                 i -= 1;
                 insts.remove(i);
-                for (&r, (_, accesses)) in fields {
-                    let mut ptr = dst;
-                    let mut ty = tys[&src];
-                    for access in accesses {
-                        ty = {
-                            let TyKind::Struct { fields, .. } = &ty_map[ty] else {
-                                unreachable!();
-                            };
-                            fields
-                                .iter()
-                                .find_map(|(name, ty)| (name == access).then_some(*ty))
-                                .unwrap()
-                        };
-                        let new_ptr = Register(*next_register);
-                        *next_register += 1;
-                        let ty = ty_map.insert(TyKind::Pointer(ty));
-                        tys.insert(new_ptr, ty);
-                        insts.insert(
-                            i,
-                            Inst::Store(new_ptr, Sk::FieldOffset(ptr, access.clone())),
-                        );
-                        i += 1;
-                        ptr = new_ptr;
-                    }
-                    insts.insert(i, Inst::Write(ptr, r));
+                for (&field_r, &(ty, ref accesses)) in fields {
+                    let new_ptr = Register(*next_register);
+                    *next_register += 1;
+                    let ty = ty_map.insert(TyKind::Pointer(ty));
+                    tys.insert(new_ptr, ty);
+                    let accesses = accesses.iter().cloned().collect();
+                    insts.insert(i, Inst::Store(new_ptr, Sk::PtrOffset(dst, accesses)));
+                    i += 1;
+                    insts.insert(i, Inst::Write(new_ptr, field_r));
                     i += 1;
                 }
             }
@@ -217,7 +201,6 @@ fn destructure_block(
                     | Sk::IntCast(..)
                     | Sk::PtrCast(..)
                     | Sk::PtrOffset(..)
-                    | Sk::FieldOffset(..)
                     | Sk::StackAlloc(_)
                     | Sk::Function(_)
                     | Sk::UnaryOp(UnaryOp::Neg, _)
@@ -292,31 +275,15 @@ fn destructure_block(
                     &mut Sk::Read(src) => {
                         i -= 1;
                         insts.remove(i);
-                        for (&r2, (_, accesses)) in fields {
-                            let mut ptr = src;
-                            let mut ty = tys[&r];
-                            for access in accesses {
-                                ty = {
-                                    let TyKind::Struct { fields, .. } = &ty_map[ty] else {
-                                        unreachable!();
-                                    };
-                                    fields
-                                        .iter()
-                                        .find_map(|(name, ty)| (name == access).then_some(*ty))
-                                        .unwrap()
-                                };
-                                let new_ptr = Register(*next_register);
-                                *next_register += 1;
-                                let ty = ty_map.insert(TyKind::Pointer(ty));
-                                tys.insert(new_ptr, ty);
-                                insts.insert(
-                                    i,
-                                    Inst::Store(new_ptr, Sk::FieldOffset(ptr, access.clone())),
-                                );
-                                i += 1;
-                                ptr = new_ptr;
-                            }
-                            insts.insert(i, Inst::Store(r2, Sk::Read(ptr)));
+                        for (&field_r, &(ty, ref accesses)) in fields {
+                            let new_ptr = Register(*next_register);
+                            *next_register += 1;
+                            let ty = ty_map.insert(TyKind::Pointer(ty));
+                            tys.insert(new_ptr, ty);
+                            let accesses = accesses.iter().cloned().collect();
+                            insts.insert(i, Inst::Store(new_ptr, Sk::PtrOffset(src, accesses)));
+                            i += 1;
+                            insts.insert(i, Inst::Store(field_r, Sk::Read(new_ptr)));
                             i += 1;
                         }
                     }

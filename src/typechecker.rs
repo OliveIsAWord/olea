@@ -101,20 +101,40 @@ impl<'a> TypeChecker<'a> {
                 }
                 TyKind::Int(lhs_int)
             }
-            Sk::PtrOffset(lhs, rhs) => {
-                self.pointer(lhs)?;
-                self.expect(rhs, &TyKind::Int(IntKind::Usize))?;
-                self.t(lhs).clone()
-            }
-            Sk::FieldOffset(r, ref field) => {
-                let TyKind::Struct { fields, .. } = self.pointer(r)? else {
-                    return Err((self.name.into(), ErrorKind::NotStruct(r)));
+            Sk::PtrOffset(pointer, ref accesses) => {
+                let &TyKind::Pointer(mut pointee) = self.t(pointer) else {
+                    return Err((self.name.into(), ErrorKind::NotPointer(pointer)));
                 };
-                fields
-                    .iter()
-                    .find_map(|(name, ty)| (name == field).then_some(TyKind::Pointer(*ty)))
-                    .ok_or_else(|| (self.name.into(), ErrorKind::NoFieldNamed(r, field.clone())))?
+                for access in accesses {
+                    match *access {
+                        PtrOffset::Index(index) => {
+                            self.expect(index, &TyKind::Int(IntKind::Usize))?;
+                            if let TyKind::Array(item, _count) = self.ty_map[pointee] {
+                                pointee = item;
+                            }
+                        }
+                        PtrOffset::Field(ref field) => {
+                            let TyKind::Struct { fields, .. } = &self.ty_map[pointee] else {
+                                return Err((self.name.into(), ErrorKind::NotStruct(pointer)));
+                            };
+                            pointee = fields
+                                .iter()
+                                .find_map(|(name, &ty)| (name == field).then_some(ty))
+                                .ok_or_else(|| {
+                                    (
+                                        self.name.into(),
+                                        ErrorKind::NoFieldNamed(pointer, field.clone()),
+                                    )
+                                })?;
+                        }
+                    }
+                }
+                TyKind::Pointer(pointee)
             }
+            /*
+            Sk::FieldOffset(r, ref field) => {
+            }
+            */
             Sk::UnaryOp(UnaryOp::Neg, rhs) => {
                 let kind = self.int(rhs)?;
                 TyKind::Int(kind)

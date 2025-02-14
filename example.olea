@@ -1,2 +1,12 @@
-fn meow(f: fn()[3]):
-    f
+struct Foo:
+    foo1: Bar
+    foo2: Baz
+struct Bar:
+    bar1: Baz
+    bar2: u8
+struct Baz:
+    awa: u16
+    meow: u32
+
+fn copy_foo(dest: Foo^, src: Foo^):
+    dest^ = src^

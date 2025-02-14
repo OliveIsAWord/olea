@@ -595,9 +595,8 @@ impl Inst {
                     | Sk::IntCast(r, _)
                     | Sk::PtrCast(r, _)
                     | Sk::Read(r)
-                    | Sk::Copy(r)
-                    | Sk::FieldOffset(r, _) => f(r, false),
-                    Sk::BinOp(_, r1, r2) | Sk::PtrOffset(r1, r2) => {
+                    | Sk::Copy(r) => f(r, false),
+                    Sk::BinOp(_, r1, r2) => {
                         f(r1, false);
                         f(r2, false);
                     }
@@ -606,6 +605,15 @@ impl Inst {
                     Sk::Struct { ty: _, ref fields } => {
                         for &value in fields {
                             f(value, false);
+                        }
+                    }
+                    Sk::PtrOffset(r, ref accesses) => {
+                        f(r, false);
+                        for access in accesses {
+                            match *access {
+                                PtrOffset::Field(_) => {}
+                                PtrOffset::Index(r) => f(r, false),
+                            }
                         }
                     }
                 }
@@ -648,28 +656,15 @@ impl Inst {
     /// Does this instruction use a certain register?
     #[must_use]
     pub fn is_use(&self, reg: Register, count_phi: bool) -> bool {
-        use StoreKind as Sk;
-        match self {
-            Self::Store(_, sk) => match *sk {
-                Sk::BinOp(_, r1, r2) | Sk::PtrOffset(r1, r2) => r1 == reg || r2 == reg,
-                Sk::UnaryOp(_, r)
-                | Sk::IntCast(r, _)
-                | Sk::PtrCast(r, _)
-                | Sk::Read(r)
-                | Sk::Copy(r)
-                | Sk::FieldOffset(r, _) => r == reg,
-                Sk::Phi(ref srcs) => count_phi && srcs.iter().any(|(_, r)| *r == reg),
-                Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => false,
-                Sk::Struct { ty: _, ref fields } => fields.iter().any(|&r| r == reg),
-            },
-            &Self::Write(r1, r2) => r1 == reg || r2 == reg,
-            Self::Call {
-                callee: _,
-                returns: _,
-                args,
-            } => args.iter().any(|r| *r == reg),
-            Self::Nop => false,
+        if count_phi {
+            let Self::Store(_, StoreKind::Phi(predecessors)) = self else {
+                return false;
+            };
+            return predecessors.values().any(|&r| r == reg);
         }
+        let mut is_use = false;
+        self.visit_regs(|r, is_def| is_use |= !is_def && r == reg);
+        is_use
     }
 }
 
@@ -697,16 +692,21 @@ pub enum StoreKind {
     IntCast(Register, IntKind),
     /// Casting an pointer inner type to a different type.
     PtrCast(Register, Ty),
-    /// A pointer offset from the first register by a number of elements according to the second register. Equivalent to `r1[r2]@`.
-    PtrOffset(Register, Register),
-    /// A pointer offset to a field of the pointed struct.
-    FieldOffset(Register, Str),
+    /// A pointer offset from the first register by an ordered sequence of inner accesses.
+    PtrOffset(Register, Vec<PtrOffset>),
     /// A pointer to a unique allocation for a value of a given type.
     StackAlloc(Ty),
     /// A read access through a pointer to memory.
     Read(Register),
     /// The pointer to a function.
     Function(Str),
+}
+
+/// A transformation from a pointer to an aggregate object into a pointer to one of its elements.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum PtrOffset {
+    Field(Str),
+    Index(Register),
 }
 
 /// A logic or arithmetic operation taking and yielding one value.

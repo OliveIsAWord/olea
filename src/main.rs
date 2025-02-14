@@ -261,14 +261,14 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // eprintln!("#IR:\n{ir}\n");
+    eprintln!("#IR:\n{ir}\n");
     if typecheck(&ir, &src, file_path, ErrorMode::User) {
         return ExitCode::FAILURE;
     }
 
-    // eprintln!("#Desugaring phase");
+    eprintln!("#Desugaring phase");
     ir_destructure::destructure_program(&mut ir);
-    // eprintln!("{ir}\n");
+    eprintln!("{ir}\n");
     if typecheck(&ir, &src, file_path, ErrorMode::Internal) {
         return ExitCode::FAILURE;
     }
