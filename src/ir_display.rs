@@ -158,7 +158,12 @@ impl DisplayWithName for Function {
                                 for access in accesses {
                                     match access {
                                         PtrOffset::Field(field) => write!(f, ".{field}")?,
-                                        PtrOffset::Index(index) => write!(f, "[{index}]")?,
+                                        PtrOffset::Index(RegisterOrConstant::Register(i)) => {
+                                            write!(f, "[{i}]")?
+                                        }
+                                        PtrOffset::Index(RegisterOrConstant::Constant(i)) => {
+                                            write!(f, "[{i}]")?
+                                        }
                                     }
                                 }
                                 write!(f, "@")

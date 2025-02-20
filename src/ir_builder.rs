@@ -613,7 +613,7 @@ impl<'a> IrBuilder<'a> {
                     return Err(todo("multidimensional indexing", index_span.clone()));
                 }
                 let index_reg = index_regs[0];
-                let access = vec![PtrOffset::Index(index_reg)];
+                let access = vec![PtrOffset::Index(RegisterOrConstant::Register(index_reg))];
                 let span = indexee.span.start..index_span.end;
                 let indexed_reg = self.push_store(StoreKind::PtrOffset(indexee_reg, access), span);
                 Ok(MaybeVar::Variable(indexed_reg))

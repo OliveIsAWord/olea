@@ -108,7 +108,9 @@ impl<'a> TypeChecker<'a> {
                 for access in accesses {
                     match *access {
                         PtrOffset::Index(index) => {
-                            self.expect(index, &TyKind::Int(IntKind::Usize))?;
+                            if let RegisterOrConstant::Register(index) = index {
+                                self.expect(index, &TyKind::Int(IntKind::Usize))?;
+                            }
                             if let TyKind::Array(item, _count) = self.ty_map[pointee] {
                                 pointee = item;
                             }

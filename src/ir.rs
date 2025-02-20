@@ -611,8 +611,9 @@ impl Inst {
                         f(r, false);
                         for access in accesses {
                             match *access {
-                                PtrOffset::Field(_) => {}
-                                PtrOffset::Index(r) => f(r, false),
+                                PtrOffset::Field(_)
+                                | PtrOffset::Index(RegisterOrConstant::Constant(_)) => {}
+                                PtrOffset::Index(RegisterOrConstant::Register(r)) => f(r, false),
                             }
                         }
                     }
@@ -706,7 +707,13 @@ pub enum StoreKind {
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum PtrOffset {
     Field(Str),
-    Index(Register),
+    Index(RegisterOrConstant),
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum RegisterOrConstant {
+    Register(Register),
+    Constant(u128),
 }
 
 /// A logic or arithmetic operation taking and yielding one value.

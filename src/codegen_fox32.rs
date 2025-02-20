@@ -439,7 +439,15 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                                         };
                                         let stride = get_size.of_in_bytes(pointee_ty);
                                         write_inst!(code, "mov {}, {stride}", TEMP_REG.foo());
-                                        let index_reg = &regs[index];
+                                        let const_storage;
+                                        let index_reg = match index {
+                                            RegisterOrConstant::Register(r) => &regs[r],
+                                            RegisterOrConstant::Constant(n) => {
+                                                const_storage =
+                                                    StoreLoc::Constant(n.to_string().into());
+                                                &const_storage
+                                            }
+                                        };
                                         write_inst!(
                                             code,
                                             "mul {}, {}",
