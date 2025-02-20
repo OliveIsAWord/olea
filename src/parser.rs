@@ -528,7 +528,7 @@ impl<'src> Parser<'src> {
             };
         }
         // assignment
-        if level <= Level::Min && self.just(P::Equals).is_some() {
+        if level <= Level::Min && self.just(P::Equal).is_some() {
             let rhs = self.expr()?;
             match e.kind {
                 ExprKind::Place(p) => {
@@ -556,7 +556,7 @@ impl<'src> Parser<'src> {
                 .name()
                 .ok_or_else(|| self.err("expected name for let statement"))?;
             let ty = self.ty()?;
-            if self.just(P::Equals).is_none() {
+            if self.just(P::Equal).is_none() {
                 return Err(self.err("expected `=` for let statement"));
             }
             let body = self.expr()?;

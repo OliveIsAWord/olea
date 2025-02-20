@@ -148,7 +148,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    if false {
+    if true {
         eprintln!("# Token tree:");
         ttree_visualize::visualize(&ttree, &src);
         eprintln!();

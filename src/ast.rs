@@ -181,6 +181,22 @@ pub enum BinOpKind {
     CmpLe,
 }
 
+/// The different directions of comparison.
+pub enum _Cmp {
+    /// Equal.
+    Eq,
+    /// Not equal.
+    Ne,
+    /// Less than.
+    Lt,
+    /// Greater than.
+    Gt,
+    /// Less than or equal.
+    Le,
+    /// Greater than or equal.
+    Ge,
+}
+
 /// A block, a list of statements that are executed in order. The block may yield the value of its last statement.
 #[derive(Clone, Debug)]
 pub struct Block(pub Vec<Stmt>);
