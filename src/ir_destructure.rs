@@ -1,4 +1,4 @@
-use crate::compiler_types::*;
+use crate::compiler_prelude::*;
 use crate::ir::*;
 
 type DestructedTys = Map<Ty, Vec<(Vec<PtrOffset>, Ty)>>;
@@ -119,7 +119,7 @@ fn visit_function(f: &mut Function, ty_map: &mut TyMap, destructed_tys: &Destruc
     for (&r, (ty, scalars)) in &destructed_regs {
         tys.remove(&r).unwrap();
         let span = spans.remove(&r).unwrap();
-        for (&scalar, &(_, scalar_ty)) in scalars.iter().zip(&destructed_tys[ty]) {
+        for (&scalar, &(_, scalar_ty)) in zip(scalars, &destructed_tys[ty]) {
             tys.insert(scalar, scalar_ty);
             spans.insert(scalar, span.clone());
         }
@@ -175,9 +175,7 @@ fn visit_block(
         Exit::Return(regs) => destructure_registers(regs, destructed_regs),
     }
     let get = |r: Register| -> Option<(&[_], &[_])> {
-        let Some((old_ty, scalar_regs)) = destructed_regs.get(&r) else {
-            return None;
-        };
+        let (old_ty, scalar_regs) = destructed_regs.get(&r)?;
         let fields = &destructed_tys[old_ty];
         Some((scalar_regs.as_ref(), fields.as_ref()))
     };
@@ -202,12 +200,12 @@ fn visit_block(
                 };
                 i -= 1;
                 insts.remove(i);
-                for (&scalar, &(ref accesses, ty)) in scalar_regs.iter().zip(fields) {
+                for (&scalar, &(ref accesses, ty)) in zip(scalar_regs, fields) {
                     let new_ptr = Register(*next_register);
                     *next_register += 1;
                     let ty = ty_map.insert(TyKind::Pointer(ty));
                     tys.insert(new_ptr, ty);
-                    let accesses = accesses.iter().cloned().collect();
+                    let accesses = accesses.clone();
                     insts.insert(i, Inst::Store(new_ptr, Sk::PtrOffset(dst, accesses)));
                     i += 1;
                     insts.insert(i, Inst::Write(new_ptr, scalar));
@@ -234,7 +232,7 @@ fn visit_block(
                         let (copied_regs, _) = get(copied).unwrap();
                         i -= 1;
                         insts.remove(i);
-                        for (&r_to, &r_from) in scalar_regs.iter().zip(copied_regs) {
+                        for (&r_to, &r_from) in zip(scalar_regs, copied_regs) {
                             insts.insert(i, Inst::Store(r_to, Sk::Copy(r_from)));
                             i += 1;
                         }
@@ -272,7 +270,7 @@ fn visit_block(
                         };
                         let mut literal_fields = literal_fields.clone();
                         destructure_registers(&mut literal_fields, destructed_regs);
-                        for (&to, from) in scalar_regs.iter().zip(literal_fields) {
+                        for (&to, from) in zip(scalar_regs, literal_fields) {
                             insts.insert(i, Inst::Store(to, Sk::Copy(from)));
                             i += 1;
                         }
@@ -280,12 +278,12 @@ fn visit_block(
                     &mut Sk::Read(src) => {
                         i -= 1;
                         insts.remove(i);
-                        for (&field_r, &(ref accesses, ty)) in scalar_regs.iter().zip(fields) {
+                        for (&field_r, &(ref accesses, ty)) in zip(scalar_regs, fields) {
                             let new_ptr = Register(*next_register);
                             *next_register += 1;
                             let ty = ty_map.insert(TyKind::Pointer(ty));
                             tys.insert(new_ptr, ty);
-                            let accesses = accesses.iter().cloned().collect();
+                            let accesses = accesses.clone();
                             insts.insert(i, Inst::Store(new_ptr, Sk::PtrOffset(src, accesses)));
                             i += 1;
                             insts.insert(i, Inst::Store(field_r, Sk::Read(new_ptr)));

@@ -10,13 +10,14 @@
     clippy::type_complexity,
     clippy::wildcard_imports,
     clippy::cognitive_complexity,
+    clippy::items_after_statements,
     reason = "In the author's opinion, these lints are either too noisy or don't help correctness or sanity."
 )]
 
 mod arborist;
 pub(crate) mod ast;
 mod codegen_fox32;
-pub(crate) mod compiler_types;
+pub(crate) mod compiler_prelude;
 pub(crate) mod ir;
 mod ir_builder;
 mod ir_destructure;
@@ -30,7 +31,7 @@ mod ttree_visualize;
 mod typechecker;
 
 use annotate_snippets::{Level, Message, Renderer, Snippet, renderer::Style};
-use compiler_types::Spanned;
+use compiler_prelude::Spanned;
 use std::process::ExitCode;
 
 fn error(message: &str) {

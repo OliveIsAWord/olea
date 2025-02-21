@@ -1,4 +1,4 @@
-use crate::compiler_types::{Map, Str};
+use crate::compiler_prelude::*;
 use crate::ir::*;
 
 #[derive(Clone, Debug)]
@@ -73,11 +73,9 @@ impl<'a> TypeChecker<'a> {
                 else {
                     unreachable!()
                 };
-                assert_eq!(fields.len(), real_fields.len());
-                real_fields
-                    .values()
-                    .zip(fields)
-                    .try_for_each(|(&ty, &r)| self.expect(r, &self.ty_map[ty]))?;
+                for (&ty, &r) in zip(real_fields.values(), fields) {
+                    self.expect(r, &self.ty_map[ty])?;
+                }
                 ty_kind.clone()
             }
             Sk::IntCast(int, kind) => {
@@ -150,9 +148,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 ty.clone()
             }
-            Sk::Function(ref name) => {
-                self.ty_map[self.function_tys[name.as_ref()]].clone()
-            }
+            Sk::Function(ref name) => self.ty_map[self.function_tys[name.as_ref()]].clone(),
         };
         Ok(ty)
     }
@@ -177,31 +173,17 @@ impl<'a> TypeChecker<'a> {
                 let TyKind::Function(fn_params, fn_returns) = self.t(callee) else {
                     return Err((self.name.into(), ErrorKind::NotFunction(callee)));
                 };
-                assert_eq!(fn_params.len(), args.len());
-                for (&(_, expected), &r) in fn_params.values().zip(args) {
+                for (&(_, expected), &r) in zip(fn_params.values(), args) {
                     self.expect(r, &self.ty_map[expected])?;
                 }
-                for (&expected, &r) in fn_returns.iter().zip(returns) {
+                for (&expected, &r) in zip(fn_returns, returns) {
                     self.expect(r, &self.ty_map[expected])?;
                 }
                 Ok(())
             }
         }
     }
-    // fn visit_jump_loc(&self, loc: &JumpLocation) -> Result {
-    //     match loc {
-    //         JumpLocation::Block(_) => Ok(()),
-    //         JumpLocation::Return(regs) => {
-    //             if regs.len() != self.return_tys.len() {
-    //                 // The IR lowering phase will always produce functions with 0 or 1 returns, and it checks that all paths return the appropriate number of values. This code path will only run when typechecking transformed IR, namely after lowering IR types to machine-friendly types.
-    //                 todo!("proper error diagnostic for wrong number of returns");
-    //             }
-    //             regs.iter()
-    //                 .zip(self.return_tys)
-    //                 .try_for_each(|(&r, ty)| self.expect(r, ty))
-    //         }
-    //     }
-    // }
+
     fn visit_block(&self, block: &Block) -> Result {
         for inst in &block.insts {
             self.visit_inst(inst)?;
@@ -216,9 +198,10 @@ impl<'a> TypeChecker<'a> {
                     // The IR lowering phase will always produce functions with 0 or 1 returns, and it checks that all paths return the appropriate number of values. This code path will only run when typechecking transformed IR, namely after lowering IR types to machine-friendly types.
                     todo!("proper error diagnostic for wrong number of returns");
                 }
-                regs.iter()
-                    .zip(self.return_tys)
-                    .try_for_each(|(&r, &ty)| self.expect(r, &self.ty_map[ty]))
+                for (&r, &ty) in zip(regs, self.return_tys) {
+                    self.expect(r, &self.ty_map[ty])?;
+                }
+                Ok(())
             }
         }
     }
@@ -228,7 +211,9 @@ impl<'a> TypeChecker<'a> {
         function_tys: &'a Map<Str, Ty>,
         ty_map: &'a TyMap,
     ) -> Result {
-        let TyKind::Function(param_tys, return_tys) = &ty_map[function_tys[name]] else { unreachable!(); };
+        let TyKind::Function(param_tys, return_tys) = &ty_map[function_tys[name]] else {
+            unreachable!();
+        };
         let this = Self {
             ty_map,
             function_tys,
@@ -236,15 +221,9 @@ impl<'a> TypeChecker<'a> {
             tys: &f.tys,
             name,
         };
-        assert_eq!(
-            f.parameters.len(),
-            param_tys.len(),
-            "mismatch in parameter count"
-        );
-        f.parameters
-            .iter()
-            .zip(param_tys)
-            .try_for_each(|(&r, (_, &(_, ty)))| this.expect(r, &ty_map[ty]))?;
+        for (&r, &(_, ty)) in zip(&f.parameters, param_tys.values()) {
+            this.expect(r, &ty_map[ty])?;
+        }
         for block in f.blocks.values() {
             this.visit_block(block)?;
         }

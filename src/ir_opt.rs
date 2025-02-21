@@ -1,6 +1,6 @@
 #![expect(dead_code, reason = "This code is unfinished.")]
 
-use crate::compiler_types::{Map, Set};
+use crate::compiler_prelude::{Map, Set};
 use crate::ir::*;
 
 pub struct Pass {

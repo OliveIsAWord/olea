@@ -4,7 +4,7 @@
 //!
 //! The types in this module represent the syntactic forms that comprise the Olea grammar. We use a convention for each category of item of an enum `FooKind` representing the element itself, and a `Foo` which contains a `FooKind` as well as the source span of the element.
 
-use crate::compiler_types::{Name, Span, Spanned, Str};
+use crate::compiler_prelude::{Name, Span, Spanned, Str};
 use crate::language_types::IsAnon;
 
 /// A full source program, made of a list of declarations.

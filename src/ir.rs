@@ -1,6 +1,6 @@
 //! The Olea intermediate representation, a low level language that consists of [SSA](https://en.wikipedia.org/wiki/Static_single-assignment_form) registers and [basic blocks](https://en.wikipedia.org/wiki/Basic_block).
 
-use crate::compiler_types::{IndexMap, Map, Set, Span, Str};
+use crate::compiler_prelude::*;
 pub use crate::language_types::IsAnon;
 
 /// A full or partial program.
@@ -140,13 +140,13 @@ impl TyMap {
                     return false;
                 }
                 for ((a_name, (a_is_anon, a_ty)), (b_name, (b_is_anon, b_ty))) in
-                    a_params.iter().zip(b_params)
+                    zip(a_params, b_params)
                 {
                     if a_is_anon != b_is_anon || a_name != b_name || !self.equals(*a_ty, *b_ty) {
                         return false;
                     }
                 }
-                for (&a, &b) in a_returns.iter().zip(b_returns) {
+                for (&a, &b) in zip(a_returns, b_returns) {
                     if !self.equals(a, b) {
                         return false;
                     }

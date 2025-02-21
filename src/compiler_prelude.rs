@@ -1,4 +1,4 @@
-//! A collection of data types used throughout the compiler.
+//! A collection of data types and functions used throughout the compiler.
 
 /// A sorted map.
 pub type Map<K, V> = std::collections::BTreeMap<K, V>;
@@ -28,4 +28,18 @@ pub struct Spanned<T> {
     pub kind: T,
     /// The span corresponding to the inner value.
     pub span: Span,
+}
+
+/// "Zips" two iterators together, asserting that the two are equal in length.
+pub fn zip<A, B>(a: A, b: B) -> impl Iterator<Item = (A::Item, B::Item)>
+where
+    A: IntoIterator,
+    B: IntoIterator,
+    A::IntoIter: ExactSizeIterator,
+    B::IntoIter: ExactSizeIterator,
+{
+    let a = a.into_iter();
+    let b = b.into_iter();
+    assert_eq!(a.len(), b.len(), "zipped iterators of unequal length");
+    std::iter::zip(a, b)
 }

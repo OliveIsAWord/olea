@@ -1,5 +1,5 @@
 use crate::ast;
-use crate::compiler_types::{IndexMap, Map, Name, Set, Span, Spanned, Str};
+use crate::compiler_prelude::*;
 use crate::ir::*;
 
 const INT_TYPES: &[(&str, IntKind)] = &[
@@ -207,8 +207,7 @@ impl<'a> IrBuilder<'a> {
         else {
             unreachable!();
         };
-        assert_eq!(parameters.len(), ir_params.len());
-        for ((_, p_name, _), (_, (_, ir_ty))) in parameters.iter().zip(ir_params) {
+        for ((_, p_name, _), (_, (_, ir_ty))) in zip(parameters, ir_params) {
             let reg = self.new_reg(ir_ty, p_name.span.clone());
             self.parameters.push(reg);
             // Currently, we assume all variables are stack allocated, so we copy the argument to a stack allocation.
@@ -241,9 +240,7 @@ impl<'a> IrBuilder<'a> {
             unreachable!();
         };
         let mut parameters: Map<&str, Register> = Map::new();
-        let field_args = ir_fields
-            .iter()
-            .zip(fields)
+        let field_args = zip(&ir_fields, fields)
             .map(|((name, ty), ast_field)| {
                 let span = ast_field.1.span.clone();
                 let reg = self.new_reg(*ty, span);
@@ -945,9 +942,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                         program_tys.format(struct_ty)
                     );
                 };
-                let fields = ast_fields
-                    .iter()
-                    .zip(fields)
+                let fields = zip(ast_fields, fields)
                     .map(|(&(is_anon, _, _), (name, &ty))| (name.clone(), (is_anon, ty)))
                     .collect();
                 let constructor_ty = TyKind::Function(fields, vec![struct_ty]);

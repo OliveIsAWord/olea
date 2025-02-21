@@ -1,4 +1,4 @@
-use crate::compiler_types::{Map, Set, Str};
+use crate::compiler_prelude::{Map, Set, Str};
 use crate::ir::*;
 use crate::ir_liveness::{self, FunctionLiveness};
 

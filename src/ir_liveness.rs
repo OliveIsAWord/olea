@@ -1,6 +1,6 @@
 //! This module calculates precise information for which registers are "live" at each syntactic point of the IR. A register is "live" at some point in execution if its value may be used at or after that point.
 
-use crate::compiler_types::{Map, Set};
+use crate::compiler_prelude::*;
 use crate::ir::*;
 
 /// Liveness information for an IR function.
@@ -98,9 +98,7 @@ pub fn calculate_liveness(f: &Function) -> FunctionLiveness {
         insts_map.insert(id, insts_live);
     }
     assert_eq!(start_map.len(), insts_map.len());
-    let blocks = start_map
-        .into_iter()
-        .zip(insts_map)
+    let blocks = zip(start_map, insts_map)
         .map(|((id1, start), (id2, insts))| {
             assert_eq!(id1, id2);
             let block = BlockLiveness { start, insts };

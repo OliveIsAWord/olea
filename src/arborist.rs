@@ -1,4 +1,4 @@
-use crate::compiler_types::{Span, Spanned};
+use crate::compiler_prelude::{Span, Spanned};
 pub use crate::lexer::PlainToken;
 use crate::lexer::{ControlToken, Token, Tokens};
 

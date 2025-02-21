@@ -1,5 +1,5 @@
 use crate::arborist::{Block, TokenTree as Tt};
-use crate::compiler_types::Spanned;
+use crate::compiler_prelude::Spanned;
 
 pub fn visualize(block: &Block, src: &str) {
     visualize0(block, src, 0);

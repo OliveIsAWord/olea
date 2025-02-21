@@ -1,4 +1,4 @@
-use crate::compiler_types::{Span, Spanned};
+use crate::compiler_prelude::{Span, Spanned};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(u8)]

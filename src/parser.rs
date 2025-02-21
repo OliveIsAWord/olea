@@ -5,7 +5,7 @@
 
 use crate::arborist::{self as a, PlainToken as P, TokenTree as Tt};
 use crate::ast::*;
-use crate::compiler_types::{Name, Span, Spanned, Str};
+use crate::compiler_prelude::{Name, Span, Spanned, Str};
 use crate::language_types::IsAnon;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
