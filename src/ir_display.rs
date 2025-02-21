@@ -156,15 +156,7 @@ impl DisplayWithName for Function {
                             Sk::PtrOffset(pointer, accesses) => {
                                 write!(f, "{pointer}")?;
                                 for access in accesses {
-                                    match access {
-                                        PtrOffset::Field(field) => write!(f, ".{field}")?,
-                                        PtrOffset::Index(RegisterOrConstant::Register(i)) => {
-                                            write!(f, "[{i}]")?
-                                        }
-                                        PtrOffset::Index(RegisterOrConstant::Constant(i)) => {
-                                            write!(f, "[{i}]")?
-                                        }
-                                    }
+                                    write!(f, "{access}")?;
                                 }
                                 write!(f, "@")
                             }
@@ -207,6 +199,16 @@ impl DisplayWithName for Function {
             write!(f, "\n    {}", block.exit.with_name(name))?;
         }
         Ok(())
+    }
+}
+
+impl Display for PtrOffset {
+    fn fmt(&self, f: F) -> Result {
+        match self {
+            Self::Field(field) => write!(f, ".{field}"),
+            Self::Index(RegisterOrConstant::Register(i)) => write!(f, "[{i}]"),
+            Self::Index(RegisterOrConstant::Constant(i)) => write!(f, "[{i}]"),
+        }
     }
 }
 
