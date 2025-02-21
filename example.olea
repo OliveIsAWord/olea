@@ -1,5 +1,13 @@
-fn main():
-    foo(
-      1
-      2,3
-      4)
+struct A:
+    a1: B[3]
+    a2: C[2]
+
+struct B:
+    b1: A^
+    b2: C
+
+struct C:
+    c1: u32
+
+fn foo(a: A) A:
+    a

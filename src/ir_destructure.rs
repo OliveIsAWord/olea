@@ -1,137 +1,149 @@
-//! An IR stage deconstructing aggregate types into its individual "base" types.
-
-use crate::compiler_types::{IndexMap, Map, Set, Str};
+use crate::compiler_types::*;
 use crate::ir::*;
 
-type StructFields = Map<Register, (Ty, Vec<PtrOffset>)>;
-
-fn make_struct_fields(
-    fields: &IndexMap<Str, Ty>,
-    next_register: &mut u128,
-    ty_map: &TyMap,
-) -> StructFields {
-    fn visit(
-        this: &mut StructFields,
-        prefix: &[PtrOffset],
-        fields: &IndexMap<Str, Ty>,
-        next_register: &mut u128,
-        ty_map: &TyMap,
-    ) {
-        for (field, &ty) in fields {
-            let mut path = prefix.to_vec();
-            path.push(PtrOffset::Field(field.clone()));
-            match &ty_map[ty] {
-                // Types that don't need destructuring
-                TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. }
-                | TyKind::Array(..) // TODO
-                => {
-                    let r = Register(*next_register);
-                    *next_register += 1;
-                    this.insert(r, (ty, path));
-                }
-                TyKind::Struct {
-                    fields: child_fields,
-                    ..
-                } => {
-                    visit(this, &path, child_fields, next_register, ty_map);
-                }
-            }
-        }
-    }
-    let mut this = StructFields::new();
-    visit(&mut this, &[], fields, next_register, ty_map);
-    this
-}
+type DestructedTys = Map<Ty, Vec<(Vec<PtrOffset>, Ty)>>;
+type DestructedRegs = Map<Register, (Ty, Vec<Register>)>;
 
 pub fn destructure_program(program: &mut Program) {
     let Program {
         functions,
-        function_tys,
+        function_tys: _,
         tys,
     } = program;
+
+    let destructed_tys: DestructedTys = {
+        let mut ty_clusters = Map::<Ty, Vec<(PtrOffset, Ty)>>::new();
+        for (&ty, kind) in &tys.inner {
+            let cluster = match kind {
+                TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function(..) => continue,
+                TyKind::Struct { fields, .. } => fields
+                    .iter()
+                    .map(|(name, &ty)| (PtrOffset::Field(name.clone()), ty))
+                    .collect(),
+                &TyKind::Array(inner_ty, count) => (0..count)
+                    .map(|i| (PtrOffset::Index(RegisterOrConstant::Constant(i)), inner_ty))
+                    .collect(),
+            };
+            ty_clusters.insert(ty, cluster);
+        }
+        fn visit(
+            ty: Ty,
+            prefix: &mut Vec<PtrOffset>,
+            ty_clusters: &Map<Ty, Vec<(PtrOffset, Ty)>>,
+            scalars: &mut Vec<(Vec<PtrOffset>, Ty)>,
+        ) {
+            match ty_clusters.get(&ty) {
+                None => scalars.push((prefix.clone(), ty)),
+                Some(branches) => {
+                    for &(ref offset, ty) in branches {
+                        prefix.push(offset.clone());
+                        visit(ty, prefix, ty_clusters, scalars);
+                        prefix.pop();
+                    }
+                }
+            };
+        }
+        ty_clusters
+            .keys()
+            .map(|&ty| {
+                let mut scalars = vec![];
+                visit(ty, &mut vec![], &ty_clusters, &mut scalars);
+                (ty, scalars)
+            })
+            .collect()
+    };
+
+    for (a, b) in &destructed_tys {
+        eprintln!("{a} {{");
+        for b in b {
+            eprintln!(" , {b:?}");
+        }
+        eprintln!("}}");
+    }
+
+    for kind in tys.inner.values_mut() {
+        let TyKind::Function(params, returns) = kind else {
+            continue;
+        };
+        assert_eq!(returns.len(), 1, "idempotence hole");
+        let return_ty = returns[0];
+        if let Some(scalars) = destructed_tys.get(&return_ty) {
+            returns.clear();
+            returns.extend(scalars.iter().map(|(_, t)| t));
+        }
+        let old_params = std::mem::take(params);
+        *params = old_params
+            .into_iter()
+            .flat_map(|(name, (is_anon, ty))| match destructed_tys.get(&ty) {
+                None => vec![(name, (is_anon, ty))],
+                Some(scalars) => scalars
+                    .iter()
+                    .map(|&(ref accesses, ty)| {
+                        let mut name = name.to_string();
+                        for access in accesses {
+                            use std::fmt::Write;
+                            write!(&mut name, "{access}").unwrap();
+                        }
+                        (name.into(), (is_anon, ty))
+                    })
+                    .collect(),
+            })
+            .collect();
+    }
+
     for f in functions.values_mut() {
-        destructure_function(f, tys);
+        visit_function(f, tys, &destructed_tys);
     }
-    // For each `Vec<Ty>` (params and returns), we need to expand any struct `Ty` into a list of its fields.
-    _ = function_tys;
-    /* TODO
-    for (params, returns) in function_tys.values_mut() {
-        destructure_struct_in_params(params, tys);
-        destructure_struct_in_returns(returns, tys);
-    }
-    */
-    // 1. for each ty in the ty map
-    #[expect(clippy::needless_collect, reason = "False positive")]
-    for ty in tys.inner.keys().copied().collect::<Vec<_>>() {
-        let kind = tys.inner.get_mut(&ty).unwrap();
-        // 2. if it's a function, mem::take its params and returns
-        if let TyKind::Function(params, returns) = kind {
-            use std::mem::take;
-            let mut params = take(params);
-            let mut returns = take(returns);
-            destructure_struct_in_params(&mut params, tys);
-            destructure_struct_in_returns(&mut returns, tys);
-            tys.inner.insert(ty, TyKind::Function(params, returns));
-        }
-        // pass it to destructure_ty_vec (which no longer has to be recursive) maybe call it destructure_struct_in_function_signature
-    }
-
-    // dsifs:
-    // 1. for each ty
-    // 2. if struct, expand to fields and retape
 }
-
-pub fn destructure_function(f: &mut Function, ty_map: &mut TyMap) {
-    let struct_regs: Map<Register, StructFields> = f
-        .tys
-        .iter()
-        .filter_map(|(&r, &ty)| match &ty_map[ty] {
-            TyKind::Struct { fields, .. } => {
-                Some((r, make_struct_fields(fields, &mut f.next_register, ty_map)))
-            }
-            TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. }
-            | TyKind::Array(..) // TODO
-            => None,
-        })
-        .collect();
-    /*
-    for (r, fields) in &struct_regs {
-        eprintln!("{r}:");
-        for (r, (ty, accesses)) in fields {
-            eprintln!("    {r}: {accesses:?} {ty}");
-        }
-    }
-    */
+fn visit_function(f: &mut Function, ty_map: &mut TyMap, destructed_tys: &DestructedTys) {
     let Function {
         parameters,
         blocks,
         tys,
         spans,
-        cfg: _, // does not contain registers
+        cfg: _,
         next_register,
     } = f;
-
-    destructure_vec(&struct_regs, parameters);
-    for block in blocks.values_mut() {
-        destructure_block(&struct_regs, block, tys, next_register, ty_map);
+    let mut destructed_regs: DestructedRegs = Map::new();
+    for (&r, &ty) in tys.iter() {
+        let Some(scalars) = destructed_tys.get(&ty) else {
+            continue;
+        };
+        let scalar_regs = scalars.iter().map(|_| {
+            let new_register = Register(*next_register);
+            *next_register += 1;
+            new_register
+        });
+        destructed_regs.insert(r, (ty, scalar_regs.collect()));
     }
-    for (r, fields) in &struct_regs {
-        // NOTE: `destructure_block` relies on getting the type of `r`
-        tys.remove(r);
-        let span = spans.remove(r).unwrap();
-        for (&field_r, (field_ty, _)) in fields {
-            tys.insert(field_r, *field_ty);
-            spans.insert(field_r, span.clone());
+    for (&r, (ty, scalars)) in &destructed_regs {
+        tys.remove(&r).unwrap();
+        let span = spans.remove(&r).unwrap();
+        for (&scalar, &(_, scalar_ty)) in scalars.iter().zip(&destructed_tys[ty]) {
+            tys.insert(scalar, scalar_ty);
+            spans.insert(scalar, span.clone());
         }
+    }
+    destructure_registers(parameters, &destructed_regs);
+    for block in blocks.values_mut() {
+        visit_block(
+            block,
+            ty_map,
+            destructed_tys,
+            &destructed_regs,
+            tys,
+            next_register,
+        );
     }
 }
 
-fn destructure_block(
-    struct_regs: &Map<Register, StructFields>,
+fn visit_block(
     block: &mut Block,
+    ty_map: &mut TyMap,
+    destructed_tys: &DestructedTys,
+    destructed_regs: &DestructedRegs,
     tys: &mut Map<Register, Ty>,
     next_register: &mut u128,
-    ty_map: &mut TyMap,
 ) {
     let Block {
         insts,
@@ -139,18 +151,19 @@ fn destructure_block(
         defined_regs,
         used_regs,
     } = block;
-    for (r, fields) in struct_regs {
-        let destructure_set = |set: &mut Set<Register>| {
-            set.remove(r);
-            set.extend(fields.keys());
+    for (r, (_, scalars)) in destructed_regs {
+        let visit = |set: &mut Set<_>| {
+            if set.remove(r) {
+                set.extend(scalars);
+            }
         };
-        destructure_set(defined_regs);
-        destructure_set(used_regs);
+        visit(defined_regs);
+        visit(used_regs);
     }
     // sanity check function: it would be a type error for this register to be a struct
     let do_not_visit = |r: Register| {
         assert!(
-            !struct_regs.contains_key(&r),
+            !destructed_regs.contains_key(&r),
             "found struct register {r} in condition"
         );
     };
@@ -159,8 +172,15 @@ fn destructure_block(
         Exit::CondJump(cond, _, _) => match cond {
             Condition::NonZero(r) => do_not_visit(*r),
         },
-        Exit::Return(regs) => destructure_vec(struct_regs, regs),
+        Exit::Return(regs) => destructure_registers(regs, destructed_regs),
     }
+    let get = |r: Register| -> Option<(&[_], &[_])> {
+        let Some((old_ty, scalar_regs)) = destructed_regs.get(&r) else {
+            return None;
+        };
+        let fields = &destructed_tys[old_ty];
+        Some((scalar_regs.as_ref(), fields.as_ref()))
+    };
     let mut i = 0;
     while let Some(inst) = insts.get_mut(i) {
         use StoreKind as Sk;
@@ -173,16 +193,16 @@ fn destructure_block(
                 args,
             } => {
                 do_not_visit(*callee);
-                destructure_vec(struct_regs, returns);
-                destructure_vec(struct_regs, args);
+                destructure_registers(returns, destructed_regs);
+                destructure_registers(args, destructed_regs);
             }
             &mut Inst::Write(dst, src) => {
-                let Some(fields) = struct_regs.get(&src) else {
+                let Some((scalar_regs, fields)) = get(src) else {
                     continue;
                 };
                 i -= 1;
                 insts.remove(i);
-                for (&field_r, &(ty, ref accesses)) in fields {
+                for (&scalar, &(ref accesses, ty)) in scalar_regs.iter().zip(fields) {
                     let new_ptr = Register(*next_register);
                     *next_register += 1;
                     let ty = ty_map.insert(TyKind::Pointer(ty));
@@ -190,12 +210,12 @@ fn destructure_block(
                     let accesses = accesses.iter().cloned().collect();
                     insts.insert(i, Inst::Store(new_ptr, Sk::PtrOffset(dst, accesses)));
                     i += 1;
-                    insts.insert(i, Inst::Write(new_ptr, field_r));
+                    insts.insert(i, Inst::Write(new_ptr, scalar));
                     i += 1;
                 }
             }
             &mut Inst::Store(r, ref mut sk) => {
-                let Some(fields) = struct_regs.get(&r) else {
+                let Some((scalar_regs, fields)) = get(r) else {
                     continue;
                 };
                 match sk {
@@ -210,13 +230,11 @@ fn destructure_block(
                     | Sk::BinOp(BinOp::Add | BinOp::Mul | BinOp::Sub | BinOp::CmpLe, _, _) => {
                         unreachable!("illegal op on struct during destructuring: {inst:?}")
                     }
-                    Sk::Copy(copied) => {
-                        let copied_fields = &struct_regs[copied];
+                    &mut Sk::Copy(copied) => {
+                        let (copied_regs, _) = get(copied).unwrap();
                         i -= 1;
                         insts.remove(i);
-                        let rs_to = fields.iter().map(|(&r, _)| r);
-                        let rs_from = copied_fields.iter().map(|(&r, _)| r);
-                        for (r_to, r_from) in rs_to.zip(rs_from) {
+                        for (&r_to, &r_from) in scalar_regs.iter().zip(copied_regs) {
                             insts.insert(i, Inst::Store(r_to, Sk::Copy(r_from)));
                             i += 1;
                         }
@@ -227,22 +245,16 @@ fn destructure_block(
                         let Inst::Store(_, Sk::Phi(preds)) = insts.remove(i) else {
                             unreachable!()
                         };
-                        for (&r, (_, name)) in fields {
-                            let field_preds = preds
+                        let pred_scalars: Vec<(BlockId, &[Register])> = preds
+                            .into_iter()
+                            .map(|(id, r)| (id, get(r).unwrap().0))
+                            .collect();
+                        for (pred_i, &scalar) in scalar_regs.iter().enumerate() {
+                            let field_preds = pred_scalars
                                 .iter()
-                                .map(|(&k, v)| {
-                                    (
-                                        k,
-                                        struct_regs[v]
-                                            .iter()
-                                            .find_map(|(&r2, (_, name2))| {
-                                                (name == name2).then_some(r2)
-                                            })
-                                            .unwrap(),
-                                    )
-                                })
+                                .map(|&(id, rs)| (id, rs[pred_i]))
                                 .collect();
-                            insts.insert(i, Inst::Store(r, Sk::Phi(field_preds)));
+                            insts.insert(i, Inst::Store(scalar, Sk::Phi(field_preds)));
                             i += 1;
                         }
                     }
@@ -258,27 +270,17 @@ fn destructure_block(
                         else {
                             unreachable!();
                         };
-                        let mut fields = fields.keys().copied();
-                        let mut add_copy = |from_reg| {
-                            let r = fields.next().unwrap();
-                            insts.insert(i, Inst::Store(r, Sk::Copy(from_reg)));
+                        let mut literal_fields = literal_fields.clone();
+                        destructure_registers(&mut literal_fields, destructed_regs);
+                        for (&to, from) in scalar_regs.iter().zip(literal_fields) {
+                            insts.insert(i, Inst::Store(to, Sk::Copy(from)));
                             i += 1;
-                        };
-                        for literal_reg in literal_fields {
-                            if let Some(inner_fields) = struct_regs.get(&literal_reg) {
-                                for &inner_reg in inner_fields.keys() {
-                                    add_copy(inner_reg);
-                                }
-                            } else {
-                                add_copy(literal_reg);
-                            }
                         }
-                        assert_eq!(fields.next(), None);
                     }
                     &mut Sk::Read(src) => {
                         i -= 1;
                         insts.remove(i);
-                        for (&field_r, &(ty, ref accesses)) in fields {
+                        for (&field_r, &(ref accesses, ty)) in scalar_regs.iter().zip(fields) {
                             let new_ptr = Register(*next_register);
                             *next_register += 1;
                             let ty = ty_map.insert(TyKind::Pointer(ty));
@@ -296,53 +298,18 @@ fn destructure_block(
     }
 }
 
-fn destructure_struct_in_params(ty_list: &mut IndexMap<Str, (IsAnon, Ty)>, ty_map: &TyMap) {
-    let mut i = 0;
-    while let Some((_, &(is_anon, ty))) = ty_list.get_index(i) {
-        match &ty_map[ty] {
-            TyKind::Struct { fields, .. } => {
-                let (name, _) = ty_list.shift_remove_index(i).unwrap();
-                let mut field_i = i;
-                for (field_name, field_ty) in fields {
-                    let new_name = format!("{name}.{field_name}").into();
-                    ty_list.shift_insert(field_i, new_name, (is_anon, *field_ty));
-                    field_i += 1;
-                }
-            }
-            _ => i += 1,
-        }
-    }
+fn destructure_registers(regs: &mut Vec<Register>, destructed_regs: &DestructedRegs) {
+    *regs = destructure_registers_cloned(regs, destructed_regs);
 }
 
-fn destructure_struct_in_returns(ty_list: &mut Vec<Ty>, ty_map: &TyMap) {
-    let mut i = 0;
-    while let Some(&ty) = ty_list.get(i) {
-        match &ty_map[ty] {
-            TyKind::Struct { fields, .. } => {
-                ty_list.remove(i);
-                let mut field_i = i;
-                for &field_ty in fields.values() {
-                    ty_list.insert(field_i, field_ty);
-                    field_i += 1;
-                }
-            }
-            _ => i += 1,
-        }
-    }
-}
-
-fn destructure_vec(struct_regs: &Map<Register, StructFields>, regs: &mut Vec<Register>) {
-    // we could write some unsafe code here if this becomes a bottleneck
-    let mut i = 0;
-    while i < regs.len() {
-        if let Some(fields) = struct_regs.get(&regs[i]) {
-            regs.remove(i);
-            for &reg in fields.keys() {
-                regs.insert(i, reg);
-                i += 1;
-            }
-        } else {
-            i += 1;
-        }
-    }
+fn destructure_registers_cloned(
+    regs: &[Register],
+    destructed_regs: &DestructedRegs,
+) -> Vec<Register> {
+    regs.iter()
+        .flat_map(|&r| match destructed_regs.get(&r) {
+            None => vec![r],
+            Some((_, rs)) => rs.clone(), // bad clone
+        })
+        .collect()
 }
