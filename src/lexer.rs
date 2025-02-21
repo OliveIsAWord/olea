@@ -78,6 +78,7 @@ const ERR: Token = Pl(P::Error);
 
 const KEYWORDS: &[(&str, Token)] = &[
     ("as", Pl(P::As)),
+    ("fn", Pl(P::Fn)),
     ("if", Pl(P::If)),
     ("or", Pl(P::Or)),
     ("and", Pl(P::And)),
