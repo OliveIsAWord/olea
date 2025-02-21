@@ -1,4 +1,4 @@
-use crate::compiler_types::{IndexMap, Map, Str};
+use crate::compiler_types::{Map, Str};
 use crate::ir::*;
 
 #[derive(Clone, Debug)]
@@ -21,12 +21,11 @@ type Error = (Str, ErrorKind);
 type Result<T = ()> = std::result::Result<T, Error>;
 
 type Tys = Map<Register, Ty>;
-type FunctionTys<'a> = &'a Map<Str, (IndexMap<Str, (IsAnon, Ty)>, Vec<Ty>)>;
 
 #[derive(Debug)]
 struct TypeChecker<'a> {
     ty_map: &'a TyMap,
-    function_tys: FunctionTys<'a>,
+    function_tys: &'a Map<Str, Ty>,
     return_tys: &'a [Ty],
     tys: &'a Tys,
     name: &'a str,
@@ -152,8 +151,7 @@ impl<'a> TypeChecker<'a> {
                 ty.clone()
             }
             Sk::Function(ref name) => {
-                let (params, returns) = self.function_tys.get(name.as_ref()).expect("function get");
-                TyKind::Function(params.clone(), returns.clone())
+                self.ty_map[self.function_tys[name.as_ref()]].clone()
             }
         };
         Ok(ty)
@@ -227,10 +225,10 @@ impl<'a> TypeChecker<'a> {
     fn visit_function(
         f: &'a Function,
         name: &'a str,
-        function_tys: FunctionTys<'a>,
+        function_tys: &'a Map<Str, Ty>,
         ty_map: &'a TyMap,
     ) -> Result {
-        let return_tys = &function_tys.get(name).unwrap().1;
+        let TyKind::Function(param_tys, return_tys) = &ty_map[function_tys[name]] else { unreachable!(); };
         let this = Self {
             ty_map,
             function_tys,
@@ -240,13 +238,13 @@ impl<'a> TypeChecker<'a> {
         };
         assert_eq!(
             f.parameters.len(),
-            function_tys[name].0.len(),
+            param_tys.len(),
             "mismatch in parameter count"
         );
         f.parameters
             .iter()
-            .zip(function_tys[name].0.values())
-            .try_for_each(|(&r, &(_, ty))| this.expect(r, &ty_map[ty]))?;
+            .zip(param_tys)
+            .try_for_each(|(&r, (_, &(_, ty)))| this.expect(r, &ty_map[ty]))?;
         for block in f.blocks.values() {
             this.visit_block(block)?;
         }

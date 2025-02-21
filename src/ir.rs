@@ -8,8 +8,8 @@ pub use crate::language_types::IsAnon;
 pub struct Program {
     /// The functions composing this program.
     pub functions: Map<Str, Function>,
-    /// The type signature of every function including extern functions.
-    pub function_tys: Map<Str, (IndexMap<Str, (IsAnon, Ty)>, Vec<Ty>)>,
+    /// The type of every function including extern functions.
+    pub function_tys: Map<Str, Ty>,
     /// All the types used in this program, indexed by `Ty`s.
     pub tys: TyMap,
 }

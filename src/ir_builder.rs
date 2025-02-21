@@ -918,7 +918,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
         }
         drop(value_cycles);
     }
-    let mut ir_function_tys: Map<Str, Ty> = Map::new();
+    let mut function_tys: Map<Str, Ty> = Map::new();
     for ast::Decl { kind, .. } in &program.decls {
         let (name, ty) = match kind {
             D::Function(ast::Function { signature, .. }) | D::ExternFunction(signature) => {
@@ -955,7 +955,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 (name, ty)
             }
         };
-        if ir_function_tys.contains_key(&name.kind) {
+        if function_tys.contains_key(&name.kind) {
             let prev_span = program
                 .decls
                 .iter()
@@ -973,35 +973,25 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 span: name.span.clone(),
             });
         }
-        ir_function_tys.insert(name.kind.clone(), ty);
+        function_tys.insert(name.kind.clone(), ty);
     }
-    let ir_function_tys = ir_function_tys;
+    let function_tys = function_tys;
     let mut functions = Map::new();
     for decl in &program.decls {
         match &decl.kind {
             D::Function(fn_decl) => {
-                let builder = IrBuilder::new(&ir_function_tys, &defined_tys, &mut program_tys);
+                let builder = IrBuilder::new(&function_tys, &defined_tys, &mut program_tys);
                 let function = builder.build_function(fn_decl)?;
                 functions.insert(fn_decl.signature.name.kind.clone(), function);
             }
             D::Struct(s) => {
-                let builder = IrBuilder::new(&ir_function_tys, &defined_tys, &mut program_tys);
+                let builder = IrBuilder::new(&function_tys, &defined_tys, &mut program_tys);
                 let function = builder.build_struct_constructor(s);
                 functions.insert(s.name.kind.clone(), function);
             }
             D::ExternFunction(_) => {}
         }
     }
-    let function_tys = ir_function_tys
-        .into_iter()
-        .map(|(name, ty)| match program_tys[ty].clone() {
-            TyKind::Function(params, returns) => (name, (params, returns)),
-            _ => unreachable!(
-                "function {name} with non function type {ty} {}",
-                program_tys.format(ty)
-            ),
-        })
-        .collect();
     Ok(Program {
         functions,
         function_tys,

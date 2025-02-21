@@ -53,10 +53,13 @@ pub fn destructure_program(program: &mut Program) {
         destructure_function(f, tys);
     }
     // For each `Vec<Ty>` (params and returns), we need to expand any struct `Ty` into a list of its fields.
+    _ = function_tys;
+    /* TODO
     for (params, returns) in function_tys.values_mut() {
         destructure_struct_in_params(params, tys);
         destructure_struct_in_returns(returns, tys);
     }
+    */
     // 1. for each ty in the ty map
     #[expect(clippy::needless_collect, reason = "False positive")]
     for ty in tys.inner.keys().copied().collect::<Vec<_>>() {
