@@ -476,6 +476,36 @@ either_or(b: 65000)
 either_or(a: 42, b: 65000) # error
 ```
 
+- The status quo for the order of evaluation in expressions has not sat right with me. We can imagine two broad approaches. One is the approach C takes, where evaluation order is unspecified save for a few exceptions like logical AND and OR and the comma operator. The other is the approach Rust takes, where evaluation order is fully specified as left to right (?).
+
+The Rust approach leads to more consistency when running code across implementations or versions of compilers, but requires more complicated or even infeasible analysis to reorder evaluation for optimization purposes. Both approaches do not clarify whether a piece of code depends on a certain order of evaluation. There must be a better way!
+
+What if expressions allowed at most one "impure" subexpression? That would mean any evaluation order would produce the same observable result! It also means the sequence of impure operations must be explicitly ordered by the programmer in terms of a sequence of statements. e.g. instead of writing...
+
+```rs
+impure1() + impure2()
+```
+
+... you would have to write...
+
+```rs
+let x = impure1()
+x + impure2()
+```
+
+To explicitly leave evaluation order unspecified, for operations whose side effects are mutually exclusive or otherwise do not change the behavior or correctness of the program, we might bless a specific syntax:
+
+```rs
+let:
+    x = impure1()
+    y = impure2()
+x + y
+```
+
+We might have an `impure` keyword that marks functions with side effects and variables whose body has side effects in this let block syntax.
+
+This approach may be incompatible or less ergonomic with other language features like borrow checking. Evaluation order obviously matters a lot when determining when borrows live and die, so this approach might require things like mutable borrows to be considered impure.
+
 - A dedicated syntax for the `Option` type and optional arguments.
 
 ```rs
