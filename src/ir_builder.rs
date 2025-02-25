@@ -396,12 +396,18 @@ impl<'a> IrBuilder<'a> {
                     A::Add => B::Add,
                     A::Sub => B::Sub,
                     A::Mul => B::Mul,
-                    A::CmpLe => todo!("comparison"),
                 };
                 let lhs_reg = self.build_expr_unvoid(lhs, span.clone())?;
                 let rhs_reg = self.build_expr_unvoid(rhs, span.clone())?;
                 self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg), span)
                     .some_if(unvoid)
+            }
+            E::Comparison {
+                operands,
+                operators,
+            } => {
+                _ = (operands, operators);
+                return Err(todo("comparison", span));
             }
             E::As(value, ty) => {
                 let value_reg = self.build_expr_unvoid(value, span.clone())?;

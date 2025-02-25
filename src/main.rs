@@ -170,7 +170,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // eprintln!("#Syntax tree:\n{ast:?}\n");
+    eprintln!("#Syntax tree:\n{ast:?}\n");
 
     let mut ir = match ir_builder::build(&ast) {
         Ok(x) => x,

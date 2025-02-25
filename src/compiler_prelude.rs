@@ -43,3 +43,14 @@ where
     assert_eq!(a.len(), b.len(), "zipped iterators of unequal length");
     std::iter::zip(a, b)
 }
+
+/// The kinds of comparison.
+#[derive(Clone, Copy, Debug)]
+pub enum Cmp {
+    Lt,
+    Le,
+    Eq,
+    Ne,
+    Gt,
+    Ge,
+}

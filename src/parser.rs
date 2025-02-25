@@ -5,7 +5,7 @@
 
 use crate::arborist::{self as a, PlainToken as P, TokenTree as Tt};
 use crate::ast::*;
-use crate::compiler_prelude::{Name, Span, Spanned, Str};
+use crate::compiler_prelude::*;
 use crate::language_types::IsAnon;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -367,11 +367,22 @@ impl<'src> Parser<'src> {
         self.expr_at(Level::Min)
     }
     fn expr_at(&mut self, level: Level) -> Result<Expr> {
-        const BIN_OPS: &[(P, Level, BinOpKind)] = &[
-            (P::LessThanEqual, Level::Equal, BinOpKind::CmpLe),
-            (P::Plus, Level::Add, BinOpKind::Add),
-            (P::Minus, Level::Add, BinOpKind::Sub),
-            (P::Asterisk, Level::Mul, BinOpKind::Mul),
+        #[derive(Clone, Copy)]
+        enum OpForm<T, U> {
+            Chained(T),
+            Unchained(U),
+        }
+        use OpForm::{Chained, Unchained};
+        const BIN_OPS: &[(P, Level, OpForm<Cmp, BinOpKind>)] = &[
+            (P::LessThan, Level::Equal, Chained(Cmp::Lt)),
+            (P::LessThanEqual, Level::Equal, Chained(Cmp::Le)),
+            (P::EqualEqual, Level::Equal, Chained(Cmp::Eq)),
+            (P::NotEqual, Level::Equal, Chained(Cmp::Ne)),
+            (P::GreaterThan, Level::Equal, Chained(Cmp::Gt)),
+            (P::GreaterThanEqual, Level::Equal, Chained(Cmp::Ge)),
+            (P::Plus, Level::Add, Unchained(BinOpKind::Add)),
+            (P::Minus, Level::Add, Unchained(BinOpKind::Sub)),
+            (P::Asterisk, Level::Mul, Unchained(BinOpKind::Mul)),
         ];
         const UNARY_OPS: &[(P, UnaryOpKind)] = &[(P::Minus, UnaryOpKind::Neg)];
         let span_start = self.get_span().start;
@@ -504,7 +515,7 @@ impl<'src> Parser<'src> {
         loop {
             let Some(Spanned {
                 kind: Tt::Plain(kind),
-                span,
+                span: op_span,
             }) = self.peek()
             else {
                 break;
@@ -517,15 +528,48 @@ impl<'src> Parser<'src> {
             }
             self.next().unwrap();
             let rhs = self.expr_at(op_level.higher())?;
-            let op = BinOp {
-                kind: op_kind,
-                span,
-            };
-            let span = e.span.start..rhs.span.end;
-            e = Expr {
-                kind: ExprKind::BinOp(op, Box::new(e), Box::new(rhs)),
-                span,
-            };
+            match op_kind {
+                Unchained(op_kind) => {
+                    let op = BinOp {
+                        kind: op_kind,
+                        span: op_span,
+                    };
+                    let span = e.span.start..rhs.span.end;
+                    e = Expr {
+                        kind: ExprKind::BinOp(op, Box::new(e), Box::new(rhs)),
+                        span,
+                    };
+                }
+                Chained(cmp) => {
+                    if !matches!(e.kind, ExprKind::Comparison { .. }) {
+                        e = Expr {
+                            kind: ExprKind::Comparison {
+                                // bad clone
+                                operands: vec![e.clone()],
+                                operators: vec![],
+                            },
+                            span: e.span.clone(),
+                        };
+                    }
+                    let Expr {
+                        kind:
+                            ExprKind::Comparison {
+                                operands,
+                                operators,
+                            },
+                        span,
+                    } = &mut e
+                    else {
+                        unreachable!()
+                    };
+                    span.end = rhs.span.end;
+                    operators.push(Spanned {
+                        kind: cmp,
+                        span: op_span,
+                    });
+                    operands.push(rhs);
+                }
+            }
         }
         // assignment
         if level <= Level::Min && self.just(P::Equal).is_some() {

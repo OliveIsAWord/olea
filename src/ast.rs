@@ -4,7 +4,7 @@
 //!
 //! The types in this module represent the syntactic forms that comprise the Olea grammar. We use a convention for each category of item of an enum `FooKind` representing the element itself, and a `Foo` which contains a `FooKind` as well as the source span of the element.
 
-use crate::compiler_prelude::{Name, Span, Spanned, Str};
+use crate::compiler_prelude::*;
 use crate::language_types::IsAnon;
 
 /// A full source program, made of a list of declarations.
@@ -102,6 +102,11 @@ pub enum ExprKind {
     UnaryOp(UnaryOp, Box<Expr>),
     /// A calculation taking the values of two expressions to yield another.
     BinOp(BinOp, Box<Expr>, Box<Expr>),
+    /// A comparison chain. Intuitively, the `operators` are interleaved between the `operands` as they appear in the syntax of the expression. Therefore, there must be one more element in `operands` than `operators`.
+    Comparison {
+        operands: Vec<Expr>,
+        operators: Vec<Spanned<Cmp>>,
+    },
     /// A cast of a value to a given type.
     As(Box<Expr>, Ty),
     /// An expression wrapped in parentheses.
@@ -177,8 +182,6 @@ pub enum BinOpKind {
     Sub,
     /// Two's complement unsigned multiplication.
     Mul,
-    /// Unsigned less-than-or-equal-to comparison.
-    CmpLe,
 }
 
 /// The different directions of comparison.
