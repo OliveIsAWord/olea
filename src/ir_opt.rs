@@ -219,7 +219,6 @@ fn constant_propagation_impl(f: &mut Function) {
                     BinOp::Add => lhs.wrapping_add(rhs),
                     BinOp::Sub => lhs.wrapping_sub(rhs),
                     BinOp::Mul => lhs.wrapping_mul(rhs),
-                    BinOp::CmpLe => i128::from(lhs <= rhs),
                 };
                 (val, lhs_kind)
             }
@@ -257,7 +256,7 @@ fn constant_propagation_impl(f: &mut Function) {
     for block in f.blocks.values_mut() {
         match block.exit {
             Exit::Jump(_) | Exit::Return(_) => {}
-            Exit::CondJump(Condition::NonZero(cond), if_true, if_false) => {
+            Exit::CondJump(cond, if_true, if_false) => {
                 let Some(&(cond, _)) = const_vals.get(&cond) else {
                     continue;
                 };

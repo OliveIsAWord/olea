@@ -1,13 +1,2 @@
-struct A:
-    a1: B[3]
-    a2: C[2]
-
-struct B:
-    b1: A^
-    b2: C
-
-struct C:
-    c1: u32
-
-fn foo(a: A) A:
-    a
+fn is_42(a: u8):
+    if a: 0

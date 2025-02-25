@@ -14,6 +14,46 @@ pub struct Program {
     pub tys: TyMap,
 }
 
+/// An index into the program level type storage.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+// I'd prefer not to have this field public but it's needed for `ir_display`.
+pub struct Ty(pub(crate) u128);
+
+/// The type of any value operated on.
+#[derive(Clone, Debug)]
+pub enum TyKind {
+    /// A boolean value, either `true` or `false`.
+    Bool,
+    /// An integer.
+    Int(IntKind),
+    /// A pointer into memory storing a value of a given type.
+    Pointer(Ty),
+    /// A function pointer accepting and returning some values.
+    Function(IndexMap<Str, (IsAnon, Ty)>, Vec<Ty>),
+    /// A named collection of named values.
+    Struct {
+        /// The name of the struct type.
+        name: Str,
+        /// The fields of the struct type.
+        fields: IndexMap<Str, Ty>,
+    },
+    /// A contiguous fixed-length list of values of a type.
+    Array(Ty, u128),
+}
+
+/// The sizes an integer type can be.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum IntKind {
+    /// Machine word-sized.
+    Usize,
+    /// 8 bits.
+    U8,
+    /// 16 bits.
+    U16,
+    /// 32 bits.
+    U32,
+}
+
 /// The storage for all the types used in a program.
 #[derive(Clone, Debug, Default)]
 pub struct TyMap {
@@ -76,6 +116,7 @@ impl TyMap {
     pub fn format_kind(&self, kind: &TyKind) -> String {
         // yeah this is bad
         match kind {
+            TyKind::Bool => "bool".to_owned(),
             TyKind::Int(size) => size.to_string(),
             &TyKind::Pointer(inner) => format!("{}^", self.format(inner)),
             TyKind::Function(params, returns) => {
@@ -130,9 +171,15 @@ impl TyMap {
         use TyKind as T;
         // exhaustiveness check; if this errors then you should probably update this function!
         match a {
-            T::Int(_) | T::Pointer(_) | T::Function(..) | T::Struct { .. } | T::Array(..) => {}
+            T::Bool
+            | T::Int(_)
+            | T::Pointer(_)
+            | T::Function(..)
+            | T::Struct { .. }
+            | T::Array(..) => {}
         }
         match (a, b) {
+            (T::Bool, T::Bool) => true,
             (T::Int(a), T::Int(b)) => a == b,
             (&T::Pointer(a), &T::Pointer(b)) => self.equals(a, b),
             (T::Function(a_params, a_returns), T::Function(b_params, b_returns)) => {
@@ -472,44 +519,6 @@ impl Function {
     }
 }
 
-/// An index into the program level type storage.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-// I'd prefer not to have this field public but it's needed for `ir_display`.
-pub struct Ty(pub(crate) u128);
-
-/// The type of any value operated on.
-#[derive(Clone, Debug)]
-pub enum TyKind {
-    /// An integer.
-    Int(IntKind),
-    /// A pointer into memory storing a value of a given type.
-    Pointer(Ty),
-    /// A function pointer accepting and returning some values.
-    Function(IndexMap<Str, (IsAnon, Ty)>, Vec<Ty>),
-    /// A named collection of named values.
-    Struct {
-        /// The name of the struct type.
-        name: Str,
-        /// The fields of the struct type.
-        fields: IndexMap<Str, Ty>,
-    },
-    /// A contiguous fixed-length list of values of a type.
-    Array(Ty, u128),
-}
-
-/// The sizes an integer type can be.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum IntKind {
-    /// Machine word-sized.
-    Usize,
-    /// 8 bits.
-    U8,
-    /// 16 bits.
-    U16,
-    /// 32 bits.
-    U32,
-}
-
 /// A basic block, as in a block of code with one entrance and one exit where each instruction is executed in sequence exactly once before another block executes or the function returns.
 #[derive(Clone, Debug)]
 pub struct Block {
@@ -732,8 +741,6 @@ pub enum BinOp {
     Sub,
     /// Unsigned multiplication.
     Mul,
-    /// Less-than-or-equal-to comparison.
-    CmpLe,
 }
 
 /// The direction of control flow after all instructions of a block have been executed.
@@ -741,8 +748,8 @@ pub enum BinOp {
 pub enum Exit {
     /// Direct control flow to a single, static location.
     Jump(BlockId),
-    /// Direct control flow to one of two locations based on some runtime condition.
-    CondJump(Condition, BlockId, BlockId),
+    /// Direct control flow to one of two locations based on a boolean value.
+    CondJump(Register, BlockId, BlockId),
     /// Execution terminates, yielding a list of values.
     Return(Vec<Register>),
 }
@@ -752,7 +759,7 @@ impl Exit {
     #[must_use]
     pub fn is_use(&self, reg: Register) -> bool {
         match self {
-            Self::CondJump(Condition::NonZero(r), _, _) => *r == reg,
+            &Self::CondJump(r, _, _) => r == reg,
             Self::Return(regs) => regs.iter().any(|r| *r == reg),
             _ => false,
         }
@@ -774,9 +781,7 @@ impl Exit {
     pub fn visit_regs<F: FnMut(Register)>(&self, mut f: F) {
         match self {
             Self::Jump(_) => {}
-            Self::CondJump(cond, _, _) => match cond {
-                &Condition::NonZero(r) => f(r),
-            },
+            &Self::CondJump(r, _, _) => f(r),
             Self::Return(regs) => {
                 for &r in regs {
                     f(r);
@@ -784,16 +789,6 @@ impl Exit {
             }
         }
     }
-}
-
-/// A runtime condition to determine which of two control flow paths to take.
-#[derive(Clone, Debug)]
-pub enum Condition {
-    /// Take the first branch if the register contains a non-zero value, meaning:
-    /// - An integer not equal to zero.
-    /// - A pointer whose address is not equal to zero.
-    /// - A function whose address is not equal to zero (so all of them?).
-    NonZero(Register),
 }
 
 /// A named location which stores a value.

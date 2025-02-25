@@ -43,7 +43,7 @@ impl SizeFinder<'_> {
     }
     fn of_ty_or(self, ty: Ty) -> Result<Size, u32> {
         match &self.0[ty] {
-            TyKind::Int(IntKind::U8) => Ok(Size::Byte),
+            TyKind::Bool | TyKind::Int(IntKind::U8) => Ok(Size::Byte),
             TyKind::Int(IntKind::U16) => Ok(Size::Short),
             TyKind::Int(IntKind::U32 | IntKind::Usize)
             | TyKind::Pointer(_)
@@ -379,6 +379,7 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                                     );
                                 }) as Box<dyn Fn(&mut String)>
                             };
+                            /*
                             let comparison = |condition| {
                                 Box::new(move |code: &mut String| {
                                     write_inst!(
@@ -392,11 +393,11 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                                     write_inst!(*code, "{condition} mov {}, 1", reg.foo());
                                 })
                             };
+                            */
                             let compile = match op {
                                 BinOp::Add => arithmetic("add"),
                                 BinOp::Sub => arithmetic("sub"),
                                 BinOp::Mul => arithmetic("mul"),
-                                BinOp::CmpLe => comparison("iflteq"),
                             };
                             compile(&mut code);
                         }
@@ -541,13 +542,9 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                     None
                 }
             }
-            Exit::CondJump(cond, branch_true, branch_false) => {
-                match cond {
-                    Condition::NonZero(r) => {
-                        let reg = regs.get(r).unwrap();
-                        write_inst!(code, "cmp {}, 0", reg.foo());
-                    }
-                }
+            Exit::CondJump(r, branch_true, branch_false) => {
+                let reg = regs.get(r).unwrap();
+                write_inst!(code, "cmp.8 {}, 0", reg.foo());
                 let next_true = {
                     merge_phis(&mut code, *branch_true, "ifnz ");
                     if indices.contains(branch_true) {

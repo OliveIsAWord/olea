@@ -149,7 +149,6 @@ impl DisplayWithName for Function {
                                 BinOp::Add => "+",
                                 BinOp::Sub => "-",
                                 BinOp::Mul => "*",
-                                BinOp::CmpLe => "<=",
                             }),
                             Sk::IntCast(inner, ty) => write!(f, "{inner} as {ty}"),
                             Sk::PtrCast(pointer, ty) => write!(f, "{pointer} as {ty}^"),
@@ -218,14 +217,6 @@ impl Display for Register {
     }
 }
 
-impl Display for Condition {
-    fn fmt(&self, f: F) -> Result {
-        match self {
-            Self::NonZero(r) => write!(f, "NonZero({r})"),
-        }
-    }
-}
-
 impl Display for Program {
     fn fmt(&self, f: F) -> Result {
         for (i, (name, function)) in self.functions.iter().enumerate() {
@@ -247,6 +238,7 @@ impl Display for Ty {
 impl Display for TyKind {
     fn fmt(&self, f: F) -> Result {
         match self {
+            Self::Bool => write!(f, "bool"),
             Self::Int(kind) => write!(f, "{kind}"),
             Self::Pointer(inner) => write!(f, "{inner}^"),
             Self::Function(params, returns) => {

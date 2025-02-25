@@ -15,7 +15,9 @@ pub fn destructure_program(program: &mut Program) {
         let mut ty_clusters = Map::<Ty, Vec<(PtrOffset, Ty)>>::new();
         for (&ty, kind) in &tys.inner {
             let cluster = match kind {
-                TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function(..) => continue,
+                TyKind::Bool | TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function(..) => {
+                    continue;
+                }
                 TyKind::Struct { fields, .. } => fields
                     .iter()
                     .map(|(name, &ty)| (PtrOffset::Field(name.clone()), ty))
@@ -169,9 +171,7 @@ fn visit_block(
     };
     match exit {
         Exit::Jump(_) => {}
-        Exit::CondJump(cond, _, _) => match cond {
-            Condition::NonZero(r) => do_not_visit(*r),
-        },
+        Exit::CondJump(r, _, _) => do_not_visit(*r),
         Exit::Return(regs) => destructure_registers(regs, destructed_regs),
     }
     let get = |r: Register| -> Option<(&[_], &[_])> {
@@ -225,7 +225,7 @@ fn visit_block(
                     | Sk::StackAlloc(_)
                     | Sk::Function(_)
                     | Sk::UnaryOp(UnaryOp::Neg, _)
-                    | Sk::BinOp(BinOp::Add | BinOp::Mul | BinOp::Sub | BinOp::CmpLe, _, _) => {
+                    | Sk::BinOp(BinOp::Add | BinOp::Mul | BinOp::Sub, _, _) => {
                         unreachable!("illegal op on struct during destructuring: {inst:?}")
                     }
                     &mut Sk::Copy(copied) => {

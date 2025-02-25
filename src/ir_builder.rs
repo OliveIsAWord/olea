@@ -2,17 +2,19 @@ use crate::ast;
 use crate::compiler_prelude::*;
 use crate::ir::*;
 
-const INT_TYPES: &[(&str, IntKind)] = &[
+const INT_TYS: &[(&str, IntKind)] = &[
     ("u8", IntKind::U8),
     ("u16", IntKind::U16),
     ("u32", IntKind::U32),
     ("usize", IntKind::Usize),
 ];
 
+const OTHER_TYS: &[(&str, TyKind)] = &[("bool", TyKind::Bool)];
+
 fn get_int_kind_from_suffix(suffix: &Name) -> Result<IntKind> {
-    INT_TYPES
+    INT_TYS
         .iter()
-        .find_map(|(name, int_kind)| (**name == *suffix.kind).then_some(*int_kind))
+        .find_map(|&(name, int_kind)| (*name == *suffix.kind).then_some(int_kind))
         .ok_or_else(|| Error {
             kind: ErrorKind::UnknownIntLiteralSuffix,
             span: suffix.span.clone(),
@@ -20,14 +22,9 @@ fn get_int_kind_from_suffix(suffix: &Name) -> Result<IntKind> {
 }
 
 /// This trait defines a helper method for transforming a `T` into an `Option<T>` with a postfix syntax.
-trait ToSome {
-    fn some(self) -> Option<Self>
-    where
-        Self: Sized;
-
-    fn some_if(self, condition: bool) -> Option<Self>
-    where
-        Self: Sized;
+trait ToSome: Sized {
+    fn some(self) -> Option<Self>;
+    fn some_if(self, condition: bool) -> Option<Self>;
 }
 
 impl<T> ToSome for T {
@@ -396,7 +393,7 @@ impl<'a> IrBuilder<'a> {
                     A::Add => B::Add,
                     A::Sub => B::Sub,
                     A::Mul => B::Mul,
-                    A::CmpLe => B::CmpLe,
+                    A::CmpLe => todo!("comparison"),
                 };
                 let lhs_reg = self.build_expr_unvoid(lhs, span.clone())?;
                 let rhs_reg = self.build_expr_unvoid(rhs, span.clone())?;
@@ -434,10 +431,7 @@ impl<'a> IrBuilder<'a> {
                 // evaluate condition, jump to either branch
                 self.enter_scope();
                 let cond_reg = self.build_expr_unvoid(cond, span.clone())?;
-                self.switch_to_new_block(
-                    Exit::CondJump(Condition::NonZero(cond_reg), then_id, else_id),
-                    then_id,
-                );
+                self.switch_to_new_block(Exit::CondJump(cond_reg, then_id, else_id), then_id);
 
                 // evaluate true branch, jump to end
                 let then_yield = self.build_block(then_body, unvoid)?;
@@ -477,10 +471,7 @@ impl<'a> IrBuilder<'a> {
                 // condition evaluation, jump to either inner body or end of expression
                 self.enter_scope(); // with code like `while x is Some(y): ...`, `y` should be accessible from the body
                 let cond_reg = self.build_expr_unvoid(cond, span)?;
-                self.switch_to_new_block(
-                    Exit::CondJump(Condition::NonZero(cond_reg), body_id, end_id),
-                    body_id,
-                );
+                self.switch_to_new_block(Exit::CondJump(cond_reg, body_id, end_id), body_id);
 
                 // body evaluation, jump back to condition
                 self.build_block(body, true)?;
@@ -804,15 +795,16 @@ pub fn build(program: &ast::Program) -> Result<Program> {
     let mut program_tys = TyMap::new();
     // Global type construction first pass: register all type names in `defined_tys`. Type declarations can reference structs declared after themselves, even cyclically.
     let mut defined_tys = DefinedTys {
-        tys: INT_TYPES
-            .iter()
-            .map(|&(name, int_kind)| {
-                (
-                    name.into(),
-                    (program_tys.insert(TyKind::Int(int_kind)), None),
-                )
-            })
-            .collect(),
+        tys: {
+            let int_tys = INT_TYS
+                .iter()
+                .map(|&(name, int_kind)| (name, TyKind::Int(int_kind)));
+            let other_tys = OTHER_TYS.iter().cloned();
+            int_tys
+                .chain(other_tys)
+                .map(|(name, ty_kind)| (name.into(), (program_tys.insert(ty_kind), None)))
+                .collect()
+        },
     };
     for ast::Decl { kind, span: _ } in &program.decls {
         match kind {

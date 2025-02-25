@@ -89,7 +89,7 @@ impl<'a> TypeChecker<'a> {
             Sk::Copy(r) => self.t(r).clone(),
             Sk::BinOp(op, lhs, rhs) => {
                 match op {
-                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::CmpLe => (),
+                    BinOp::Add | BinOp::Sub | BinOp::Mul => (),
                 }
                 let lhs_int = self.int(lhs)?;
                 let rhs_int = self.int(rhs)?;
@@ -190,9 +190,7 @@ impl<'a> TypeChecker<'a> {
         }
         match &block.exit {
             Exit::Jump(_) => Ok(()),
-            Exit::CondJump(cond, _, _) => match cond {
-                &Condition::NonZero(r) => self.int(r).map(|_| ()),
-            },
+            &Exit::CondJump(r, _, _) => self.expect(r, &TyKind::Bool),
             Exit::Return(regs) => {
                 if regs.len() != self.return_tys.len() {
                     // The IR lowering phase will always produce functions with 0 or 1 returns, and it checks that all paths return the appropriate number of values. This code path will only run when typechecking transformed IR, namely after lowering IR types to machine-friendly types.
