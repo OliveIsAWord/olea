@@ -234,8 +234,8 @@ Prefix | negation `-` | Right-to-left
 Multiplication | `*`, `/` | Left-to-right
 Addition | `+`, subtraction `-` | Left-to-right
 Comparison | `==`, `!=`, `<`, `>`, `<=`, `>=` | See [comparison operators](#comparison-operators)
-And | either `&&` or `and` (TODO) | Left-to-right
-Or | either `\|\|` or `or` (TODO) | Left-to-right
+And | `and` | Left-to-right
+Or | `or` | Left-to-right
 
 Evaluating contrary to these precedence levels requires placing sub-expressions within parentheses.
 
@@ -346,7 +346,16 @@ These operations perform addition, subtraction, multiplication, division, and ne
 
 Tests for equality, inequality, or ordering between two values. Yields `true` if the comparison holds, `false` otherwise.
 
-Comparisons can be "chained". E.g. `x < y < z` is equivalent to `x < y && y < z` except that the expression `y` is only evaluated once. Such a chain must be "well formed", meaning that all the comparison operators must have a consistent ordering direction. This definition will be changed or refined in the future.
+Comparisons can be "chained". E.g. `x < y < z` is equivalent to `x < y and y < z` except that the expression `y` is only evaluated once. Such a chain must be "well formed", meaning that all the comparison operators must have a consistent ordering direction. This definition will be changed or refined in the future.
+
+### Boolean Operators
+
+```rs
+<expression> and <expression>
+<expression> or <expression>
+```
+
+The `and` and `or` operators combine two boolean values into one, by logical conjunction and disjunction respectively. These operators are "lazy" or "short-circuiting", meaning that the right hand subexpression does not execute if its value cannot affect the result. More precisely, if the left operand of an `and` expression yields `false` or the left operand of an `or` operation yields `true`, the right operand is not evaluated.
 
 ### `as` Casting
 

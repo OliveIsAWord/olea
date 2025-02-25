@@ -1,8 +1,2 @@
-fn meow(a: usize):
-    defer:
-     a = a + 1
-    return
-    return a
-    continue
-    break
-    break a
+fn meow(a: usize) bool:
+    false and a == 0 or true

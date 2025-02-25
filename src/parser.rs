@@ -374,6 +374,8 @@ impl<'src> Parser<'src> {
         }
         use OpForm::{Chained, Unchained};
         const BIN_OPS: &[(P, Level, OpForm<Cmp, BinOpKind>)] = &[
+            (P::Or, Level::Or, Unchained(BinOpKind::Or)),
+            (P::And, Level::And, Unchained(BinOpKind::And)),
             (P::LessThan, Level::Equal, Chained(Cmp::Lt)),
             (P::LessThanEqual, Level::Equal, Chained(Cmp::Le)),
             (P::EqualEqual, Level::Equal, Chained(Cmp::Eq)),

@@ -186,6 +186,10 @@ pub enum BinOpKind {
     Sub,
     /// Two's complement unsigned multiplication.
     Mul,
+    /// Short-circuiting boolean AND.
+    And,
+    /// Short-circuiting boolean OR.
+    Or,
 }
 
 /// The different directions of comparison.

@@ -397,15 +397,42 @@ impl<'a> IrBuilder<'a> {
             E::BinOp(op, lhs, rhs) => {
                 use BinOp as B;
                 use ast::BinOpKind as A;
-                let op_kind = match op.kind {
-                    A::Add => B::Add,
-                    A::Sub => B::Sub,
-                    A::Mul => B::Mul,
-                };
+                let mut arithmetic = |op_kind| {
                 let lhs_reg = self.build_expr_unvoid(lhs, span.clone())?;
                 let rhs_reg = self.build_expr_unvoid(rhs, span.clone())?;
-                self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg), span)
-                    .some_if(unvoid)
+                let result = self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg), span.clone());
+                Ok(result)
+                };
+                let result = match op.kind {
+                    A::Add => arithmetic(B::Add)?,
+                    A::Sub => arithmetic(B::Sub)?,
+                    A::Mul => arithmetic(B::Mul)?,
+                    A::And => {
+                        let lhs_reg = self.build_expr_unvoid(lhs, span.clone())?;
+                        let lhs_id = self.current_block_id;
+                        let end_id = self.reserve_block_id();
+                        let continue_id = self.reserve_block_id();
+                        self.switch_to_new_block(Exit::CondJump(lhs_reg, continue_id, end_id), continue_id);
+                        let rhs_reg = self.build_expr_unvoid(rhs, span.clone())?;
+                        let rhs_id = self.current_block_id;
+                        self.switch_to_new_block(Exit::Jump(end_id), end_id);
+                        let phi_map = [(lhs_id, lhs_reg), (rhs_id, rhs_reg)].into_iter().collect();
+                        self.push_store(Sk::Phi(phi_map), span)
+                    }
+                    A::Or => {
+                        let lhs_reg = self.build_expr_unvoid(lhs, span.clone())?;
+                        let lhs_id = self.current_block_id;
+                        let end_id = self.reserve_block_id();
+                        let continue_id = self.reserve_block_id();
+                        self.switch_to_new_block(Exit::CondJump(lhs_reg, end_id, continue_id), continue_id);
+                        let rhs_reg = self.build_expr_unvoid(rhs, span.clone())?;
+                        let rhs_id = self.current_block_id;
+                        self.switch_to_new_block(Exit::Jump(end_id), end_id);
+                        let phi_map = [(lhs_id, lhs_reg), (rhs_id, rhs_reg)].into_iter().collect();
+                        self.push_store(Sk::Phi(phi_map), span)
+                    }
+                };
+                Some(result)
             }
             E::Comparison {
                 operands: ast_operands,
