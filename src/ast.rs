@@ -86,6 +86,10 @@ pub enum StmtKind {
     Assign(Place, Expr),
     /// A local variable declaration. This introduces a name which is bound to a value and can be accessed by all following statements in the block.
     Let(Name, Option<Ty>, Expr),
+    Return(Option<Expr>),
+    Break(Option<Expr>),
+    Continue,
+    Defer(Box<Stmt>),
 }
 
 /// See [`ExprKind`].

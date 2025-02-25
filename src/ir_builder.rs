@@ -318,6 +318,10 @@ impl<'a> IrBuilder<'a> {
                 self.push_write(alloc_reg, value_reg);
                 None
             }
+            S::Continue => return Err(todo("continue", span)),
+            S::Return(_e) => return Err(todo("return", span)),
+            S::Break(_e) => return Err(todo("break", span)),
+            S::Defer(_e) => return Err(todo("defer", span)),
         };
         Ok(reg)
     }

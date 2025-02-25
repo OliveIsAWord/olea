@@ -30,7 +30,7 @@
     devShells = allSystems (pkgs: let
       pkgsFenix = fenix.packages.${pkgs.system};
       # rust version 1.85
-      rustPackages = pkgsFenix.beta.withComponents [
+      rustPackages = pkgsFenix.default.withComponents [
           "cargo"
           "clippy"
           "rustc" # includes rust-std

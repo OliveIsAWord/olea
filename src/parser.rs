@@ -573,6 +573,12 @@ impl<'src> Parser<'src> {
         }
         Ok(e)
     }
+    fn expr_or_end(&mut self) -> Parsed<Expr> {
+        if self.peek().is_none() {
+            return Ok(None);
+        }
+        self.expr().map(Some)
+    }
     fn stmt(&mut self) -> Result<Stmt> {
         self.spanned(Self::stmt_kind)
     }
@@ -587,7 +593,15 @@ impl<'src> Parser<'src> {
             }
             let body = self.expr()?;
             Ok(StmtKind::Let(name, ty, body))
-        } else {
+        } else if self.just(P::Return).is_some() {
+            self.expr_or_end().map(StmtKind::Return)
+        } else if self.just(P::Break).is_some() {
+            self.expr_or_end().map(StmtKind::Break)
+        } else if self.just(P::Continue).is_some() {
+            Ok(StmtKind::Continue)
+        } else if self.just(P::Defer).is_some() {
+            self.stmt().map(|s| StmtKind::Defer(Box::new(s)))
+        }  else {
             let e = self.expr()?;
             // assignment
             if self.just(P::Equal).is_some() {
