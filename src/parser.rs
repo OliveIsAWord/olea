@@ -571,24 +571,6 @@ impl<'src> Parser<'src> {
                 }
             }
         }
-        // assignment
-        if level <= Level::Min && self.just(P::Equal).is_some() {
-            let rhs = self.expr()?;
-            match e.kind {
-                ExprKind::Place(p) => {
-                    let lhs = Place {
-                        kind: p,
-                        span: e.span,
-                    };
-                    let span = lhs.span.start..rhs.span.end;
-                    e = Expr {
-                        kind: ExprKind::Assign(lhs, Box::new(rhs)),
-                        span,
-                    };
-                }
-                _ => return Err(err_span("cannot assign to this kind of expression", e.span)),
-            }
-        }
         Ok(e)
     }
     fn stmt(&mut self) -> Result<Stmt> {
@@ -606,7 +588,23 @@ impl<'src> Parser<'src> {
             let body = self.expr()?;
             Ok(StmtKind::Let(name, ty, body))
         } else {
-            self.expr().map(StmtKind::Expr)
+            let e = self.expr()?;
+            // assignment
+            if self.just(P::Equal).is_some() {
+                let rhs = self.expr()?;
+                match e.kind {
+                    ExprKind::Place(p) => {
+                        let lhs = Place {
+                            kind: p,
+                            span: e.span,
+                        };
+                        Ok(StmtKind::Assign(lhs, rhs))
+                    }
+                    _ => Err(err_span("cannot assign to this kind of expression", e.span)),
+                }
+            } else {
+                Ok(StmtKind::Expr(e))
+            }
         }
     }
     fn colon_block(&mut self) -> Parsed<Block> {

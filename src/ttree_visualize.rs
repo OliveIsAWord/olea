@@ -39,10 +39,11 @@ fn visualize0(block: &Block, src: &str, level: usize) {
                     // indent();
                     eprintln!(":");
                     visualize0(b, src, level + 1);
+                    eprintln!();
                     indent();
                 }
                 Tt::ElseBlock(b) => {
-                    eprintln!("else");
+                    eprintln!("else:");
                     visualize0(b, src, level + 1);
                     indent();
                 }

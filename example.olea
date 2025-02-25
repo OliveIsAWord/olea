@@ -1,6 +1,2 @@
-extern fn meower() usize
-
-fn is_42():
-    if 555 <= 3000 < meower() == 2000: 0
-    if 42 != 24: 1
-    if 999 > 9999 >= 99999: 2
+fn meow(a: usize):
+    (a = 0)

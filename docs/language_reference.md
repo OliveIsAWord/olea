@@ -189,8 +189,6 @@ Creates a local variable that can be accessed by name and by pointer in expressi
 
 ### Assignments
 
-TODO: Assignments are currently parsed as expressions in the compiler. This will likely change.
-
 ```rs
 <place expression> = <expression>
 ```

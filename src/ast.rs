@@ -80,10 +80,12 @@ pub type Stmt = Spanned<StmtKind>;
 // TODO: Allow decls in stmts.
 #[derive(Clone, Debug)]
 pub enum StmtKind {
-    /// A local variable declaration. This introduces a name which is bound to a value and can be accessed by all following statements in the block.
-    Let(Name, Option<Ty>, Expr),
     /// An expression whose yielded value, if any, is ignored (unless it is the final statement of a block). See [`ExprKind`].
     Expr(Expr),
+    /// Store a value in a memory location.
+    Assign(Place, Expr),
+    /// A local variable declaration. This introduces a name which is bound to a value and can be accessed by all following statements in the block.
+    Let(Name, Option<Ty>, Expr),
 }
 
 /// See [`ExprKind`].
@@ -115,8 +117,6 @@ pub enum ExprKind {
     If(Box<Expr>, Block, Option<Block>),
     /// A "while" loop. The condition and body expressions are evaluated repeatedly until the condition yields false.
     While(Box<Expr>, Block),
-    /// Store a value in a memory location.
-    Assign(Place, Box<Expr>),
     /// See [`Block`].
     Block(Block),
     /// A function call, composed of a function and a list of arguments to pass to it.

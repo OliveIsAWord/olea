@@ -295,6 +295,19 @@ impl<'a> IrBuilder<'a> {
         let ast::Stmt { kind, span } = stmt;
         let span = span.clone();
         let reg = match kind {
+            S::Expr(expr) => self.build_expr(expr, unvoid)?,
+            // NOTE: We're implicitly checking and evaluating the place expression first, but typechecking currently has to check the value expression first. Should we change our order here?
+            S::Assign(place, value) => {
+                let MaybeVar::Variable(place_reg) = self.build_place(&place.kind)? else {
+                    return Err(Error {
+                        kind: ErrorKind::CantAssignToConstant,
+                        span,
+                    });
+                };
+                let value_reg = self.build_expr_unvoid(value, span)?;
+                self.push_write(place_reg, value_reg);
+                None
+            }
             S::Let(name, ty, body) => {
                 let value_reg = self.build_expr_unvoid(body, span)?;
                 let alloc_ty = match ty {
@@ -305,7 +318,6 @@ impl<'a> IrBuilder<'a> {
                 self.push_write(alloc_reg, value_reg);
                 None
             }
-            S::Expr(expr) => self.build_expr(expr, unvoid)?,
         };
         Ok(reg)
     }
@@ -334,18 +346,6 @@ impl<'a> IrBuilder<'a> {
                     .some_if(unvoid),
                 MaybeVar::Constant(value_reg) => Some(value_reg),
             },
-            // NOTE: We're implicitly checking and evaluating the place expression first, but typechecking currently has to check the value expression first. Should we change our order here?
-            E::Assign(place, value) => {
-                let MaybeVar::Variable(place_reg) = self.build_place(&place.kind)? else {
-                    return Err(Error {
-                        kind: ErrorKind::CantAssignToConstant,
-                        span,
-                    });
-                };
-                let value_reg = self.build_expr_unvoid(value, span)?;
-                self.push_write(place_reg, value_reg);
-                None
-            }
             E::Int(int, suffix) => {
                 let int_ty = suffix
                     .as_ref()
