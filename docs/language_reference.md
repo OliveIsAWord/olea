@@ -103,7 +103,7 @@ Angle brackets indicate a required section. Curly brackets indicate an optional 
 <type name>
 ```
 
-Structs and built-in integer types (`u8`, `u16`, `u32`, and `usize`) are accessed by name.
+Structs and built-in types are accessed by name. The built-in types include the integers (`u8`, `u16`, `u32`, and `usize`) and the boolean type `bool`.
 
 ### Pointers
 
@@ -337,10 +337,6 @@ These operations perform addition, subtraction, multiplication, division, and ne
 
 ### Comparison Operators
 
-TODO: Mostly not yet implemented
-
-TODO: Boolean type
-
 ```rs
 <expression> == <expression>
 <expression> != <expression>
@@ -350,7 +346,7 @@ TODO: Boolean type
 <expression> >= <expression>
 ```
 
-Tests for equality, inequality, or ordering between two values. Yields `1` if the comparison holds, `0` otherwise.
+Tests for equality, inequality, or ordering between two values. Yields `true` if the comparison holds, `false` otherwise.
 
 Comparisons can be "chained". E.g. `x < y < z` is equivalent to `x < y && y < z` except that the expression `y` is only evaluated once. Such a chain must be "well formed", meaning that all the comparison operators must have a consistent ordering direction. This definition will be changed or refined in the future.
 
@@ -434,7 +430,7 @@ if <condition expression>:
 { else <expression> }
 ```
 
-An `if` expression evaluates its condition, executing its body if the condition yields non-zero. If the `else` branch is present, that expression is executed if the condition yields zero. The types of the values yielded by the two branches only need to match if the surrounding context of the `if` expression requires it to yield a value.
+An `if` expression evaluates its boolean condition, executing its body if `true`. If the `else` branch is present, that expression is executed if the condition is `false`. The types of the values yielded by the two branches only need to match if the surrounding context of the `if` expression requires it to yield a value.
 
 ### `while` Loops
 
@@ -447,7 +443,7 @@ while <condition expression>:
 { else <expression> }
 ```
 
-A `while` loop repeatedly evaluates its condition and body in an alternating pattern until the condition yields zero, or until a `break` statement terminates the loop. If the condition yields zero, the else branch is evaluated and yielded.
+A `while` loop repeatedly evaluates its condition and body in an alternating pattern until the condition is `false`, or until a `break` statement terminates the loop. If the condition yields `false`, the else branch is evaluated and yielded.
 
 ## Future Language Direction
 
