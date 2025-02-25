@@ -67,6 +67,7 @@ struct IrBuilder<'a> {
     next_reg_id: u128,
     program_tys: &'a mut TyMap,
     function_tys: &'a Map<Str, Ty>,
+    constants: &'a Map<Str, StoreKind>,
     defined_tys: &'a DefinedTys,
     dummy_ty: Ty,
 }
@@ -170,6 +171,7 @@ impl DefinedTys {
 impl<'a> IrBuilder<'a> {
     fn new(
         function_tys: &'a Map<Str, Ty>,
+        constants: &'a Map<Str, StoreKind>,
         defined_tys: &'a DefinedTys,
         program_tys: &'a mut TyMap,
     ) -> Self {
@@ -185,6 +187,7 @@ impl<'a> IrBuilder<'a> {
             next_reg_id: 0,
             dummy_ty: program_tys.insert(TyKind::Int(IntKind::U8)),
             function_tys,
+            constants,
             defined_tys,
             program_tys,
         }
@@ -584,6 +587,12 @@ impl<'a> IrBuilder<'a> {
                         })
                         .map(MaybeVar::Constant)
                 })
+                .or_else(|| {
+                    self.constants.get(&name.kind).map(|value| {
+                        let r = self.push_store(value.clone(), name.span.clone());
+                        MaybeVar::Constant(r)
+                    })
+                })
                 .ok_or_else(|| Error {
                     kind: ErrorKind::NotFound("variable", name.kind.clone()),
                     span: name.span.clone(),
@@ -705,6 +714,7 @@ impl<'a> IrBuilder<'a> {
         let dummy_ty = self.dummy_ty;
         let t = |r| *self.tys.get(r).unwrap();
         match sk {
+            Sk::Bool(_) => self.program_tys.insert(TyKind::Bool),
             &Sk::Int(_, kind) | &Sk::IntCast(_, kind) => self.program_tys.insert(TyKind::Int(kind)),
             &Sk::PtrCast(_, kind) => self.program_tys.insert(TyKind::Pointer(kind)),
             Sk::Phi(regs) => t(regs.first_key_value().expect("empty phi").1),
@@ -806,6 +816,13 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 .collect()
         },
     };
+    let constants: Map<Str, StoreKind> = [
+        ("true", StoreKind::Bool(true)),
+        ("false", StoreKind::Bool(false)),
+    ]
+    .into_iter()
+    .map(|(name, value)| (name.into(), value))
+    .collect();
     for ast::Decl { kind, span: _ } in &program.decls {
         match kind {
             D::Function(_) | D::ExternFunction(_) => {}
@@ -967,12 +984,14 @@ pub fn build(program: &ast::Program) -> Result<Program> {
     for decl in &program.decls {
         match &decl.kind {
             D::Function(fn_decl) => {
-                let builder = IrBuilder::new(&function_tys, &defined_tys, &mut program_tys);
+                let builder =
+                    IrBuilder::new(&function_tys, &constants, &defined_tys, &mut program_tys);
                 let function = builder.build_function(fn_decl)?;
                 functions.insert(fn_decl.signature.name.kind.clone(), function);
             }
             D::Struct(s) => {
-                let builder = IrBuilder::new(&function_tys, &defined_tys, &mut program_tys);
+                let builder =
+                    IrBuilder::new(&function_tys, &constants, &defined_tys, &mut program_tys);
                 let function = builder.build_struct_constructor(s);
                 functions.insert(s.name.kind.clone(), function);
             }

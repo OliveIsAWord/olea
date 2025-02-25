@@ -1,2 +1,2 @@
 fn is_42(a: u8):
-    if a: 0
+    if true: 0

@@ -63,6 +63,7 @@ impl<'a> TypeChecker<'a> {
     fn infer_storekind(&self, sk: &StoreKind) -> Result<TyKind> {
         use StoreKind as Sk;
         let ty = match *sk {
+            Sk::Bool(_) => TyKind::Bool,
             Sk::Int(_, kind) => TyKind::Int(kind),
             Sk::Struct { ty, ref fields } => {
                 let ty_kind = &self.ty_map[ty];

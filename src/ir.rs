@@ -610,7 +610,7 @@ impl Inst {
                         f(r2, false);
                     }
                     Sk::Phi(_) => (), // Don't visit phi node arguments because they conceptually live in the predecessor block.
-                    Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => {}
+                    Sk::Bool(_) | Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => {}
                     Sk::Struct { ty: _, ref fields } => {
                         for &value in fields {
                             f(value, false);
@@ -681,6 +681,8 @@ impl Inst {
 /// A method of calculating a value to store in a register.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum StoreKind {
+    /// A boolean constant.
+    Bool(bool),
     /// An integer constant.
     Int(i128, IntKind),
     /// A struct constant.

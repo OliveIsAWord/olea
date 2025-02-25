@@ -139,6 +139,7 @@ impl DisplayWithName for Function {
                         write!(f, "{} = ", reg_def(r))?;
                         match sk {
                             Sk::StackAlloc(ty) => write!(f, "StackAlloc({ty})"),
+                            Sk::Bool(b) => write!(f, "{b}"),
                             Sk::Int(i, kind) => write!(f, "{i}_{kind}"),
                             Sk::Copy(r) => write!(f, "{r}"),
                             Sk::Read(r) => write!(f, "{r}^"),

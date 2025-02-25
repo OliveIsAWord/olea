@@ -67,11 +67,12 @@ pub fn destructure_program(program: &mut Program) {
         let TyKind::Function(params, returns) = kind else {
             continue;
         };
-        assert_eq!(returns.len(), 1, "idempotence hole");
-        let return_ty = returns[0];
-        if let Some(scalars) = destructed_tys.get(&return_ty) {
-            returns.clear();
-            returns.extend(scalars.iter().map(|(_, t)| t));
+        assert!(returns.len() <= 1, "idempotence hole");
+        if let Some(&return_ty) = returns.get(0) {
+            if let Some(scalars) = destructed_tys.get(&return_ty) {
+                returns.clear();
+                returns.extend(scalars.iter().map(|(_, t)| t));
+            }
         }
         let old_params = std::mem::take(params);
         *params = old_params
@@ -218,7 +219,8 @@ fn visit_block(
                 };
                 match sk {
                     // we could `do_not_visit` all of these, but that would be annoying
-                    Sk::Int(..)
+                    Sk::Bool(_)
+                    | Sk::Int(..)
                     | Sk::IntCast(..)
                     | Sk::PtrCast(..)
                     | Sk::PtrOffset(..)

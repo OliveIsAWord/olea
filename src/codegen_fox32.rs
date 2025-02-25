@@ -185,6 +185,7 @@ fn reg_alloc(f: &Function, get_size: SizeFinder) -> RegAllocInfo {
                 continue;
             };
             let constant_str = match sk {
+                &StoreKind::Bool(b) => u8::from(b).to_string().into(),
                 #[expect(
                     clippy::cast_sign_loss,
                     reason = "`fox32asm` doesn't support negative int literals, so we have to do the two's complement conversion ourselves."
@@ -460,7 +461,7 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                                 }
                             }
                         }
-                        Sk::Int(..) | Sk::Function(_) => unreachable!(
+                        Sk::Bool(_) | Sk::Int(..) | Sk::Function(_) => unreachable!(
                             "register store should have been optimized as a constant literal"
                         ),
                         Sk::Struct { .. } => unreachable!("struct literal"),
