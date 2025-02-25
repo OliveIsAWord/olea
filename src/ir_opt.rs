@@ -1,6 +1,6 @@
 #![expect(dead_code, reason = "This code is unfinished.")]
 
-use crate::compiler_prelude::{Map, Set};
+use crate::compiler_prelude::*;
 use crate::ir::*;
 
 pub struct Pass {
@@ -219,6 +219,17 @@ fn constant_propagation_impl(f: &mut Function) {
                     BinOp::Add => lhs.wrapping_add(rhs),
                     BinOp::Sub => lhs.wrapping_sub(rhs),
                     BinOp::Mul => lhs.wrapping_mul(rhs),
+                    BinOp::Cmp(cmp) => {
+                        let b = match cmp {
+                            Cmp::Lt => lhs < rhs,
+                            Cmp::Le => lhs <= rhs,
+                            Cmp::Eq => lhs == rhs,
+                            Cmp::Ne => lhs != rhs,
+                            Cmp::Gt => lhs > rhs,
+                            Cmp::Ge => lhs >= rhs,
+                        };
+                        b.into()
+                    }
                 };
                 (val, lhs_kind)
             }

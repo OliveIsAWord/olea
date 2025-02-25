@@ -743,6 +743,8 @@ pub enum BinOp {
     Sub,
     /// Unsigned multiplication.
     Mul,
+    /// Unsigned comparison.
+    Cmp(Cmp),
 }
 
 /// The direction of control flow after all instructions of a block have been executed.

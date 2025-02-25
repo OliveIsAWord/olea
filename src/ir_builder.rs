@@ -48,6 +48,7 @@ pub enum ErrorKind {
     MissingArgs(Vec<Str>, Option<Span>),
     InvalidArgs(Vec<Str>),
     BadPun,
+    IllFormedComparison,
     Todo(&'static str),
 }
 
@@ -403,11 +404,60 @@ impl<'a> IrBuilder<'a> {
                     .some_if(unvoid)
             }
             E::Comparison {
-                operands,
+                operands: ast_operands,
                 operators,
             } => {
-                _ = (operands, operators);
-                return Err(todo("comparison", span));
+                let mut operands = ast_operands.iter();
+                let unvoid_span = operators[0].span.clone();
+                let end_id = self.reserve_block_id();
+                let mut phi_map = Map::new();
+                let mut lhs = self.build_expr_unvoid(operands.next().unwrap(), unvoid_span)?;
+                // these two booleans track the well-formedness of the comparison chain
+                let mut less_ok = true;
+                let mut greater_ok = true;
+                for (i, (rhs, op)) in zip(operands, operators).enumerate() {
+                    let valid = match op.kind {
+                        Cmp::Eq => true,
+                        Cmp::Lt | Cmp::Le => {
+                            greater_ok = false;
+                            less_ok
+                        }
+                        Cmp::Gt | Cmp::Ge => {
+                            less_ok = false;
+                            greater_ok
+                        }
+                        Cmp::Ne => {
+                            let b = less_ok && greater_ok;
+                            less_ok = false;
+                            greater_ok = false;
+                            b
+                        }
+                    };
+                    if !valid {
+                        return Err(Error {
+                            kind: ErrorKind::IllFormedComparison,
+                            span: op.span.clone(),
+                        });
+                    }
+                    let rhs = self.build_expr_unvoid(rhs, op.span.clone())?;
+                    let span = ast_operands[i].span.start..ast_operands[i + 1].span.end;
+                    let cmp_result =
+                        self.push_store(Sk::BinOp(BinOp::Cmp(op.kind), lhs, rhs), span);
+                    let current_id = self.current_block_id;
+                    phi_map.insert(current_id, cmp_result);
+                    if i + 2 == ast_operands.len() {
+                        // tail comparison
+                        self.switch_to_new_block(Exit::Jump(end_id), end_id);
+                    } else {
+                        let continue_id = self.reserve_block_id();
+                        self.switch_to_new_block(
+                            Exit::CondJump(cmp_result, continue_id, end_id),
+                            continue_id,
+                        );
+                        lhs = rhs;
+                    }
+                }
+                self.push_store(StoreKind::Phi(phi_map), span).some()
             }
             E::As(value, ty) => {
                 let value_reg = self.build_expr_unvoid(value, span.clone())?;
@@ -720,11 +770,11 @@ impl<'a> IrBuilder<'a> {
         let dummy_ty = self.dummy_ty;
         let t = |r| *self.tys.get(r).unwrap();
         match sk {
-            Sk::Bool(_) => self.program_tys.insert(TyKind::Bool),
+            Sk::Bool(_) | Sk::BinOp(BinOp::Cmp(_), ..) => self.program_tys.insert(TyKind::Bool),
             &Sk::Int(_, kind) | &Sk::IntCast(_, kind) => self.program_tys.insert(TyKind::Int(kind)),
             &Sk::PtrCast(_, kind) => self.program_tys.insert(TyKind::Pointer(kind)),
             Sk::Phi(regs) => t(regs.first_key_value().expect("empty phi").1),
-            Sk::BinOp(_, lhs, _rhs) => t(lhs),
+            Sk::BinOp(BinOp::Add | BinOp::Sub | BinOp::Mul, lhs, _rhs) => t(lhs),
             Sk::PtrOffset(ptr, accesses) => {
                 assert_eq!(accesses.len(), 1);
                 let access = &accesses[0];

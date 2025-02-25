@@ -1,5 +1,6 @@
 // This code is bad!
 
+use crate::compiler_prelude::*;
 use crate::ir::*;
 use std::fmt::{Display, Formatter, Result};
 
@@ -150,6 +151,12 @@ impl DisplayWithName for Function {
                                 BinOp::Add => "+",
                                 BinOp::Sub => "-",
                                 BinOp::Mul => "*",
+                                BinOp::Cmp(Cmp::Lt) => "<",
+                                BinOp::Cmp(Cmp::Le) => "<=",
+                                BinOp::Cmp(Cmp::Eq) => "==",
+                                BinOp::Cmp(Cmp::Ne) => "!=",
+                                BinOp::Cmp(Cmp::Gt) => ">",
+                                BinOp::Cmp(Cmp::Ge) => ">=",
                             }),
                             Sk::IntCast(inner, ty) => write!(f, "{inner} as {ty}"),
                             Sk::PtrCast(pointer, ty) => write!(f, "{pointer} as {ty}^"),
@@ -163,10 +170,7 @@ impl DisplayWithName for Function {
                             Sk::Phi(regs) => write!(
                                 f,
                                 "Phi({})",
-                                Commas(
-                                    regs.iter()
-                                        .map(|(id, r)| format!("{}: {r}", id.with_name(name)))
-                                )
+                                Commas(regs.iter().map(|(id, r)| format!("{}: {r}", id.0)))
                             ),
 
                             Sk::Function(name) => write!(f, "{name}"),

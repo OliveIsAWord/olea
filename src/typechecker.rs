@@ -90,14 +90,18 @@ impl<'a> TypeChecker<'a> {
             Sk::Copy(r) => self.t(r).clone(),
             Sk::BinOp(op, lhs, rhs) => {
                 match op {
-                    BinOp::Add | BinOp::Sub | BinOp::Mul => (),
+                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Cmp(_) => (),
                 }
                 let lhs_int = self.int(lhs)?;
                 let rhs_int = self.int(rhs)?;
                 if lhs_int != rhs_int {
                     self.err(rhs, &TyKind::Int(lhs_int))?;
                 }
-                TyKind::Int(lhs_int)
+                if matches!(op, BinOp::Cmp(_)) {
+                    TyKind::Bool
+                } else {
+                    TyKind::Int(lhs_int)
+                }
             }
             Sk::PtrOffset(pointer, ref accesses) => {
                 let &TyKind::Pointer(mut pointee) = self.t(pointer) else {

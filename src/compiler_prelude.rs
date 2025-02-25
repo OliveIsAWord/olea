@@ -45,7 +45,7 @@ where
 }
 
 /// The kinds of comparison.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Cmp {
     Lt,
     Le,

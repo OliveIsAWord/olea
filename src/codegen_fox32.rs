@@ -1,4 +1,4 @@
-use crate::compiler_prelude::{Map, Set, Str};
+use crate::compiler_prelude::*;
 use crate::ir::*;
 use crate::ir_liveness::{self, FunctionLiveness};
 
@@ -365,6 +365,7 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                             write_inst!(code, "{}{size} {}", op_mnemonic, reg.foo());
                         }
                         Sk::BinOp(op, lhs, rhs) => {
+                            let size = get_size.of_ty(f.tys[lhs]);
                             let lhs_reg = regs.get(lhs).unwrap();
                             let rhs_reg = regs.get(rhs).unwrap();
                             let arithmetic = |mnemonic| {
@@ -380,7 +381,6 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                                     );
                                 }) as Box<dyn Fn(&mut String)>
                             };
-                            /*
                             let comparison = |condition| {
                                 Box::new(move |code: &mut String| {
                                     write_inst!(
@@ -394,11 +394,21 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                                     write_inst!(*code, "{condition} mov {}, 1", reg.foo());
                                 })
                             };
-                            */
                             let compile = match op {
                                 BinOp::Add => arithmetic("add"),
                                 BinOp::Sub => arithmetic("sub"),
                                 BinOp::Mul => arithmetic("mul"),
+                                BinOp::Cmp(cmp) => {
+                                    let prefix = match cmp {
+                                        Cmp::Lt => "iflt",
+                                        Cmp::Le => "iflteq",
+                                        Cmp::Eq => "ifeq",
+                                        Cmp::Ne => "ifne",
+                                        Cmp::Gt => "ifgt",
+                                        Cmp::Ge => "ifgteq",
+                                    };
+                                    comparison(prefix)
+                                }
                             };
                             compile(&mut code);
                         }
