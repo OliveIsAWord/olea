@@ -66,6 +66,7 @@ struct IrBuilder<'a> {
     spans: Map<Register, Span>,
     scopes: Vec<Map<Str, Register>>,
     next_reg_id: u128,
+    static_values: &'a mut Map<Str, Value>,
     program_tys: &'a mut TyMap,
     function_tys: &'a Map<Str, Ty>,
     constants: &'a Map<Str, StoreKind>,
@@ -174,6 +175,7 @@ impl<'a> IrBuilder<'a> {
         function_tys: &'a Map<Str, Ty>,
         constants: &'a Map<Str, StoreKind>,
         defined_tys: &'a DefinedTys,
+        static_values: &'a mut Map<Str, Value>,
         program_tys: &'a mut TyMap,
     ) -> Self {
         Self {
@@ -190,6 +192,7 @@ impl<'a> IrBuilder<'a> {
             function_tys,
             constants,
             defined_tys,
+            static_values,
             program_tys,
         }
     }
@@ -357,8 +360,20 @@ impl<'a> IrBuilder<'a> {
                 self.push_store(Sk::Int((*int).into(), int_ty), span).some()
             }
             E::String(string) => {
-                dbg!(string);
-                return Err(todo("string literals", span));
+                let bytes: Vec<_> = string.bytes().chain(Some(0)).map(ValueKind::U8).collect();
+                let u8_ty = self.program_tys.insert(TyKind::Int(IntKind::U8));
+                let array_ty = self
+                    .program_tys
+                    .insert(TyKind::Array(u8_ty, bytes.len().try_into().unwrap()));
+                let value = Value {
+                    kind: ValueKind::Array(bytes),
+                    ty: array_ty,
+                };
+                let static_name = Str::from(format!("__olea_string_{}", self.static_values.len()));
+                self.static_values.insert(static_name.clone(), value);
+                let pointer_to_byte_array = self.push_store(Sk::Static(static_name), span.clone());
+                self.push_store(Sk::PtrCast(pointer_to_byte_array, u8_ty), span)
+                    .some()
             }
             E::Tuple(items) => {
                 let _regs = items
@@ -398,10 +413,11 @@ impl<'a> IrBuilder<'a> {
                 use BinOp as B;
                 use ast::BinOpKind as A;
                 let mut arithmetic = |op_kind| {
-                let lhs_reg = self.build_expr_unvoid(lhs, span.clone())?;
-                let rhs_reg = self.build_expr_unvoid(rhs, span.clone())?;
-                let result = self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg), span.clone());
-                Ok(result)
+                    let lhs_reg = self.build_expr_unvoid(lhs, span.clone())?;
+                    let rhs_reg = self.build_expr_unvoid(rhs, span.clone())?;
+                    let result =
+                        self.push_store(Sk::BinOp(op_kind, lhs_reg, rhs_reg), span.clone());
+                    Ok(result)
                 };
                 let result = match op.kind {
                     A::Add => arithmetic(B::Add)?,
@@ -412,7 +428,10 @@ impl<'a> IrBuilder<'a> {
                         let lhs_id = self.current_block_id;
                         let end_id = self.reserve_block_id();
                         let continue_id = self.reserve_block_id();
-                        self.switch_to_new_block(Exit::CondJump(lhs_reg, continue_id, end_id), continue_id);
+                        self.switch_to_new_block(
+                            Exit::CondJump(lhs_reg, continue_id, end_id),
+                            continue_id,
+                        );
                         let rhs_reg = self.build_expr_unvoid(rhs, span.clone())?;
                         let rhs_id = self.current_block_id;
                         self.switch_to_new_block(Exit::Jump(end_id), end_id);
@@ -424,7 +443,10 @@ impl<'a> IrBuilder<'a> {
                         let lhs_id = self.current_block_id;
                         let end_id = self.reserve_block_id();
                         let continue_id = self.reserve_block_id();
-                        self.switch_to_new_block(Exit::CondJump(lhs_reg, end_id, continue_id), continue_id);
+                        self.switch_to_new_block(
+                            Exit::CondJump(lhs_reg, end_id, continue_id),
+                            continue_id,
+                        );
                         let rhs_reg = self.build_expr_unvoid(rhs, span.clone())?;
                         let rhs_id = self.current_block_id;
                         self.switch_to_new_block(Exit::Jump(end_id), end_id);
@@ -840,6 +862,10 @@ impl<'a> IrBuilder<'a> {
                 _ => dummy_ty,
             },
             Sk::Function(name) => self.function_tys[name],
+            Sk::Static(name) => {
+                let inner = self.static_values[name].ty;
+                self.program_tys.insert(TyKind::Pointer(inner))
+            }
             &Sk::Struct { ty, .. } => ty,
         }
     }
@@ -1068,17 +1094,28 @@ pub fn build(program: &ast::Program) -> Result<Program> {
     }
     let function_tys = function_tys;
     let mut functions = Map::new();
+    let mut static_values = Map::new();
     for decl in &program.decls {
         match &decl.kind {
             D::Function(fn_decl) => {
-                let builder =
-                    IrBuilder::new(&function_tys, &constants, &defined_tys, &mut program_tys);
+                let builder = IrBuilder::new(
+                    &function_tys,
+                    &constants,
+                    &defined_tys,
+                    &mut static_values,
+                    &mut program_tys,
+                );
                 let function = builder.build_function(fn_decl)?;
                 functions.insert(fn_decl.signature.name.kind.clone(), function);
             }
             D::Struct(s) => {
-                let builder =
-                    IrBuilder::new(&function_tys, &constants, &defined_tys, &mut program_tys);
+                let builder = IrBuilder::new(
+                    &function_tys,
+                    &constants,
+                    &defined_tys,
+                    &mut static_values,
+                    &mut program_tys,
+                );
                 let function = builder.build_struct_constructor(s);
                 functions.insert(s.name.kind.clone(), function);
             }
@@ -1088,6 +1125,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
     Ok(Program {
         functions,
         function_tys,
+        static_values,
         tys: program_tys,
     })
 }

@@ -603,7 +603,7 @@ impl<'src> Parser<'src> {
             Ok(StmtKind::Continue)
         } else if self.just(P::Defer).is_some() {
             self.stmt().map(|s| StmtKind::Defer(Box::new(s)))
-        }  else {
+        } else {
             let e = self.expr()?;
             // assignment
             if self.just(P::Equal).is_some() {

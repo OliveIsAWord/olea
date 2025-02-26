@@ -10,6 +10,8 @@ pub struct Program {
     pub functions: Map<Str, Function>,
     /// The type of every function including extern functions.
     pub function_tys: Map<Str, Ty>,
+    /// The globally accessible values of static lifetime.
+    pub static_values: Map<Str, Value>,
     /// All the types used in this program, indexed by `Ty`s.
     pub tys: TyMap,
 }
@@ -52,6 +54,18 @@ pub enum IntKind {
     U16,
     /// 32 bits.
     U32,
+}
+
+#[derive(Clone, Debug)]
+pub struct Value {
+    pub kind: ValueKind,
+    pub ty: Ty,
+}
+
+#[derive(Clone, Debug)]
+pub enum ValueKind {
+    U8(u8),
+    Array(Vec<Self>),
 }
 
 /// The storage for all the types used in a program.
@@ -610,7 +624,11 @@ impl Inst {
                         f(r2, false);
                     }
                     Sk::Phi(_) => (), // Don't visit phi node arguments because they conceptually live in the predecessor block.
-                    Sk::Bool(_) | Sk::Int(..) | Sk::StackAlloc(_) | Sk::Function(_) => {}
+                    Sk::Bool(_)
+                    | Sk::Int(..)
+                    | Sk::StackAlloc(_)
+                    | Sk::Function(_)
+                    | Sk::Static(_) => {}
                     Sk::Struct { ty: _, ref fields } => {
                         for &value in fields {
                             f(value, false);
@@ -712,6 +730,8 @@ pub enum StoreKind {
     Read(Register),
     /// The pointer to a function.
     Function(Str),
+    /// The pointer to a static value.
+    Static(Str),
 }
 
 /// A transformation from a pointer to an aggregate object into a pointer to one of its elements.

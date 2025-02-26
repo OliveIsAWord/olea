@@ -173,7 +173,7 @@ impl DisplayWithName for Function {
                                 Commas(regs.iter().map(|(id, r)| format!("{}: {r}", id.0)))
                             ),
 
-                            Sk::Function(name) => write!(f, "{name}"),
+                            Sk::Function(name) | Sk::Static(name) => write!(f, "{name}"),
                             Sk::Struct { ty, fields } => {
                                 write!(f, "struct {ty}(")?;
                                 for (i, val) in fields.iter().enumerate() {

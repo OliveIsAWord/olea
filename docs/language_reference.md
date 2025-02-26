@@ -50,9 +50,9 @@ item 1: sub item 1
 item 2: sub item 2
 ```
 
-### Parentheses and Square Brackets
+### Brackets
 
-Items in parentheses or square brackets are separated by commas or line breaks.
+Brackets in Olea are a matching pair of parentheses or square brackets, containing a list of items. These items are separated by commas or line breaks.
 
 ```
 foo(a, b, c)
@@ -69,13 +69,13 @@ bar[
 ]
 ```
 
-Commas can terminate a block.
+Commas can terminate a block within brackets.
 
 ```
 (item 1: sub item 1, item 2: sub item 2)
 ```
 
-In some cases, the grammar distinguishes between a "single" item within parentheses/square brackets, which has one item and no trailing comma, and a "list" of items within parentheses/square brackets, which has zero or multiple items or is a single item with a trailing comma.  (For example, a parenthesized expression vs. a tuple of one element)
+In some cases, the grammar distinguishes between a "single" item in brackets, which has one item and no trailing comma, and a "list" of items in brackets, which has zero or multiple items or is a single item with a trailing comma.  (For example, a parenthesized expression vs. a tuple of one element)
 
 ```
 (a) # this item
@@ -286,13 +286,11 @@ A decimal integer value. The suffix must be the name of an integer type, which d
 
 ### Strings
 
-TODO: Not yet implemented.
-
 ```rs
 "<character>..."
 ```
 
-A pointer to static memory containing the character data of the string. Supports certain escape characters. A string can only span one line. only span one line.
+A `u8` pointer to static memory containing the null-terminated, UTF-8 encoded character data of the string. Supports certain escape characters. A string can only span one line.
 
 ### Variables
 

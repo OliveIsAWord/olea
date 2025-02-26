@@ -8,6 +8,7 @@ pub fn destructure_program(program: &mut Program) {
     let Program {
         functions,
         function_tys: _,
+        static_values: _,
         tys,
     } = program;
 
@@ -226,6 +227,7 @@ fn visit_block(
                     | Sk::PtrOffset(..)
                     | Sk::StackAlloc(_)
                     | Sk::Function(_)
+                    | Sk::Static(_)
                     | Sk::UnaryOp(UnaryOp::Neg, _)
                     | Sk::BinOp(BinOp::Add | BinOp::Mul | BinOp::Sub | BinOp::Cmp(_), _, _) => {
                         unreachable!("illegal op on struct during destructuring: {inst:?}")

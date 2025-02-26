@@ -294,7 +294,7 @@ fn main() -> ExitCode {
         */
 
         let asm = codegen_fox32::gen_program(&ir);
-        // eprintln!("#Codegen");
+        eprintln!("#Codegen");
         print!("{asm}");
     }
     ExitCode::SUCCESS

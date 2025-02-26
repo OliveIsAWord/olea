@@ -26,6 +26,7 @@ type Tys = Map<Register, Ty>;
 struct TypeChecker<'a> {
     ty_map: &'a TyMap,
     function_tys: &'a Map<Str, Ty>,
+    static_values: &'a Map<Str, Value>,
     return_tys: &'a [Ty],
     tys: &'a Tys,
     name: &'a str,
@@ -154,6 +155,10 @@ impl<'a> TypeChecker<'a> {
                 ty.clone()
             }
             Sk::Function(ref name) => self.ty_map[self.function_tys[name.as_ref()]].clone(),
+            Sk::Static(ref name) => {
+                let inner = self.static_values[name.as_ref()].ty;
+                TyKind::Pointer(inner)
+            }
         };
         Ok(ty)
     }
@@ -212,6 +217,7 @@ impl<'a> TypeChecker<'a> {
         f: &'a Function,
         name: &'a str,
         function_tys: &'a Map<Str, Ty>,
+        static_values: &'a Map<Str, Value>,
         ty_map: &'a TyMap,
     ) -> Result {
         let TyKind::Function(param_tys, return_tys) = &ty_map[function_tys[name]] else {
@@ -220,6 +226,7 @@ impl<'a> TypeChecker<'a> {
         let this = Self {
             ty_map,
             function_tys,
+            static_values,
             return_tys,
             tys: &f.tys,
             name,
@@ -243,7 +250,13 @@ pub fn typecheck(program: &Program) -> Result {
             eprintln!("  {r} {ty}");
         }
         */
-        TypeChecker::visit_function(f, fn_name, &program.function_tys, &program.tys)?;
+        TypeChecker::visit_function(
+            f,
+            fn_name,
+            &program.function_tys,
+            &program.static_values,
+            &program.tys,
+        )?;
     }
     Ok(())
 }

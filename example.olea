@@ -1,2 +1,3 @@
-fn meow(a: usize) bool:
-    false and a == 0 or true
+fn meow() u8^:
+    "aawagga"
+    ""

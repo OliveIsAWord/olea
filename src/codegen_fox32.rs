@@ -195,7 +195,7 @@ fn reg_alloc(f: &Function, get_size: SizeFinder) -> RegAllocInfo {
                     IntKind::U8 => (i as u8).to_string().into(),
                     IntKind::U16 => (i as u16).to_string().into(),
                 },
-                StoreKind::Function(name) => name.clone(),
+                StoreKind::Function(name) | StoreKind::Static(name) => name.clone(),
                 _ => continue,
             };
             open.remove(r);
@@ -268,9 +268,22 @@ macro_rules! write_comment {
 }
 
 pub fn gen_program(ir: &Program) -> String {
-    let get_size = SizeFinder(&ir.tys);
+    let Program {
+        functions,
+        function_tys: _,
+        static_values,
+        tys,
+    } = ir;
     let mut code = String::new();
-    for (i, (name, f)) in ir.functions.iter().enumerate() {
+    for (i, (name, value)) in static_values.iter().enumerate() {
+        if i != 0 {
+            code.push('\n');
+        }
+        write_label!(code, "{name}");
+        gen_static(&value.kind, &mut code);
+    }
+    let get_size = SizeFinder(tys);
+    for (i, (name, f)) in functions.iter().enumerate() {
         if i != 0 {
             code.push('\n');
         }
@@ -278,6 +291,17 @@ pub fn gen_program(ir: &Program) -> String {
         code.push_str(&fn_output);
     }
     code
+}
+
+fn gen_static(value: &ValueKind, code: &mut String) {
+    match value {
+        ValueKind::U8(byte) => write_inst!(*code, "data.8 {byte}"),
+        ValueKind::Array(items) => {
+            for item in items {
+                gen_static(item, code);
+            }
+        }
+    }
 }
 
 fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> String {
@@ -471,9 +495,11 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                                 }
                             }
                         }
-                        Sk::Bool(_) | Sk::Int(..) | Sk::Function(_) => unreachable!(
-                            "register store should have been optimized as a constant literal"
-                        ),
+                        Sk::Bool(_) | Sk::Int(..) | Sk::Function(_) | Sk::Static(_) => {
+                            unreachable!(
+                                "register store should have been optimized as a constant literal"
+                            )
+                        }
                         Sk::Struct { .. } => unreachable!("struct literal"),
                         Sk::Phi(_) => (),
                         // _ => write_comment!(code, "TODO: {inst:?}"),
