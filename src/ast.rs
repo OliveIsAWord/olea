@@ -26,6 +26,8 @@ pub enum DeclKind {
     ExternFunction(FunctionSignature),
     /// See [`Struct`].
     Struct(Struct),
+    /// A constant declaration.
+    Const(Name, Option<Ty>, Expr),
 }
 
 /// A named body of code that can be entered during execution.

@@ -720,6 +720,17 @@ impl<'src> Parser<'src> {
                 };
                 DeclKind::Struct(Struct { name, fields })
             }
+            Tt::Plain(P::Const) => {
+                let name = self
+                    .name()
+                    .ok_or_else(|| self.err("expected name for const declaration"))?;
+                let ty = self.ty()?;
+                if self.just(P::Equal).is_none() {
+                    return Err(self.err("expected `=` for const declaration"));
+                }
+                let body = self.expr()?;
+                DeclKind::Const(name, ty, body)
+            }
             _ => {
                 self.i -= 1; // Hacky, I know.
                 return Ok(None);

@@ -64,7 +64,11 @@ pub struct Value {
 
 #[derive(Clone, Debug)]
 pub enum ValueKind {
+    Bool(bool),
     U8(u8),
+    U16(u16),
+    U32(u32),
+    Usize(u64),
     Array(Vec<Self>),
 }
 

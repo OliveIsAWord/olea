@@ -1,3 +1,4 @@
-fn meow() u8^:
-    "aawagga"
-    ""
+fn meower() usize:
+    MEOW + 1
+
+const MEOW = 42

@@ -294,9 +294,13 @@ pub fn gen_program(ir: &Program) -> String {
 }
 
 fn gen_static(value: &ValueKind, code: &mut String) {
-    match value {
-        ValueKind::U8(byte) => write_inst!(*code, "data.8 {byte}"),
-        ValueKind::Array(items) => {
+    match *value {
+        ValueKind::Bool(b) => write_inst!(*code, "data.8 {}", u8::from(b)),
+        ValueKind::U8(v) => write_inst!(*code, "data.8 {v}"),
+        ValueKind::U16(v) => write_inst!(*code, "data.16 {v}"),
+        ValueKind::U32(v) => write_inst!(*code, "data.32 {v}"),
+        ValueKind::Usize(v) => write_inst!(*code, "data.32 {v}"),
+        ValueKind::Array(ref items) => {
             for item in items {
                 gen_static(item, code);
             }

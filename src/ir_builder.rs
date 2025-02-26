@@ -69,7 +69,7 @@ struct IrBuilder<'a> {
     static_values: &'a mut Map<Str, Value>,
     program_tys: &'a mut TyMap,
     function_tys: &'a Map<Str, Ty>,
-    constants: &'a Map<Str, StoreKind>,
+    constants: &'a Map<Str, Value>,
     defined_tys: &'a DefinedTys,
     dummy_ty: Ty,
 }
@@ -104,8 +104,10 @@ impl DefinedTys {
             }
             T::Array(inner, count) => {
                 let inner_kind = self.build_ty(inner, program_tys)?;
-                let count = self.eval_const(count)?;
-                Ok(program_tys.insert(TyKind::Array(inner_kind, count)))
+                let ValueKind::Usize(count) = eval_const(count)? else {
+                    return Err(todo("const eval type error", count.span.clone()));
+                };
+                Ok(program_tys.insert(TyKind::Array(inner_kind, count.into())))
             }
             T::Function(params, returns) => {
                 self.build_function_ty(params, returns.as_ref().map(|v| &**v), program_tys)
@@ -152,28 +154,36 @@ impl DefinedTys {
             .collect::<Result<_>>()?;
         Ok(program_tys.insert(TyKind::Function(ir_params, returns)))
     }
-    fn eval_const(&self, expr: &ast::Expr) -> Result<u128> {
-        use ast::ExprKind as E;
-        _ = self;
-        match &expr.kind {
-            E::Int(i, suffix) => {
-                if let Some(suffix) = suffix {
-                    get_int_kind_from_suffix(suffix)?;
-                };
-                Ok(u128::from(*i))
-            }
-            _ => Err(todo(
-                "const evaluation. Try using a plain integer literal instead!",
-                expr.span.clone(),
-            )),
+}
+
+fn eval_const(expr: &ast::Expr) -> Result<ValueKind> {
+    use ast::ExprKind as E;
+    match &expr.kind {
+        E::Int(i, suffix) => {
+            let n = u128::from(*i);
+            let kind = match suffix {
+                Some(suffix) => get_int_kind_from_suffix(suffix)?,
+                None => IntKind::Usize,
+            };
+            let value = match kind {
+                IntKind::U8 => ValueKind::U8(n as _),
+                IntKind::U16 => ValueKind::U16(n as _),
+                IntKind::U32 => ValueKind::U32(n as _),
+                IntKind::Usize => ValueKind::Usize(n as _),
+            };
+            Ok(value)
         }
+        _ => Err(todo(
+            "const evaluation. Try using a plain integer literal instead!",
+            expr.span.clone(),
+        )),
     }
 }
 
 impl<'a> IrBuilder<'a> {
     fn new(
         function_tys: &'a Map<Str, Ty>,
-        constants: &'a Map<Str, StoreKind>,
+        constants: &'a Map<Str, Value>,
         defined_tys: &'a DefinedTys,
         static_values: &'a mut Map<Str, Value>,
         program_tys: &'a mut TyMap,
@@ -698,7 +708,7 @@ impl<'a> IrBuilder<'a> {
                 })
                 .or_else(|| {
                     self.constants.get(&name.kind).map(|value| {
-                        let r = self.push_store(value.clone(), name.span.clone());
+                        let r = self.build_constant(value, name.span.clone());
                         MaybeVar::Constant(r)
                     })
                 })
@@ -731,6 +741,19 @@ impl<'a> IrBuilder<'a> {
                 let field_ptr_reg = self.push_store(StoreKind::PtrOffset(struct_reg, access), span);
                 Ok(MaybeVar::Variable(field_ptr_reg))
             }
+        }
+    }
+
+    fn build_constant(&mut self, value: &Value, span: Span) -> Register {
+        let mut int =
+            |v: i128, int_kind: IntKind| self.push_store(StoreKind::Int(v, int_kind), span.clone());
+        match value.kind {
+            ValueKind::Bool(b) => self.push_store(StoreKind::Bool(b), span),
+            ValueKind::U8(v) => int(v.into(), IntKind::U8),
+            ValueKind::U16(v) => int(v.into(), IntKind::U16),
+            ValueKind::U32(v) => int(v.into(), IntKind::U32),
+            ValueKind::Usize(v) => int(v.into(), IntKind::Usize),
+            ValueKind::Array(_) => todo!("array const eval"),
         }
     }
 
@@ -929,16 +952,23 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 .collect()
         },
     };
-    let constants: Map<Str, StoreKind> = [
-        ("true", StoreKind::Bool(true)),
-        ("false", StoreKind::Bool(false)),
+    let bool_ty = program_tys.insert(TyKind::Bool);
+    let mut constants: Map<Str, Value> = [
+        ("true", Value {
+            kind: ValueKind::Bool(true),
+            ty: bool_ty,
+        }),
+        ("false", Value {
+            kind: ValueKind::Bool(true),
+            ty: bool_ty,
+        }),
     ]
     .into_iter()
     .map(|(name, value)| (name.into(), value))
     .collect();
     for ast::Decl { kind, span: _ } in &program.decls {
         match kind {
-            D::Function(_) | D::ExternFunction(_) => {}
+            D::Function(_) | D::ExternFunction(_) | D::Const(..) => {}
             D::Struct(ast::Struct { name, fields: _ }) => {
                 let maybe_clash = defined_tys.tys.insert(
                     name.kind.clone(),
@@ -1001,6 +1031,29 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                     (name.span.clone(), fields_stored_by_value),
                 );
             }
+            D::Const(name, ty_annotation, body) => {
+                let value_kind = eval_const(body)?;
+                let ty_kind = match value_kind {
+                    ValueKind::Bool(_) => TyKind::Bool,
+                    ValueKind::U8(_) => TyKind::Int(IntKind::U8),
+                    ValueKind::U16(_) => TyKind::Int(IntKind::U16),
+                    ValueKind::U32(_) => TyKind::Int(IntKind::U32),
+                    ValueKind::Usize(_) => TyKind::Int(IntKind::Usize),
+                    ValueKind::Array(_) => todo!("array const eval"),
+                };
+                let ty = program_tys.insert(ty_kind);
+                let value = Value {
+                    kind: value_kind,
+                    ty,
+                };
+                if let Some(ty_annotation) = ty_annotation {
+                    let declared_ty = defined_tys.build_ty(ty_annotation, &mut program_tys)?;
+                    if !program_tys.equals(ty, declared_ty) {
+                        return Err(todo("const eval type error", ty_annotation.span.clone()));
+                    }
+                }
+                constants.insert(name.kind.clone(), value);
+            }
         }
     }
     // detect infinite size types
@@ -1040,6 +1093,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
     let mut function_tys: Map<Str, Ty> = Map::new();
     for ast::Decl { kind, .. } in &program.decls {
         let (name, ty) = match kind {
+            D::Const(..) => continue,
             D::Function(ast::Function { signature, .. }) | D::ExternFunction(signature) => {
                 let ast::FunctionSignature {
                     name,
@@ -1078,6 +1132,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 .iter()
                 .find_map(|ast::Decl { kind, .. }| {
                     let prev_name = match kind {
+                        D::Const(..) => return None,
                         D::Function(ast::Function { signature, .. })
                         | D::ExternFunction(signature) => &signature.name,
                         D::Struct(ast::Struct { name, .. }) => name,
@@ -1097,6 +1152,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
     let mut static_values = Map::new();
     for decl in &program.decls {
         match &decl.kind {
+            D::ExternFunction(_) | D::Const(..) => {}
             D::Function(fn_decl) => {
                 let builder = IrBuilder::new(
                     &function_tys,
@@ -1119,7 +1175,6 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 let function = builder.build_struct_constructor(s);
                 functions.insert(s.name.kind.clone(), function);
             }
-            D::ExternFunction(_) => {}
         }
     }
     Ok(Program {
