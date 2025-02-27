@@ -73,8 +73,8 @@ pub enum TyKind {
     Pointer(Box<Ty>),
     /// A contiguous collection of elements of a known length.
     Array(Box<Ty>, Box<Expr>),
-    /// A function accepting and returning values of given types.
-    Function(Vec<(IsAnon, Name, Ty)>, Option<Box<Ty>>),
+    /// A function accepting and returning values of given types. The `Option<Span>` is the leading underscore.
+    Function(Option<Span>, Vec<(IsAnon, Name, Ty)>, Option<Box<Ty>>),
 }
 
 /// See [`StmtKind`].

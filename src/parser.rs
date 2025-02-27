@@ -265,9 +265,8 @@ impl<'src> Parser<'src> {
     fn ty(&mut self) -> Parsed<Ty> {
         let mut ty = if let Some(fn_span) = self.just(P::Fn) {
             let (underscore_self, params, returns) = self.function_parameters()?;
-            _ = underscore_self; // TODO
             Ty {
-                kind: TyKind::Function(params, returns.map(Box::new)),
+                kind: TyKind::Function(underscore_self, params, returns.map(Box::new)),
                 span: fn_span.start..self.get_previous_span().end,
             }
         } else if let Some(name) = self.name() {

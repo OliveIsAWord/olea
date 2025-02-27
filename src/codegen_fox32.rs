@@ -47,7 +47,7 @@ impl SizeFinder<'_> {
             TyKind::Int(IntKind::U16) => Ok(Size::Short),
             TyKind::Int(IntKind::U32 | IntKind::Usize)
             | TyKind::Pointer(_)
-            | TyKind::Function(..) => Ok(Size::Word),
+            | TyKind::Function { .. } => Ok(Size::Word),
             TyKind::Struct { fields, .. } => {
                 Err(fields.iter().map(|(_, ty)| self.of_in_bytes(*ty)).sum())
             }

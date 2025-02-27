@@ -31,7 +31,14 @@ pub enum TyKind {
     /// A pointer into memory storing a value of a given type.
     Pointer(Ty),
     /// A function pointer accepting and returning some values.
-    Function(IndexMap<Str, (IsAnon, Ty)>, Vec<Ty>),
+    Function {
+        /// Can this function be called with method call notation?
+        has_self: bool,
+        /// The parameters of this function.
+        params: IndexMap<Str, (IsAnon, Ty)>,
+        /// The return types of this function.
+        returns: Vec<Ty>,
+    },
     /// A named collection of named values.
     Struct {
         /// The name of the struct type.
@@ -137,10 +144,17 @@ impl TyMap {
             TyKind::Bool => "bool".to_owned(),
             TyKind::Int(size) => size.to_string(),
             &TyKind::Pointer(inner) => format!("{}^", self.format(inner)),
-            TyKind::Function(params, returns) => {
+            TyKind::Function {
+                has_self,
+                params,
+                returns,
+            } => {
                 let mut string = "fn(".to_owned();
+                if *has_self {
+                    string.push('_');
+                }
                 for (i, (name, (is_anon, ty))) in params.iter().enumerate() {
-                    if i != 0 {
+                    if i != 0 || *has_self {
                         string.push_str(", ");
                     }
                     if is_anon.into() {
@@ -192,7 +206,7 @@ impl TyMap {
             T::Bool
             | T::Int(_)
             | T::Pointer(_)
-            | T::Function(..)
+            | T::Function { .. }
             | T::Struct { .. }
             | T::Array(..) => {}
         }
@@ -200,8 +214,22 @@ impl TyMap {
             (T::Bool, T::Bool) => true,
             (T::Int(a), T::Int(b)) => a == b,
             (&T::Pointer(a), &T::Pointer(b)) => self.equals(a, b),
-            (T::Function(a_params, a_returns), T::Function(b_params, b_returns)) => {
-                if a_params.len() != b_params.len() || a_returns.len() != b_returns.len() {
+            (
+                T::Function {
+                    has_self: a_self,
+                    params: a_params,
+                    returns: a_returns,
+                },
+                T::Function {
+                    has_self: b_self,
+                    params: b_params,
+                    returns: b_returns,
+                },
+            ) => {
+                if a_self != b_self
+                    || a_params.len() != b_params.len()
+                    || a_returns.len() != b_returns.len()
+                {
                     return false;
                 }
                 for ((a_name, (a_is_anon, a_ty)), (b_name, (b_is_anon, b_ty))) in

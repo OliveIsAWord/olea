@@ -113,13 +113,17 @@ impl DefinedTys {
                 };
                 Ok(program_tys.insert(TyKind::Array(inner_kind, count.into())))
             }
-            T::Function(params, returns) => {
-                self.build_function_ty(params, returns.as_ref().map(|v| &**v), program_tys)
-            }
+            T::Function(underscore_self, params, returns) => self.build_function_ty(
+                underscore_self.is_none(),
+                params,
+                returns.as_ref().map(|v| &**v),
+                program_tys,
+            ),
         }
     }
     fn build_function_ty(
         &self,
+        has_self: bool,
         params: &[(IsAnon, Name, ast::Ty)],
         returns: Option<&ast::Ty>,
         program_tys: &mut TyMap,
@@ -156,7 +160,11 @@ impl DefinedTys {
             .iter()
             .map(|t| self.build_ty(t, program_tys))
             .collect::<Result<_>>()?;
-        Ok(program_tys.insert(TyKind::Function(ir_params, returns)))
+        Ok(program_tys.insert(TyKind::Function {
+            has_self,
+            params: ir_params,
+            returns,
+        }))
     }
 }
 
@@ -224,8 +232,9 @@ impl<'a> IrBuilder<'a> {
             returns,
         } = signature;
         self.underscore_self = underscore_self.clone();
-        let TyKind::Function(ir_params, _) =
-            self.program_tys[self.function_tys[&name.kind]].clone()
+        let TyKind::Function {
+            params: ir_params, ..
+        } = self.program_tys[self.function_tys[&name.kind]].clone()
         else {
             unreachable!();
         };
@@ -604,7 +613,11 @@ impl<'a> IrBuilder<'a> {
             }
             E::Call(callee, args) => {
                 let callee = self.build_expr_unvoid(callee, span.clone())?;
-                let TyKind::Function(params, returns) = self.program_tys[self.tys[&callee]].clone()
+                let TyKind::Function {
+                    params,
+                    returns,
+                    has_self: _,
+                } = self.program_tys[self.tys[&callee]].clone()
                 else {
                     // if we need to do anything important after this big `match`, perhaps we should replace this with a named break
                     // add a dummy instruction to defer the error to typechecking
@@ -1035,7 +1048,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                     fn recursively_stores(field_kind: &ast::TyKind) -> Option<Str> {
                         // does this field store a possibly recursive type by value?
                         match &field_kind {
-                            Tk::Pointer(_) | Tk::Function(_, _) => None,
+                            Tk::Pointer(_) | Tk::Function { .. } => None,
                             Tk::Name(name) => Some(name.kind.clone()),
                             Tk::Array(item_ty, _count) => {
                                 // Open question: Do we consider arrays of length 0? Rust has an open issue for it: https://github.com/rust-lang/rust/issues/11924
@@ -1133,11 +1146,12 @@ pub fn build(program: &ast::Program) -> Result<Program> {
             D::Function(ast::Function { signature, .. }) | D::ExternFunction(signature) => {
                 let ast::FunctionSignature {
                     name,
-                    underscore_self: _, // TODO
+                    underscore_self, // TODO
                     parameters,
                     returns,
                 } = signature;
                 let ty = defined_tys.build_function_ty(
+                    underscore_self.is_none(),
                     parameters,
                     returns.as_ref(),
                     &mut program_tys,
@@ -1155,10 +1169,15 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                         program_tys.format(struct_ty)
                     );
                 };
-                let fields = zip(ast_fields, fields)
+                let params = zip(ast_fields, fields)
                     .map(|(&(is_anon, _, _), (name, &ty))| (name.clone(), (is_anon, ty)))
                     .collect();
-                let constructor_ty = TyKind::Function(fields, vec![struct_ty]);
+                // We arbitrarily decide that constructor functions can be called as methods. This seems fine enough, and is especially nice for wrapper types.
+                let constructor_ty = TyKind::Function {
+                    has_self: true,
+                    params,
+                    returns: vec![struct_ty],
+                };
                 let ty = program_tys.insert(constructor_ty);
                 (name, ty)
             }

@@ -247,10 +247,18 @@ impl Display for TyKind {
             Self::Bool => write!(f, "bool"),
             Self::Int(kind) => write!(f, "{kind}"),
             Self::Pointer(inner) => write!(f, "{inner}^"),
-            Self::Function(params, returns) => {
+            Self::Function {
+                has_self,
+                params,
+                returns,
+            } => {
+                write!(f, "fn(")?;
+                if *has_self {
+                    write!(f, "_, ")?;
+                }
                 write!(
                     f,
-                    "fn({}){}",
+                    "{}){}",
                     Commas(params.iter().map(|(name, (anon, ty))| if anon.into() {
                         format!("anon {name}: {ty}")
                     } else {

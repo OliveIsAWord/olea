@@ -16,7 +16,7 @@ pub fn destructure_program(program: &mut Program) {
         let mut ty_clusters = Map::<Ty, Vec<(PtrOffset, Ty)>>::new();
         for (&ty, kind) in &tys.inner {
             let cluster = match kind {
-                TyKind::Bool | TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function(..) => {
+                TyKind::Bool | TyKind::Int(_) | TyKind::Pointer(_) | TyKind::Function { .. } => {
                     continue;
                 }
                 TyKind::Struct { fields, .. } => fields
@@ -65,7 +65,12 @@ pub fn destructure_program(program: &mut Program) {
     }
 
     for kind in tys.inner.values_mut() {
-        let TyKind::Function(params, returns) = kind else {
+        let TyKind::Function {
+            has_self: _,
+            params,
+            returns,
+        } = kind
+        else {
             continue;
         };
         assert!(returns.len() <= 1, "idempotence hole");

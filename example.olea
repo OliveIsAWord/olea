@@ -1,6 +1,8 @@
-struct Foo:
-    a: u32
-    b: u16
+struct Selfless:
+    f: fn(_, x: u8) u16
 
-fn meower(x: Foo^) u16:
-    self.b
+fn promote(_, x: u8) u16:
+    x as u16
+
+fn main():
+    Selfless(f: promote)

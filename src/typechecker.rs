@@ -183,7 +183,12 @@ impl<'a> TypeChecker<'a> {
                 returns,
             } => {
                 let callee = *callee;
-                let TyKind::Function(fn_params, fn_returns) = self.t(callee) else {
+                let TyKind::Function {
+                    has_self: _,
+                    params: fn_params,
+                    returns: fn_returns,
+                } = self.t(callee)
+                else {
                     return Err((self.name.into(), ErrorKind::NotFunction(callee)));
                 };
                 for (&(_, expected), &r) in zip(fn_params.values(), args) {
@@ -223,7 +228,12 @@ impl<'a> TypeChecker<'a> {
         static_values: &'a Map<Str, Value>,
         ty_map: &'a TyMap,
     ) -> Result {
-        let TyKind::Function(param_tys, return_tys) = &ty_map[function_tys[name]] else {
+        let TyKind::Function {
+            has_self: _,
+            params: param_tys,
+            returns: return_tys,
+        } = &ty_map[function_tys[name]]
+        else {
             unreachable!();
         };
         let this = Self {
