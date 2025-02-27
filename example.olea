@@ -1,4 +1,2 @@
 fn meower() usize:
-    MEOW + 1
-
-const MEOW = 42
+    42 / 3

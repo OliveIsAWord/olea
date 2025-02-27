@@ -219,6 +219,13 @@ fn constant_propagation_impl(f: &mut Function) {
                     BinOp::Add => lhs.wrapping_add(rhs),
                     BinOp::Sub => lhs.wrapping_sub(rhs),
                     BinOp::Mul => lhs.wrapping_mul(rhs),
+                    BinOp::Div => {
+                        if rhs == 0 {
+                            0 // TODO: we should probably properly handle this at some point
+                        } else {
+                            lhs.wrapping_div(rhs)
+                        }
+                    }
                     BinOp::Cmp(cmp) => {
                         let b = match cmp {
                             Cmp::Lt => lhs < rhs,

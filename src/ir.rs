@@ -767,6 +767,8 @@ pub enum BinOp {
     Sub,
     /// Unsigned multiplication.
     Mul,
+    /// Unsigned division.
+    Div,
     /// Unsigned comparison.
     Cmp(Cmp),
 }

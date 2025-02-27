@@ -385,6 +385,7 @@ impl<'src> Parser<'src> {
             (P::Plus, Level::Add, Unchained(BinOpKind::Add)),
             (P::Minus, Level::Add, Unchained(BinOpKind::Sub)),
             (P::Asterisk, Level::Mul, Unchained(BinOpKind::Mul)),
+            (P::ForwardSlash, Level::Mul, Unchained(BinOpKind::Div)),
         ];
         const UNARY_OPS: &[(P, UnaryOpKind)] = &[(P::Minus, UnaryOpKind::Neg)];
         let span_start = self.get_span().start;

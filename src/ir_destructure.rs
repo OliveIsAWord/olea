@@ -229,7 +229,11 @@ fn visit_block(
                     | Sk::Function(_)
                     | Sk::Static(_)
                     | Sk::UnaryOp(UnaryOp::Neg, _)
-                    | Sk::BinOp(BinOp::Add | BinOp::Mul | BinOp::Sub | BinOp::Cmp(_), _, _) => {
+                    | Sk::BinOp(
+                        BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Cmp(_),
+                        _,
+                        _,
+                    ) => {
                         unreachable!("illegal op on struct during destructuring: {inst:?}")
                     }
                     &mut Sk::Copy(copied) => {

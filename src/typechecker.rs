@@ -91,7 +91,7 @@ impl<'a> TypeChecker<'a> {
             Sk::Copy(r) => self.t(r).clone(),
             Sk::BinOp(op, lhs, rhs) => {
                 match op {
-                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Cmp(_) => (),
+                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Cmp(_) => (),
                 }
                 let lhs_int = self.int(lhs)?;
                 let rhs_int = self.int(rhs)?;

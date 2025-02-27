@@ -42,6 +42,7 @@ pub enum PlainToken {
     Plus,
     Minus,
     Asterisk,
+    ForwardSlash,
     EqualEqual,
     NotEqual,
     LessThan,
@@ -115,6 +116,7 @@ const PUNCTUATION: &[(&str, Token)] = &[
     ("+", Pl(P::Plus)),
     ("-", Pl(P::Minus)),
     ("*", Pl(P::Asterisk)),
+    ("/", Pl(P::ForwardSlash)),
     ("^", Pl(P::Hat)),
     ("@", Pl(P::At)),
 ];

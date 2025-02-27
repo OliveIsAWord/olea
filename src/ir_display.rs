@@ -151,6 +151,7 @@ impl DisplayWithName for Function {
                                 BinOp::Add => "+",
                                 BinOp::Sub => "-",
                                 BinOp::Mul => "*",
+                                BinOp::Div => "/",
                                 BinOp::Cmp(Cmp::Lt) => "<",
                                 BinOp::Cmp(Cmp::Le) => "<=",
                                 BinOp::Cmp(Cmp::Eq) => "==",
