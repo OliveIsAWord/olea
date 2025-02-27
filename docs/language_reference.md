@@ -406,8 +406,6 @@ Name punning allows eliding the explicit name of a named argument, if the tail e
 
 ### Method Calls
 
-TODO: Not yet implemented. Also, the semantics described are subject to change.
-
 ```rs
 <expression>.<function name>(<function argument>...)
 ```

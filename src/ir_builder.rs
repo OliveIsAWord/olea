@@ -51,6 +51,7 @@ pub enum ErrorKind {
     BadPun,
     IllFormedComparison,
     NoSelf(Option<Span>),
+    NotMethod,
     Todo(&'static str),
 }
 
@@ -78,6 +79,7 @@ struct IrBuilder<'a> {
     dummy_ty: Ty,
 }
 
+#[must_use]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum MaybeVar {
     /// A register containing the value we're accessing.
@@ -378,12 +380,10 @@ impl<'a> IrBuilder<'a> {
         let span = span.clone();
         // let span2 = span.clone(); // maybe if i write enough of these, Rust 2024 will make it Copy
         let reg = match kind {
-            E::Place(kind) => match self.build_place(kind, span.clone())? {
-                MaybeVar::Variable(place_reg) => {
-                    self.push_store(Sk::Read(place_reg), span).some_if(unvoid)
-                }
-                MaybeVar::Constant(value_reg) => Some(value_reg),
-            },
+            E::Place(kind) => {
+                let maybe_var = self.build_place(kind, span.clone())?;
+                self.maybe_var_to_value(maybe_var, span).some()
+            }
             E::Int(int, suffix) => {
                 let int_ty = suffix
                     .as_ref()
@@ -613,87 +613,21 @@ impl<'a> IrBuilder<'a> {
             }
             E::Call(callee, args) => {
                 let callee = self.build_expr_unvoid(callee, span.clone())?;
-                let TyKind::Function {
-                    params,
-                    returns,
-                    has_self: _,
-                } = self.program_tys[self.tys[&callee]].clone()
-                else {
-                    // if we need to do anything important after this big `match`, perhaps we should replace this with a named break
-                    // add a dummy instruction to defer the error to typechecking
-                    self.push_inst(Inst::Call {
-                        callee,
-                        args: vec![],
-                        returns: vec![],
-                    });
-                    return Ok(Some(callee));
-                };
-                let (mut evaled_args, evaled_anon) =
-                    self.build_function_arguments(args, span.clone())?;
-                let mut evaled_anon = evaled_anon.into_iter();
-                let mut missing_args = vec![];
-                let args = params
-                    .iter()
-                    .map(|(name, (is_anon, _))| {
-                        if let Some((_, r)) = evaled_args.shift_remove(name) {
-                            r
-                        } else {
-                            let is_anon = bool::from(is_anon);
-                            is_anon
-                                .then(|| evaled_anon.next())
-                                .flatten()
-                                .unwrap_or_else(|| {
-                                    let missing = if is_anon {
-                                        format!("anon {name}").into()
-                                    } else {
-                                        name.clone()
-                                    };
-                                    missing_args.push(missing);
-                                    Register(u128::MAX)
-                                })
-                        }
-                    })
-                    .collect();
-                if !missing_args.is_empty() {
-                    return Err(Error {
-                        kind: ErrorKind::MissingArgs(missing_args, None),
-                        span,
-                    });
-                }
-                if !evaled_args.is_empty() {
-                    return Err(Error {
-                        kind: ErrorKind::InvalidArgs(evaled_args.into_keys().collect()),
-                        span,
-                    });
-                }
-                assert!(returns.len() < 2);
-                let return_reg = returns
-                    .first()
-                    .map(|&return_ty| self.new_reg(return_ty, span));
-                self.push_inst(Inst::Call {
-                    callee,
-                    returns: return_reg.into_iter().collect(),
-                    args,
-                });
-                return_reg
+                self.build_function_call(callee, args, None, span)?
             }
             E::MethodCall(receiver, method_name, args, dot_span) => {
-                let (receiver, receiver_span) = if let Some(receiver) = receiver {
-                    let r = self.build_expr_unvoid(receiver, method_name.span.clone())?;
-                    (r, receiver.span.clone())
+                let receiver_span;
+                let receiver = if let Some(receiver) = receiver {
+                    receiver_span = receiver.span.clone();
+                    self.build_expr_unvoid(receiver, method_name.span.clone())?
                 } else {
-                    let r = self.get_self(dot_span.clone())?;
-                    let r = self.push_store(Sk::Read(r), dot_span.clone());
-                    (r, dot_span.clone())
+                    receiver_span = dot_span.clone();
+                    let r = self.get_self(receiver_span.clone())?;
+                    self.push_store(Sk::Read(r), receiver_span.clone())
                 };
-                let (mut evaled_named, evaled_anon) =
-                    self.build_function_arguments(args, span.clone())?;
-                let had_self =
-                    evaled_named.insert("some unique self str".into(), (receiver_span, receiver));
-                assert_eq!(had_self, None);
-                dbg!(evaled_named, evaled_anon);
-                _ = evaled_anon;
-                return Err(todo("method calls", span));
+                let f = self.get_var(&method_name.kind, method_name.span.clone(), "function")?;
+                let f = self.maybe_var_to_value(f, method_name.span.clone());
+                self.build_function_call(f, args, Some((receiver, receiver_span)), span)?
             }
         };
         // eprintln!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");
@@ -703,31 +637,7 @@ impl<'a> IrBuilder<'a> {
     fn build_place(&mut self, kind: &ast::PlaceKind, span: Span) -> Result<MaybeVar> {
         use ast::PlaceKind as Pk;
         match kind {
-            Pk::Var(name) => self
-                .scopes
-                .iter()
-                .rev()
-                .find_map(|scope| scope.get(name.as_ref()).copied())
-                .map(|reg| {
-                    let r = self.push_store(Sk::Copy(reg), span.clone());
-                    MaybeVar::Variable(r)
-                })
-                .or_else(|| {
-                    self.function_tys
-                        .contains_key(name)
-                        .then(|| self.push_store(Sk::Function(name.clone()), span.clone()))
-                        .map(MaybeVar::Constant)
-                })
-                .or_else(|| {
-                    self.constants.get(name).map(|value| {
-                        let r = self.build_constant(value, span.clone());
-                        MaybeVar::Constant(r)
-                    })
-                })
-                .ok_or_else(|| Error {
-                    kind: ErrorKind::NotFound("variable", name.clone()),
-                    span,
-                }),
+            Pk::Var(name) => self.get_var(name, span, "variable"),
             Pk::Self_ => self.get_self(span).map(MaybeVar::Variable),
             Pk::Deref(e, deref_span) => self
                 .build_expr_unvoid(e, deref_span.clone())
@@ -781,6 +691,13 @@ impl<'a> IrBuilder<'a> {
         Ok(r)
     }
 
+    fn maybe_var_to_value(&mut self, maybe_var: MaybeVar, span: Span) -> Register {
+        match maybe_var {
+            MaybeVar::Variable(place_reg) => self.push_store(Sk::Read(place_reg), span),
+            MaybeVar::Constant(value_reg) => value_reg,
+        }
+    }
+
     fn build_constant(&mut self, value: &Value, span: Span) -> Register {
         let mut int =
             |v: i128, int_kind: IntKind| self.push_store(Sk::Int(v, int_kind), span.clone());
@@ -792,6 +709,87 @@ impl<'a> IrBuilder<'a> {
             ValueKind::Usize(v) => int(v.into(), IntKind::Usize),
             ValueKind::Array(_) => todo!("array const eval"),
         }
+    }
+
+    fn build_function_call(
+        &mut self,
+        callee: Register,
+        args: &[ast::FunctionArg],
+        mut receiver: Option<(Register, Span)>,
+        span: Span,
+    ) -> Result<Option<Register>> {
+        let TyKind::Function {
+            params,
+            returns,
+            has_self,
+        } = self.program_tys[self.tys[&callee]].clone()
+        else {
+            // if we need to do anything important after this big `match`, perhaps we should replace this with a named break
+            // add a dummy instruction to defer the error to typechecking
+            self.push_inst(Inst::Call {
+                callee,
+                args: vec![],
+                returns: vec![],
+            });
+            return Ok(Some(callee));
+        };
+        let (mut evaled_args, evaled_anon) = self.build_function_arguments(args, span.clone())?;
+        let mut evaled_anon = evaled_anon.into_iter();
+        if receiver.is_some() && (!has_self || params.is_empty()) {
+            return Err(Error {
+                kind: ErrorKind::NotMethod,
+                span,
+            });
+        }
+        let mut missing_args = vec![];
+        let args = params
+            .iter()
+            .map(|(name, (is_anon, _))| {
+                // if we have a receiver, use it as the first argument
+                if let Some((r, _)) = receiver.take() {
+                    return r;
+                }
+                // if there was an argument with the name of this parameter...
+                if let Some((_, r)) = evaled_args.shift_remove(name) {
+                    return r;
+                }
+                let is_anon = bool::from(is_anon);
+                // if this function has an anon parameter and the caller provided an anon argument...
+                if let Some(Some(r)) = is_anon.then(|| evaled_anon.next()) {
+                    return r;
+                }
+                // otherwise, add this parameter name to the list of missing arguments
+                let missing = if is_anon {
+                    format!("anon {name}").into()
+                } else {
+                    name.clone()
+                };
+                missing_args.push(missing);
+                Register(u128::MAX)
+            })
+            .collect();
+        if !missing_args.is_empty() {
+            return Err(Error {
+                kind: ErrorKind::MissingArgs(missing_args, None),
+                span,
+            });
+        }
+        if !evaled_args.is_empty() {
+            return Err(Error {
+                kind: ErrorKind::InvalidArgs(evaled_args.into_keys().collect()),
+                span,
+            });
+        }
+        assert!(returns.len() < 2);
+        let return_reg = returns
+            .first()
+            .map(|&return_ty| self.new_reg(return_ty, span));
+        self.push_inst(Inst::Call {
+            callee,
+            returns: return_reg.into_iter().collect(),
+            args,
+        });
+        Ok(return_reg)
     }
 
     // use `IndexMap` so that an "invalid args" error is in the same order as the argument list
@@ -879,6 +877,33 @@ impl<'a> IrBuilder<'a> {
         let reg = self.push_store(Sk::StackAlloc(ty), name.span);
         self.scopes.last_mut().unwrap().insert(name.kind, reg);
         reg
+    }
+
+    fn get_var(&mut self, name: &Str, span: Span, kind: &'static str) -> Result<MaybeVar> {
+        self.scopes
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(name.as_ref()).copied())
+            .map(|reg| {
+                let r = self.push_store(Sk::Copy(reg), span.clone());
+                MaybeVar::Variable(r)
+            })
+            .or_else(|| {
+                self.function_tys
+                    .contains_key(name)
+                    .then(|| self.push_store(Sk::Function(name.clone()), span.clone()))
+                    .map(MaybeVar::Constant)
+            })
+            .or_else(|| {
+                self.constants.get(name).map(|value| {
+                    let r = self.build_constant(value, span.clone());
+                    MaybeVar::Constant(r)
+                })
+            })
+            .ok_or_else(|| Error {
+                kind: ErrorKind::NotFound(kind, name.clone()),
+                span,
+            })
     }
 
     fn push_write(&mut self, dst: Register, src: Register) {

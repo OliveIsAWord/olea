@@ -253,6 +253,7 @@ fn main() -> ExitCode {
                     "can't access `self` in this context".to_owned(),
                     span.map(|span| ("use of `self` disabled here".to_owned(), span)),
                 ),
+                E::NotMethod => ("this function can't be called as a method".to_owned(), None),
                 E::Todo(msg) => (format!("not yet implemented: {msg}"), None),
             };
             let mut e = Snippet::source(&src)

@@ -1,8 +1,5 @@
-struct Selfless:
-    f: fn(_, x: u8) u16
-
-fn promote(_, x: u8) u16:
+fn promote(x: u8) u16:
     x as u16
 
-fn main():
-    Selfless(f: promote)
+fn main() u16:
+    42_u8.promote()
