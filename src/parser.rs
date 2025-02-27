@@ -440,7 +440,9 @@ impl<'src> Parser<'src> {
         } else if let Some(block) = self.colon_block()? {
             ExprKind::Block(block)
         } else if let Some(name) = self.name() {
-            ExprKind::Place(PlaceKind::Var(name))
+            ExprKind::Place(PlaceKind::Var(name.kind))
+        } else if self.just(P::Self_).is_some() {
+            ExprKind::Place(PlaceKind::Self_)
         } else if let Some((int, suffix)) = self.int() {
             ExprKind::Int(int, suffix)
         } else if let Some(string) = self.string()? {

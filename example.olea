@@ -3,4 +3,4 @@ struct Foo:
     b: u16
 
 fn meower(_, x: Foo^) u16:
-    .b
+    self.b

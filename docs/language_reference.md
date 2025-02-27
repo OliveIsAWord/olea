@@ -316,8 +316,6 @@ The value of a local or global variable.
 
 ### Self
 
-TODO: Not yet implemented.
-
 ```rs
 self
 ```

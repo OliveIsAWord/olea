@@ -235,7 +235,7 @@ impl<'a> IrBuilder<'a> {
             let var_reg = self.new_var(p_name.clone(), ir_ty);
             self.push_write(var_reg, reg);
             if i == 0 && underscore_self.is_none() {
-                self.self_reg = dbg!(Some(var_reg));
+                self.self_reg = Some(var_reg);
             }
         }
         let return_regs = if let Some(returns) = returns.as_ref() {
@@ -321,7 +321,9 @@ impl<'a> IrBuilder<'a> {
             S::Expr(expr) => self.build_expr(expr, unvoid)?,
             // NOTE: We're implicitly checking and evaluating the place expression first, but typechecking currently has to check the value expression first. Should we change our order here?
             S::Assign(place, value) => {
-                let MaybeVar::Variable(place_reg) = self.build_place(&place.kind)? else {
+                let MaybeVar::Variable(place_reg) =
+                    self.build_place(&place.kind, place.span.clone())?
+                else {
                     return Err(Error {
                         kind: ErrorKind::CantAssignToConstant,
                         span,
@@ -367,7 +369,7 @@ impl<'a> IrBuilder<'a> {
         let span = span.clone();
         // let span2 = span.clone(); // maybe if i write enough of these, Rust 2024 will make it Copy
         let reg = match kind {
-            E::Place(kind) => match self.build_place(kind)? {
+            E::Place(kind) => match self.build_place(kind, span.clone())? {
                 MaybeVar::Variable(place_reg) => self
                     .push_store(StoreKind::Read(place_reg), span)
                     .some_if(unvoid),
@@ -414,7 +416,7 @@ impl<'a> IrBuilder<'a> {
                     }
                     A::Ref => {
                         let maybe_var = match &e.kind {
-                            E::Place(kind) => self.build_place(kind)?,
+                            E::Place(kind) => self.build_place(kind, span.clone())?,
                             _ => MaybeVar::Constant(self.build_expr_unvoid(e, span)?),
                         };
                         match maybe_var {
@@ -681,12 +683,7 @@ impl<'a> IrBuilder<'a> {
                     let r = self.build_expr_unvoid(receiver, method_name.span.clone())?;
                     (r, receiver.span.clone())
                 } else {
-                    let Some(r) = self.self_reg else {
-                        return Err(Error {
-                            kind: ErrorKind::NoSelf(self.underscore_self.clone()),
-                            span: dot_span.clone(),
-                        });
-                    };
+                    let r = self.get_self(dot_span.clone())?;
                     let r = self.push_store(Sk::Read(r), dot_span.clone());
                     (r, dot_span.clone())
                 };
@@ -704,40 +701,31 @@ impl<'a> IrBuilder<'a> {
         Ok(reg)
     }
     // This function returns a MaybeVar because not all syntactic place expressions are semantic place expressions. For example, we can't assign a value to a function. Different code paths we expect a place expression will have to properly handle these cases.
-    fn build_place(&mut self, kind: &ast::PlaceKind) -> Result<MaybeVar> {
+    fn build_place(&mut self, kind: &ast::PlaceKind, span: Span) -> Result<MaybeVar> {
         use ast::PlaceKind as Pk;
         match kind {
             Pk::Var(name) => self
                 .scopes
                 .iter()
                 .rev()
-                .find_map(|scope| {
-                    scope
-                        .get(name.kind.as_ref())
-                        .copied()
-                        .map(MaybeVar::Variable)
-                })
+                .find_map(|scope| scope.get(name.as_ref()).copied().map(MaybeVar::Variable))
                 .or_else(|| {
                     self.function_tys
-                        .contains_key(&name.kind)
-                        .then(|| {
-                            self.push_store(
-                                StoreKind::Function(name.kind.clone()),
-                                name.span.clone(),
-                            )
-                        })
+                        .contains_key(name)
+                        .then(|| self.push_store(StoreKind::Function(name.clone()), span.clone()))
                         .map(MaybeVar::Constant)
                 })
                 .or_else(|| {
-                    self.constants.get(&name.kind).map(|value| {
-                        let r = self.build_constant(value, name.span.clone());
+                    self.constants.get(name).map(|value| {
+                        let r = self.build_constant(value, span.clone());
                         MaybeVar::Constant(r)
                     })
                 })
                 .ok_or_else(|| Error {
-                    kind: ErrorKind::NotFound("variable", name.kind.clone()),
-                    span: name.span.clone(),
+                    kind: ErrorKind::NotFound("variable", name.clone()),
+                    span,
                 }),
+            Pk::Self_ => self.get_self(span).map(MaybeVar::Variable),
             Pk::Deref(e, deref_span) => self
                 .build_expr_unvoid(e, deref_span.clone())
                 .map(MaybeVar::Variable),
@@ -761,12 +749,7 @@ impl<'a> IrBuilder<'a> {
                     let r = self.build_expr_unvoid(struct_value, dot_span.clone())?;
                     (r, struct_value.span.clone())
                 } else {
-                    let Some(r) = self.self_reg else {
-                        return Err(Error {
-                            kind: ErrorKind::NoSelf(self.underscore_self.clone()),
-                            span: dot_span.clone(),
-                        });
-                    };
+                    let r = self.get_self(dot_span.clone())?;
                     let r = self.push_store(StoreKind::Read(r), dot_span.clone());
                     (r, dot_span.clone())
                 };
@@ -830,6 +813,7 @@ impl<'a> IrBuilder<'a> {
     }
 
     fn pun(block: &ast::Block) -> Result<Name> {
+        use ast::{ExprKind, PlaceKind};
         let last = block.0.last().unwrap();
         let err = Err(Error {
             kind: ErrorKind::BadPun,
@@ -839,12 +823,24 @@ impl<'a> IrBuilder<'a> {
             return err;
         };
         let name = match &e.kind {
-            ast::ExprKind::Place(ast::PlaceKind::Var(name) | ast::PlaceKind::Field(_, name, _)) => {
-                name.clone()
-            }
+            ExprKind::Place(PlaceKind::Var(name)) => Name {
+                kind: name.clone(),
+                span: e.span.clone(),
+            },
+            ExprKind::Place(PlaceKind::Field(_, name, _)) => name.clone(),
             _ => return err,
         };
         Ok(name)
+    }
+
+    fn get_self(&mut self, span: Span) -> Result<Register> {
+        let Some(r) = self.self_reg else {
+            return Err(Error {
+                kind: ErrorKind::NoSelf(self.underscore_self.clone()),
+                span: span.clone(),
+            });
+        };
+        Ok(self.push_store(StoreKind::Copy(r), span))
     }
 
     fn enter_scope(&mut self) {

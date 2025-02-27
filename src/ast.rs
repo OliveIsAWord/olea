@@ -157,7 +157,9 @@ pub type Place = Spanned<PlaceKind>;
 #[derive(Clone, Debug)]
 pub enum PlaceKind {
     /// A variable.
-    Var(Name),
+    Var(Str),
+    /// The `self` variable.
+    Self_,
     /// An access of a value from an expression which yields a pointer. The second field contains the source span of the deref operator `^` itself.
     Deref(Box<Expr>, Span),
     /// An index operation, consisting of the indexee, the list of indices, and the span of the index (including square brackets). Note that multidimensional indexing is not yet supported.
