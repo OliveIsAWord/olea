@@ -52,7 +52,7 @@ enum DotAccess {
 }
 
 impl DotAccess {
-    fn to_expr_kind(self, receiver: Option<Box<Expr>>) -> ExprKind {
+    fn into_expr_kind(self, receiver: Option<Box<Expr>>) -> ExprKind {
         match self {
             Self::Field(name, dot_span) => {
                 ExprKind::Place(PlaceKind::Field(receiver, name, dot_span))
@@ -469,7 +469,7 @@ impl<'src> Parser<'src> {
             }
             ExprKind::While(Box::new(condition), body)
         } else if let Some(dot_access) = self.dot_access()? {
-            dot_access.to_expr_kind(None)
+            dot_access.into_expr_kind(None)
         } else {
             let b = 'b: {
                 let Some(Spanned {
@@ -514,7 +514,7 @@ impl<'src> Parser<'src> {
                 kind = ExprKind::UnaryOp(op, Box::new(e));
             } else if let Some(dot_access) = self.dot_access()? {
                 span = e.span.start..self.get_previous_span().end;
-                kind = dot_access.to_expr_kind(Some(Box::new(e)));
+                kind = dot_access.into_expr_kind(Some(Box::new(e)));
             } else if self.just(P::As).is_some() {
                 let Some(ty) = self.ty()? else {
                     return Err(self.err_previous("expected type after `as`"));

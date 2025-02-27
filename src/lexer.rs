@@ -124,12 +124,12 @@ const PUNCTUATION: &[(&str, Token)] = &[
 ];
 
 /// Is this character valid as the start of an identifier?
-fn is_start(c: char) -> bool {
+const fn is_start(c: char) -> bool {
     c == '_' || c.is_ascii_alphabetic()
 }
 
 /// Is this character valid as the continuation of an identifier?
-fn is_continued(c: char) -> bool {
+const fn is_continued(c: char) -> bool {
     is_start(c) || c.is_ascii_digit()
 }
 

@@ -74,7 +74,7 @@ pub fn destructure_program(program: &mut Program) {
             continue;
         };
         assert!(returns.len() <= 1, "idempotence hole");
-        if let Some(&return_ty) = returns.get(0) {
+        if let Some(&return_ty) = returns.first() {
             if let Some(scalars) = destructed_tys.get(&return_ty) {
                 returns.clear();
                 returns.extend(scalars.iter().map(|(_, t)| t));

@@ -233,7 +233,7 @@ impl<'a> IrBuilder<'a> {
             parameters,
             returns,
         } = signature;
-        self.underscore_self = underscore_self.clone();
+        self.underscore_self.clone_from(underscore_self);
         let TyKind::Function {
             params: ir_params, ..
         } = self.program_tys[self.function_tys[&name.kind]].clone()
@@ -677,7 +677,7 @@ impl<'a> IrBuilder<'a> {
     /// Build an expression and return a pointer to its value. If it's a place expression, this will be a pointer to its memory region. Otherwise, this will create a new stack allocation and return a pointer to that.
     fn build_expr_ref(&mut self, expr: &ast::Expr, span: Span) -> Result<Register> {
         let maybe_var = match &expr.kind {
-            ast::ExprKind::Place(kind) => self.build_place(kind, span.clone())?,
+            ast::ExprKind::Place(kind) => self.build_place(kind, span)?,
             _ => MaybeVar::Constant(self.build_expr_unvoid(expr, span)?),
         };
         let r = match maybe_var {
@@ -855,7 +855,7 @@ impl<'a> IrBuilder<'a> {
         let Some(r) = self.self_reg else {
             return Err(Error {
                 kind: ErrorKind::NoSelf(self.underscore_self.clone()),
-                span: span.clone(),
+                span,
             });
         };
         Ok(self.push_store(Sk::Copy(r), span))
