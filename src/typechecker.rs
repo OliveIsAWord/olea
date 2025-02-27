@@ -10,7 +10,7 @@ pub enum ErrorKind {
     /// We called a register of a non-function type.
     NotFunction(Register),
     /// We accessed a field of a non-struct type.
-    NotStruct(Register),
+    NotStruct(Ty, Register),
     /// We accessed a non-existent field of a struct.
     NoFieldNamed(Register, Str),
     /// The register has one type but we expected another.
@@ -120,7 +120,10 @@ impl<'a> TypeChecker<'a> {
                         }
                         PtrOffset::Field(ref field) => {
                             let TyKind::Struct { fields, .. } = &self.ty_map[pointee] else {
-                                return Err((self.name.into(), ErrorKind::NotStruct(pointer)));
+                                return Err((
+                                    self.name.into(),
+                                    ErrorKind::NotStruct(pointee, pointer),
+                                ));
                             };
                             pointee = fields
                                 .iter()

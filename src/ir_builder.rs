@@ -1,6 +1,7 @@
 use crate::ast;
 use crate::compiler_prelude::*;
 use crate::ir::*;
+use StoreKind as Sk;
 
 const INT_TYS: &[(&str, IntKind)] = &[
     ("u8", IntKind::U8),
@@ -274,7 +275,7 @@ impl<'a> IrBuilder<'a> {
             .collect();
         self.parameters.extend(parameters.values());
         let struct_reg = self.push_store(
-            StoreKind::Struct {
+            Sk::Struct {
                 ty,
                 fields: field_args,
             },
@@ -363,16 +364,15 @@ impl<'a> IrBuilder<'a> {
     }
 
     fn build_expr(&mut self, expr: &ast::Expr, unvoid: bool) -> Result<Option<Register>> {
-        use StoreKind as Sk;
         use ast::ExprKind as E;
         let ast::Expr { kind, span } = expr;
         let span = span.clone();
         // let span2 = span.clone(); // maybe if i write enough of these, Rust 2024 will make it Copy
         let reg = match kind {
             E::Place(kind) => match self.build_place(kind, span.clone())? {
-                MaybeVar::Variable(place_reg) => self
-                    .push_store(StoreKind::Read(place_reg), span)
-                    .some_if(unvoid),
+                MaybeVar::Variable(place_reg) => {
+                    self.push_store(Sk::Read(place_reg), span).some_if(unvoid)
+                }
                 MaybeVar::Constant(value_reg) => Some(value_reg),
             },
             E::Int(int, suffix) => {
@@ -414,21 +414,7 @@ impl<'a> IrBuilder<'a> {
                         self.push_store(Sk::UnaryOp(B::Neg, reg), span)
                             .some_if(unvoid)
                     }
-                    A::Ref => {
-                        let maybe_var = match &e.kind {
-                            E::Place(kind) => self.build_place(kind, span.clone())?,
-                            _ => MaybeVar::Constant(self.build_expr_unvoid(e, span)?),
-                        };
-                        match maybe_var {
-                            MaybeVar::Variable(v) => Some(v),
-                            MaybeVar::Constant(c) => {
-                                let r =
-                                    self.push_store(Sk::StackAlloc(self.tys[&c]), e.span.clone());
-                                self.push_write(r, c);
-                                Some(r)
-                            }
-                        }
-                    }
+                    A::Ref => self.build_expr_ref(e, op_span)?.some(),
                 }
             }
             E::BinOp(op, lhs, rhs) => {
@@ -533,7 +519,7 @@ impl<'a> IrBuilder<'a> {
                         lhs = rhs;
                     }
                 }
-                self.push_store(StoreKind::Phi(phi_map), span).some()
+                self.push_store(Sk::Phi(phi_map), span).some()
             }
             E::As(value, ty) => {
                 let value_reg = self.build_expr_unvoid(value, span.clone())?;
@@ -591,7 +577,7 @@ impl<'a> IrBuilder<'a> {
                 match (then_yield, else_yield) {
                     (Some(a), Some((b, else_id))) => {
                         let choices = [(then_id, a), (else_id, b)].into_iter().collect();
-                        self.push_store(StoreKind::Phi(choices), span).some()
+                        self.push_store(Sk::Phi(choices), span).some()
                     }
                     _ => None,
                 }
@@ -708,11 +694,15 @@ impl<'a> IrBuilder<'a> {
                 .scopes
                 .iter()
                 .rev()
-                .find_map(|scope| scope.get(name.as_ref()).copied().map(MaybeVar::Variable))
+                .find_map(|scope| scope.get(name.as_ref()).copied())
+                .map(|reg| {
+                    let r = self.push_store(Sk::Copy(reg), span.clone());
+                    MaybeVar::Variable(r)
+                })
                 .or_else(|| {
                     self.function_tys
                         .contains_key(name)
-                        .then(|| self.push_store(StoreKind::Function(name.clone()), span.clone()))
+                        .then(|| self.push_store(Sk::Function(name.clone()), span.clone()))
                         .map(MaybeVar::Constant)
                 })
                 .or_else(|| {
@@ -741,31 +731,48 @@ impl<'a> IrBuilder<'a> {
                 let index_reg = index_regs[0];
                 let access = vec![PtrOffset::Index(RegisterOrConstant::Register(index_reg))];
                 let span = indexee.span.start..index_span.end;
-                let indexed_reg = self.push_store(StoreKind::PtrOffset(indexee_reg, access), span);
+                let indexed_reg = self.push_store(Sk::PtrOffset(indexee_reg, access), span);
                 Ok(MaybeVar::Variable(indexed_reg))
             }
             Pk::Field(struct_value, field, dot_span) => {
-                let (struct_reg, struct_span) = if let Some(struct_value) = struct_value {
-                    let r = self.build_expr_unvoid(struct_value, dot_span.clone())?;
-                    (r, struct_value.span.clone())
+                let span;
+                let struct_reg = if let Some(struct_value) = struct_value {
+                    span = struct_value.span.clone();
+                    self.build_expr_ref(struct_value, span.clone())?
                 } else {
-                    let r = self.get_self(dot_span.clone())?;
-                    let r = self.push_store(StoreKind::Read(r), dot_span.clone());
-                    (r, dot_span.clone())
+                    span = dot_span.clone();
+                    self.get_self(span.clone())?
                 };
                 let access = vec![PtrOffset::Field(field.kind.clone())];
-                let span = struct_span.start..field.span.end;
-                let field_ptr_reg = self.push_store(StoreKind::PtrOffset(struct_reg, access), span);
+                let span = span.start..field.span.end;
+                let field_ptr_reg = self.push_store(Sk::PtrOffset(struct_reg, access), span);
                 Ok(MaybeVar::Variable(field_ptr_reg))
             }
         }
     }
 
+    /// Build an expression and return a pointer to its value. If it's a place expression, this will be a pointer to its memory region. Otherwise, this will create a new stack allocation and return a pointer to that.
+    fn build_expr_ref(&mut self, expr: &ast::Expr, span: Span) -> Result<Register> {
+        let maybe_var = match &expr.kind {
+            ast::ExprKind::Place(kind) => self.build_place(kind, span.clone())?,
+            _ => MaybeVar::Constant(self.build_expr_unvoid(expr, span)?),
+        };
+        let r = match maybe_var {
+            MaybeVar::Variable(r) => r,
+            MaybeVar::Constant(c) => {
+                let r = self.push_store(Sk::StackAlloc(self.tys[&c]), expr.span.clone());
+                self.push_write(r, c);
+                r
+            }
+        };
+        Ok(r)
+    }
+
     fn build_constant(&mut self, value: &Value, span: Span) -> Register {
         let mut int =
-            |v: i128, int_kind: IntKind| self.push_store(StoreKind::Int(v, int_kind), span.clone());
+            |v: i128, int_kind: IntKind| self.push_store(Sk::Int(v, int_kind), span.clone());
         match value.kind {
-            ValueKind::Bool(b) => self.push_store(StoreKind::Bool(b), span),
+            ValueKind::Bool(b) => self.push_store(Sk::Bool(b), span),
             ValueKind::U8(v) => int(v.into(), IntKind::U8),
             ValueKind::U16(v) => int(v.into(), IntKind::U16),
             ValueKind::U32(v) => int(v.into(), IntKind::U32),
@@ -840,7 +847,7 @@ impl<'a> IrBuilder<'a> {
                 span: span.clone(),
             });
         };
-        Ok(self.push_store(StoreKind::Copy(r), span))
+        Ok(self.push_store(Sk::Copy(r), span))
     }
 
     fn enter_scope(&mut self) {
@@ -856,7 +863,7 @@ impl<'a> IrBuilder<'a> {
     }
 
     fn new_var(&mut self, name: Name, ty: Ty) -> Register {
-        let reg = self.push_store(StoreKind::StackAlloc(ty), name.span);
+        let reg = self.push_store(Sk::StackAlloc(ty), name.span);
         self.scopes.last_mut().unwrap().insert(name.kind, reg);
         reg
     }
@@ -865,14 +872,13 @@ impl<'a> IrBuilder<'a> {
         self.push_inst(Inst::Write(dst, src));
     }
 
-    fn push_store(&mut self, sk: StoreKind, span: Span) -> Register {
+    fn push_store(&mut self, sk: Sk, span: Span) -> Register {
         let ty = self.guess_ty(&sk);
         let reg = self.new_reg(ty, span);
         self.push_inst(Inst::Store(reg, sk));
         reg
     }
-    pub fn guess_ty(&mut self, sk: &StoreKind) -> Ty {
-        use StoreKind as Sk;
+    pub fn guess_ty(&mut self, sk: &Sk) -> Ty {
         let dummy_ty = self.dummy_ty;
         let t = |r| *self.tys.get(r).unwrap();
         match sk {

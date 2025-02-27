@@ -75,9 +75,9 @@ fn typecheck(ir: &ir::Program, src: &str, file_path: &str, error_mode: ErrorMode
                     format!("expected function, got {}", t(reg),),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
-                E::NotStruct(reg) => (
-                    format!("type {} does not support field access", t(reg),),
-                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                E::NotStruct(ty, span_reg) => (
+                    format!("type {} does not support field access", ir.tys.format(ty)),
+                    snippet.annotation(Level::Error.span(fun.spans[&span_reg].clone())),
                 ),
                 E::NoFieldNamed(reg, field) => (
                     format!("{} does not have field {field}", t(reg),),

@@ -440,8 +440,6 @@ TODO: Currently, indexing can only be done through a pointer.
 
 ### Field Accesses
 
-TODO: Currently, field access can only be done through a pointer.
-
 ```rs
 <expression>.<field name>
 ```
@@ -539,8 +537,6 @@ foo(required: Some(t))
 foo(required: None, optional: T::Severed)
 foo(required: None, ?optional: Some(T::Tenuous)) # explicitly pass by option, useful for chaining optional parameters
 ```
-
-- Field access and method calling without a receiver (e.g. `.field` or `.method()`) that implicitly uses the first argument of the function as the receiver.
 
 - Compile-time evaluation and metaprogramming, including being able to reify types and syntactic elements as values. The syntax for structs and functions may radically change.
 

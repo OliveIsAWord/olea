@@ -2,5 +2,5 @@ struct Foo:
     a: u32
     b: u16
 
-fn meower(_, x: Foo^) u16:
+fn meower(x: Foo^) u16:
     self.b
