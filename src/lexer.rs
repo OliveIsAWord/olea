@@ -121,6 +121,16 @@ const PUNCTUATION: &[(&str, Token)] = &[
     ("@", Pl(P::At)),
 ];
 
+/// Is this character valid as the start of an identifier?
+fn is_start(c: char) -> bool {
+    c == '_' || c.is_ascii_alphabetic()
+}
+
+/// Is this character valid as the continuation of an identifier?
+fn is_continued(c: char) -> bool {
+    is_start(c) || c.is_ascii_digit()
+}
+
 /// # Invariants
 /// `tokens` and `span` have the same length.
 #[derive(Clone, Debug, Default)]
@@ -260,10 +270,8 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
         }
         let start = src.index;
         let Some(c) = src.consume() else { break };
-        // if a character can continue an identifier or integer literal
-        let is_continued = |c: char| c.is_ascii_alphabetic() || c.is_ascii_digit() || c == '_';
         let token = match c {
-            c if c.is_ascii_alphabetic() => {
+            c if is_start(c) => {
                 src.skip_while(is_continued);
                 let name = &src.src[start..src.index];
                 let mut token = Pl(P::Name);
@@ -276,6 +284,7 @@ pub fn tokenize(src_bytes: &str) -> Tokens {
                 token
             }
             c if c.is_ascii_digit() => {
+                // capture the remaining digits as well as any suffix identifier
                 src.skip_while(is_continued);
                 Pl(P::Int)
             }

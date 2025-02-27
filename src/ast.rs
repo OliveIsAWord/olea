@@ -44,6 +44,8 @@ pub struct Function {
 pub struct FunctionSignature {
     /// The name of the function.
     pub name: Name,
+    /// The optional first dummy parameter signalling the function cannot use `self` and cannot be called with method call notation.
+    pub underscore_self: Option<Span>,
     /// The list of parameters and their types that the function accepts, as well as whether each parameter can be passed "anonymously" by position.
     pub parameters: Vec<(IsAnon, Name, Ty)>,
     /// The type of value the function returns, if any.
@@ -127,8 +129,8 @@ pub enum ExprKind {
     Block(Block),
     /// A function call, composed of a function and a list of arguments to pass to it.
     Call(Box<Expr>, Vec<FunctionArg>),
-    /// A method call, composed of a receiver, a method name, and a list of arguments.
-    MethodCall(Box<Expr>, Name, Vec<FunctionArg>),
+    /// A method call, composed of a receiver, a method name, a list of arguments, and the source location of the dot. Can take an implicit receiver.
+    MethodCall(Option<Box<Expr>>, Name, Vec<FunctionArg>, Span),
     /// See [`PlaceKind`].
     Place(PlaceKind),
 }
@@ -160,8 +162,8 @@ pub enum PlaceKind {
     Deref(Box<Expr>, Span),
     /// An index operation, consisting of the indexee, the list of indices, and the span of the index (including square brackets). Note that multidimensional indexing is not yet supported.
     Index(Box<Expr>, Vec<Expr>, Span),
-    /// A field of a struct value, and the span of the dot.
-    Field(Box<Expr>, Name, Span),
+    /// A field of a struct value, and the span of the dot. Can take an implicit receiver.
+    Field(Option<Box<Expr>>, Name, Span),
 }
 
 /// See [`UnaryOpKind`].

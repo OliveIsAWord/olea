@@ -49,6 +49,7 @@ pub enum ErrorKind {
     InvalidArgs(Vec<Str>),
     BadPun,
     IllFormedComparison,
+    NoSelf(Option<Span>),
     Todo(&'static str),
 }
 
@@ -65,6 +66,8 @@ struct IrBuilder<'a> {
     tys: Map<Register, Ty>,
     spans: Map<Register, Span>,
     scopes: Vec<Map<Str, Register>>,
+    self_reg: Option<Register>,
+    underscore_self: Option<Span>,
     next_reg_id: u128,
     static_values: &'a mut Map<Str, Value>,
     program_tys: &'a mut TyMap,
@@ -197,6 +200,8 @@ impl<'a> IrBuilder<'a> {
             tys: Map::new(),
             spans: Map::new(),
             scopes: vec![Map::new()],
+            self_reg: None,
+            underscore_self: None,
             next_reg_id: 0,
             dummy_ty: program_tys.insert(TyKind::Int(IntKind::U8)),
             function_tys,
@@ -213,20 +218,25 @@ impl<'a> IrBuilder<'a> {
     ) -> Result<Function> {
         let ast::FunctionSignature {
             name,
+            underscore_self,
             parameters,
             returns,
         } = signature;
+        self.underscore_self = underscore_self.clone();
         let TyKind::Function(ir_params, _) =
             self.program_tys[self.function_tys[&name.kind]].clone()
         else {
             unreachable!();
         };
-        for ((_, p_name, _), (_, (_, ir_ty))) in zip(parameters, ir_params) {
+        for (i, ((_, p_name, _), (_, (_, ir_ty)))) in zip(parameters, ir_params).enumerate() {
             let reg = self.new_reg(ir_ty, p_name.span.clone());
             self.parameters.push(reg);
             // Currently, we assume all variables are stack allocated, so we copy the argument to a stack allocation.
             let var_reg = self.new_var(p_name.clone(), ir_ty);
             self.push_write(var_reg, reg);
+            if i == 0 && underscore_self.is_none() {
+                self.self_reg = dbg!(Some(var_reg));
+            }
         }
         let return_regs = if let Some(returns) = returns.as_ref() {
             vec![self.build_block_unvoid(body, returns.span.clone())?]
@@ -666,9 +676,20 @@ impl<'a> IrBuilder<'a> {
                 });
                 return_reg
             }
-            E::MethodCall(receiver, method_name, args) => {
-                let receiver_span = receiver.span.clone();
-                let receiver = self.build_expr_unvoid(receiver, method_name.span.clone())?;
+            E::MethodCall(receiver, method_name, args, dot_span) => {
+                let (receiver, receiver_span) = if let Some(receiver) = receiver {
+                    let r = self.build_expr_unvoid(receiver, method_name.span.clone())?;
+                    (r, receiver.span.clone())
+                } else {
+                    let Some(r) = self.self_reg else {
+                        return Err(Error {
+                            kind: ErrorKind::NoSelf(self.underscore_self.clone()),
+                            span: dot_span.clone(),
+                        });
+                    };
+                    let r = self.push_store(Sk::Read(r), dot_span.clone());
+                    (r, dot_span.clone())
+                };
                 let (mut evaled_named, evaled_anon) =
                     self.build_function_arguments(args, span.clone())?;
                 let had_self =
@@ -736,9 +757,21 @@ impl<'a> IrBuilder<'a> {
                 Ok(MaybeVar::Variable(indexed_reg))
             }
             Pk::Field(struct_value, field, dot_span) => {
-                let struct_reg = self.build_expr_unvoid(struct_value, dot_span.clone())?;
+                let (struct_reg, struct_span) = if let Some(struct_value) = struct_value {
+                    let r = self.build_expr_unvoid(struct_value, dot_span.clone())?;
+                    (r, struct_value.span.clone())
+                } else {
+                    let Some(r) = self.self_reg else {
+                        return Err(Error {
+                            kind: ErrorKind::NoSelf(self.underscore_self.clone()),
+                            span: dot_span.clone(),
+                        });
+                    };
+                    let r = self.push_store(StoreKind::Read(r), dot_span.clone());
+                    (r, dot_span.clone())
+                };
                 let access = vec![PtrOffset::Field(field.kind.clone())];
-                let span = struct_value.span.start..field.span.end;
+                let span = struct_span.start..field.span.end;
                 let field_ptr_reg = self.push_store(StoreKind::PtrOffset(struct_reg, access), span);
                 Ok(MaybeVar::Variable(field_ptr_reg))
             }
@@ -1098,6 +1131,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
             D::Function(ast::Function { signature, .. }) | D::ExternFunction(signature) => {
                 let ast::FunctionSignature {
                     name,
+                    underscore_self: _, // TODO
                     parameters,
                     returns,
                 } = signature;

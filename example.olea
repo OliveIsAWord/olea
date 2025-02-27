@@ -1,2 +1,6 @@
-fn meower() usize:
-    42 / 3
+struct Foo:
+    a: u32
+    b: u16
+
+fn meower(_, x: Foo^) u16:
+    .b

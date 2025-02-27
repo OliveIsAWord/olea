@@ -101,11 +101,10 @@ fn typecheck(ir: &ir::Program, src: &str, file_path: &str, error_mode: ErrorMode
 fn main() -> ExitCode {
     let args: Vec<_> = std::env::args().collect();
     if args.len() != 2 {
-        error(&format!(
-            "{} <file>",
-            args.first()
-                .map_or(env!("CARGO_CRATE_NAME"), String::as_ref)
-        ));
+        let app_name = args
+            .first()
+            .map_or(env!("CARGO_CRATE_NAME"), String::as_ref);
+        error(&format!("{app_name} <file>"));
         return ExitCode::FAILURE;
     };
     let file_path = &args[1];
@@ -250,6 +249,10 @@ fn main() -> ExitCode {
                 }
                 E::BadPun => ("this expression can't be name punned".to_owned(), None),
                 E::IllFormedComparison => ("ill formed comparison chain".to_owned(), None),
+                E::NoSelf(span) => (
+                    "can't access `self` in this context".to_owned(),
+                    span.map(|span| ("use of `self` disabled here".to_owned(), span)),
+                ),
                 E::Todo(msg) => (format!("not yet implemented: {msg}"), None),
             };
             let mut e = Snippet::source(&src)

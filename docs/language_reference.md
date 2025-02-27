@@ -136,12 +136,14 @@ An Olea program is a list of declarations.
 ### Functions
 
 ```rs
-fn <function name>({anon} <parameter name>: <parameter type>...) {return type}:
+fn <function name>({_,} {anon} <parameter name>: <parameter type>...) {return type}:
     <statement>
     ...
 ```
 
 A function is a named body of code that can be entered and exited. The `anon` keyword indicates whether the parameter can be passed anonymously (see [function calls](#function-calls)). If the return type is specified, the last statement must be an expression whose value is yielded.
+
+If a leading underscore precedes the parameters, the function body does not allow a `self` and the function cannot be called with method call notation.
 
 ### Extern Functions
 
@@ -274,7 +276,19 @@ Evaluating contrary to these precedence levels requires placing sub-expressions 
 
 ### Place Expressions
 
-A "place expression" is an expression that is associated with the memory region in which its value is stored. This includes [variables](#variables), [dereferences](#dereferences), [array indexing](#array-indexing), and [field accesses](#field-accesses). Certain expressions and statements require that, or behave differently if, a certain expression is a place expression.
+A "place expression" is an expression that is associated with the memory region in which its value is stored. This includes [variables](#variables), [self](#self), [dereferences](#dereferences), [array indexing](#array-indexing), and [field accesses](#field-accesses). Certain expressions and statements require that, or behave differently if, a certain expression is a place expression.
+
+### Implicit Receiver
+
+A [field access](#field-accesses) or [method call](#method-calls) can be written without a left hand "receiver" expression. This is equivalent to using [self](#self) as the receiver. e.g.
+
+```rs
+fn area(my_rect: Rectangle) u32:
+    .width * .height
+
+fn is_zero_area(my_rect: Rectangle) bool:
+    .area() == 0
+```
 
 ### Integers
 
@@ -299,6 +313,16 @@ A `u8` pointer to static memory containing the null-terminated, UTF-8 encoded ch
 ```
 
 The value of a local or global variable.
+
+### Self
+
+TODO: Not yet implemented.
+
+```rs
+self
+```
+
+A special variable that refers to the first parameter of the current function.
 
 ### Tuples
 

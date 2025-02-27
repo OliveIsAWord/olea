@@ -46,6 +46,24 @@ impl Level {
     }
 }
 
+enum DotAccess {
+    Field(Name, Span),
+    Method(Name, Vec<FunctionArg>, Span),
+}
+
+impl DotAccess {
+    fn to_expr_kind(self, receiver: Option<Box<Expr>>) -> ExprKind {
+        match self {
+            Self::Field(name, dot_span) => {
+                ExprKind::Place(PlaceKind::Field(receiver, name, dot_span))
+            }
+            Self::Method(name, args, dot_span) => {
+                ExprKind::MethodCall(receiver, name, args, dot_span)
+            }
+        }
+    }
+}
+
 struct Parser<'src> {
     tokens: &'src [Spanned<Tt>],
     i: usize,
@@ -208,7 +226,7 @@ impl<'src> Parser<'src> {
     }
     fn parse_block<O>(
         mut item_parser: impl FnMut(&mut Self) -> Result<O>,
-        block: &'src a::Block,
+        block: &'src [a::Item],
         source: &'src str,
         start_span: Span,
         end_span: Span,
@@ -238,7 +256,7 @@ impl<'src> Parser<'src> {
     fn block<O>(
         &self,
         item_parser: impl FnMut(&mut Self) -> Result<O>,
-        block: &'src a::Block,
+        block: &'src [a::Item],
         start_span: Span,
         end_span: Span,
     ) -> Result<Vec<O>> {
@@ -246,7 +264,8 @@ impl<'src> Parser<'src> {
     }
     fn ty(&mut self) -> Parsed<Ty> {
         let mut ty = if let Some(fn_span) = self.just(P::Fn) {
-            let (params, returns) = self.function_parameters()?;
+            let (underscore_self, params, returns) = self.function_parameters()?;
+            _ = underscore_self; // TODO
             Ty {
                 kind: TyKind::Function(params, returns.map(Box::new)),
                 span: fn_span.start..self.get_previous_span().end,
@@ -363,6 +382,20 @@ impl<'src> Parser<'src> {
         )?;
         Ok(Some((args, args_span)))
     }
+    fn dot_access(&mut self) -> Parsed<DotAccess> {
+        let Some(dot_span) = self.just(P::Dot) else {
+            return Ok(None);
+        };
+        let field = self
+            .name()
+            .ok_or_else(|| self.err("expected field or method name after dot"))?;
+        let dot_access = if let Some((method_args, _)) = self.function_arguments()? {
+            DotAccess::Method(field, method_args, dot_span)
+        } else {
+            DotAccess::Field(field, dot_span)
+        };
+        Ok(Some(dot_access))
+    }
     fn expr(&mut self) -> Result<Expr> {
         self.expr_at(Level::Min)
     }
@@ -434,6 +467,8 @@ impl<'src> Parser<'src> {
                 return Err(self.err("else blocks for while loops not yet implemented"));
             }
             ExprKind::While(Box::new(condition), body)
+        } else if let Some(dot_access) = self.dot_access()? {
+            dot_access.to_expr_kind(None)
         } else {
             let b = 'b: {
                 let Some(Spanned {
@@ -476,17 +511,9 @@ impl<'src> Parser<'src> {
                     span: ref_span,
                 };
                 kind = ExprKind::UnaryOp(op, Box::new(e));
-            } else if let Some(dot_span) = self.just(P::Dot) {
-                let field = self
-                    .name()
-                    .ok_or_else(|| self.err("expected field or method name after dot"))?;
-                if let Some((method_args, args_span)) = self.function_arguments()? {
-                    span = e.span.start..args_span.end;
-                    kind = ExprKind::MethodCall(Box::new(e), field, method_args);
-                } else {
-                    span = e.span.start..field.span.end;
-                    kind = ExprKind::Place(PlaceKind::Field(Box::new(e), field, dot_span));
-                }
+            } else if let Some(dot_access) = self.dot_access()? {
+                span = e.span.start..self.get_previous_span().end;
+                kind = dot_access.to_expr_kind(Some(Box::new(e)));
             } else if self.just(P::As).is_some() {
                 let Some(ty) = self.ty()? else {
                     return Err(self.err_previous("expected type after `as`"));
@@ -656,14 +683,17 @@ impl<'src> Parser<'src> {
         let name = self
             .name()
             .ok_or_else(|| self.err("expected function name"))?;
-        let (parameters, returns) = self.function_parameters()?;
+        let (underscore_self, parameters, returns) = self.function_parameters()?;
         Ok(FunctionSignature {
             name,
+            underscore_self,
             parameters,
             returns,
         })
     }
-    fn function_parameters(&mut self) -> Result<(Vec<(IsAnon, Name, Ty)>, Option<Ty>)> {
+    fn function_parameters(
+        &mut self,
+    ) -> Result<(Option<Span>, Vec<(IsAnon, Name, Ty)>, Option<Ty>)> {
         // use .peek() so we get the correct span for the error
         let Some(Spanned {
             kind: Tt::Paren(params, _),
@@ -675,9 +705,20 @@ impl<'src> Parser<'src> {
         self.next().unwrap();
         let start_span = span.start + 1..span.start + 1;
         let end_span = span.end - 1..span.end - 1;
-        let parameters = self.block(Self::param, params, start_span, end_span)?;
+        // kinda hacky lol
+        let mut params: &[_] = params.as_ref();
+        let mut underscore_self = None;
+        if let Some(item) = params.first() {
+            if let Ok(Some(name)) = self.item(|this| Ok(this.name()), item, 0..0, 0..0) {
+                if &*name.kind == "_" {
+                    underscore_self = Some(name.span);
+                    params = &params[1..];
+                }
+            }
+        }
+        let parameters = self.block(Self::param, &params[0..], start_span, end_span)?;
         let returns = self.ty()?;
-        Ok((parameters, returns))
+        Ok((underscore_self, parameters, returns))
     }
     fn decl(&mut self) -> Parsed<Decl> {
         self.spanned2(Self::decl_kind)
