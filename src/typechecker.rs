@@ -9,6 +9,7 @@ pub enum ErrorKind {
     NotPointer(Register),
     /// We wrote a value through a const pointer.
     MutateThroughConstPointer(Register),
+    CantCastPointerToMut(Register),
     /// We called a register of a non-function type.
     NotFunction(Register),
     /// We accessed a field of a non-struct type.
@@ -87,7 +88,10 @@ impl<'a> TypeChecker<'a> {
                 TyKind::Int(kind)
             }
             Sk::PtrCast(pointer, kind) => {
-                self.pointer(pointer)?;
+                let (_, is_mut) = self.pointer(pointer)?;
+                if is_mut == IsMut::Const && kind.is_mut == IsMut::Mut {
+                    return Err((self.name.clone(), ErrorKind::CantCastPointerToMut(pointer)));
+                }
                 TyKind::Pointer(kind)
             }
             Sk::Copy(r) => self.t(r).clone(),

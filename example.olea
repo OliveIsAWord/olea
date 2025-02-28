@@ -1,2 +1,4 @@
-fn write(ptr: usize^mut):
-    ptr^ = 42
+fn read(ptr: usize^) usize:
+    let evil = ptr as usize^mut
+    evil^ = 42
+    evil^

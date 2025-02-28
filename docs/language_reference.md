@@ -117,7 +117,7 @@ A pointer is a value that can be used to access a region of memory. A `mut` poin
 ### Function Pointers
 
 ```rs
-fn({anon} <parameter name>: <type>...) {type}
+fn({_, } {anon} <parameter name>: <type>...) {type}
 ```
 
 A function pointer can be called with the appropriate parameters via function call or method call.

@@ -74,6 +74,10 @@ fn typecheck(ir: &ir::Program, src: &str, file_path: &str, error_mode: ErrorMode
                     "cannot mutate through a const pointer".to_owned(),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
+                E::CantCastPointerToMut(reg) => (
+                    "cannot cast a const pointer to a mut pointer".to_owned(),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
                 E::NotFunction(reg) => (
                     format!("expected function, got {}", t(reg),),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
