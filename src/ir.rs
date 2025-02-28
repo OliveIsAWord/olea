@@ -1,7 +1,6 @@
 //! The Olea intermediate representation, a low level language that consists of [SSA](https://en.wikipedia.org/wiki/Static_single-assignment_form) registers and [basic blocks](https://en.wikipedia.org/wiki/Basic_block).
 
 use crate::compiler_prelude::*;
-pub use crate::language_types::IsAnon;
 
 /// A full or partial program.
 #[derive(Clone, Debug)]

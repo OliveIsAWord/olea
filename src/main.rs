@@ -24,7 +24,6 @@ mod ir_destructure;
 mod ir_display;
 pub mod ir_liveness;
 mod ir_opt;
-pub(crate) mod language_types;
 mod lexer;
 mod parser;
 mod ttree_visualize;
