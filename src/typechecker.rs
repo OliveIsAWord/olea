@@ -9,7 +9,12 @@ pub enum ErrorKind {
     NotPointer(Register),
     /// We wrote a value through a const pointer.
     MutateThroughConstPointer(Register),
+    /// We wrote a value to an immutable variable.
+    MutateConstVariable(Register),
+    /// We cast a const pointer to a mut pointer.
     CantCastPointerToMut(Register),
+    /// We tried to mutably reference an immutable variable.
+    MutRefToConstVariable(Register),
     /// We called a register of a non-function type.
     NotFunction(Register),
     /// We accessed a field of a non-struct type.
@@ -33,6 +38,7 @@ struct TypeChecker<'a> {
     return_tys: &'a [Ty],
     tys: &'a Tys,
     name: &'a Str,
+    variable_set: &'a Set<Register>,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -90,7 +96,12 @@ impl<'a> TypeChecker<'a> {
             Sk::PtrCast(pointer, kind) => {
                 let (_, is_mut) = self.pointer(pointer)?;
                 if is_mut == IsMut::Const && kind.is_mut == IsMut::Mut {
-                    return Err((self.name.clone(), ErrorKind::CantCastPointerToMut(pointer)));
+                    let kind = if self.variable_set.contains(&pointer) {
+                        ErrorKind::MutRefToConstVariable(pointer)
+                    } else {
+                        ErrorKind::CantCastPointerToMut(pointer)
+                    };
+                    return Err((self.name.clone(), kind));
                 }
                 TyKind::Pointer(kind)
             }
@@ -189,7 +200,12 @@ impl<'a> TypeChecker<'a> {
             &Inst::Write(dst, src) => {
                 let (inner, is_mut) = self.pointer(dst)?;
                 if is_mut == IsMut::Const {
-                    return Err((self.name.clone(), ErrorKind::MutateThroughConstPointer(dst)));
+                    let kind = if self.variable_set.contains(&dst) {
+                        ErrorKind::MutateConstVariable(dst)
+                    } else {
+                        ErrorKind::MutateThroughConstPointer(dst)
+                    };
+                    return Err((self.name.clone(), kind));
                 }
                 self.expect(src, inner)
             }
@@ -244,6 +260,7 @@ impl<'a> TypeChecker<'a> {
         function_tys: &'a Map<Str, Ty>,
         static_values: &'a Map<Str, Value>,
         ty_map: &'a TyMap,
+        variable_set: &'a Set<Register>,
     ) -> Result {
         let TyKind::Function {
             has_self: _,
@@ -260,6 +277,7 @@ impl<'a> TypeChecker<'a> {
             return_tys,
             tys: &f.tys,
             name,
+            variable_set,
         };
         for (&r, &(_, ty)) in zip(&f.parameters, param_tys.values()) {
             this.expect(r, &ty_map[ty])?;
@@ -286,6 +304,7 @@ pub fn typecheck(program: &Program) -> Result {
             &program.function_tys,
             &program.static_values,
             &program.tys,
+            &f.variables,
         )?;
     }
     Ok(())

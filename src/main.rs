@@ -74,8 +74,16 @@ fn typecheck(ir: &ir::Program, src: &str, file_path: &str, error_mode: ErrorMode
                     "cannot mutate through a const pointer".to_owned(),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
+                E::MutateConstVariable(reg) => (
+                    "cannot mutate an immutable variable".to_owned(),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
                 E::CantCastPointerToMut(reg) => (
                     "cannot cast a const pointer to a mut pointer".to_owned(),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
+                E::MutRefToConstVariable(reg) => (
+                    "cannot mutably reference an immutable variable".to_owned(),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
                 E::NotFunction(reg) => (

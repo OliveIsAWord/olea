@@ -77,6 +77,7 @@ struct IrBuilder<'a> {
     constants: &'a Map<Str, Value>,
     defined_tys: &'a DefinedTys,
     dummy_ty: Ty,
+    variable_set: Set<Register>,
 }
 
 #[must_use]
@@ -221,6 +222,7 @@ impl<'a> IrBuilder<'a> {
             defined_tys,
             static_values,
             program_tys,
+            variable_set: Set::new(),
         }
     }
 
@@ -264,6 +266,7 @@ impl<'a> IrBuilder<'a> {
             self.blocks,
             self.tys,
             self.spans,
+            self.variable_set,
             self.next_reg_id,
         ))
     }
@@ -299,6 +302,7 @@ impl<'a> IrBuilder<'a> {
             self.blocks,
             self.tys,
             self.spans,
+            Set::new(), // we don't need Function.variables, this generated function should not have any errors
             self.next_reg_id,
         )
     }
@@ -908,6 +912,7 @@ impl<'a> IrBuilder<'a> {
             .find_map(|scope| scope.get(name.as_ref()).copied())
             .map(|reg| {
                 let r = self.push_store(Sk::Copy(reg), span.clone());
+                self.variable_set.insert(r);
                 MaybeVar::Variable(r)
             })
             .or_else(|| {

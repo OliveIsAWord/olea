@@ -110,6 +110,7 @@ fn visit_function(f: &mut Function, ty_map: &mut TyMap, destructed_tys: &Destruc
         blocks,
         tys,
         spans,
+        variables: _,
         cfg: _,
         next_register,
     } = f;

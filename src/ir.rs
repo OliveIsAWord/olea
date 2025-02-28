@@ -302,6 +302,8 @@ pub struct Function {
     pub tys: Map<Register, Ty>,
     /// The corresponding source location of each register.
     pub spans: Map<Register, Span>,
+    /// The registers corresponding to variable accesses, for better type checking error diagnostics.
+    pub variables: Set<Register>,
     /// Information about the control flow graph.
     pub cfg: Cfg,
     /// Next register ID.
@@ -563,6 +565,7 @@ impl Function {
         blocks: Map<BlockId, Block>,
         tys: Map<Register, Ty>,
         spans: Map<Register, Span>,
+        variables: Set<Register>,
         next_register: u128,
     ) -> Self {
         let cfg = Cfg::new(&blocks);
@@ -571,6 +574,7 @@ impl Function {
             blocks,
             tys,
             spans,
+            variables,
             cfg,
             next_register,
         }
