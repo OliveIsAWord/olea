@@ -505,10 +505,14 @@ impl<'src> Parser<'src> {
             if let Some(deref_span) = self.just(P::Hat) {
                 span = e.span.start..deref_span.end;
                 kind = ExprKind::Place(PlaceKind::Deref(Box::new(e), deref_span));
-            } else if let Some(ref_span) = self.just(P::At) {
+            } else if let Some(mut ref_span) = self.just(P::At) {
+                let is_mut = self.just(P::Mut);
+                if let Some(s) = &is_mut {
+                    ref_span.end = s.end;
+                }
                 span = e.span.start..ref_span.end;
                 let op = UnaryOp {
-                    kind: UnaryOpKind::Ref,
+                    kind: UnaryOpKind::Ref(is_mut.is_some().into()),
                     span: ref_span,
                 };
                 kind = ExprKind::UnaryOp(op, Box::new(e));

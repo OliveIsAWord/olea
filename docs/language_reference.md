@@ -417,9 +417,10 @@ Olea supports [Uniform Function Call Syntax](https://en.wikipedia.org/wiki/Unifo
 
 ```rs
 <expression>@
+<expression>@mut
 ```
 
-Yields a pointer to the value of the expression. If referencing a place expression, this will be the pointer to its associated memory region. Otherwise, it will be a pointer to a temporary allocation that lives for the duration of the current statement.
+Yields a (possibly mutable) pointer to the value of the expression. If referencing a place expression, this will be the pointer to its associated memory region. Otherwise, it will be a pointer to a temporary allocation that lives for the duration of the current statement.
 
 ### Dereferences
 

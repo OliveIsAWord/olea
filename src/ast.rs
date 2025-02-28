@@ -175,8 +175,8 @@ pub type UnaryOp = Spanned<UnaryOpKind>;
 pub enum UnaryOpKind {
     /// Two's complement negation.
     Neg,
-    /// Taking the pointer of a value.
-    Ref,
+    /// Taking the (possibly mutable) pointer of a value.
+    Ref(IsMut),
 }
 
 /// See [`BinOpKind`].

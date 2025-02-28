@@ -428,7 +428,7 @@ impl<'a> IrBuilder<'a> {
                         self.push_store(Sk::UnaryOp(B::Neg, reg), span)
                             .some_if(unvoid)
                     }
-                    A::Ref => self.build_expr_ref(e, op_span)?.some(),
+                    A::Ref(is_mut) => self.build_expr_ref(e, Some(is_mut), op_span)?.some(),
                 }
             }
             E::BinOp(op, lhs, rhs) => {
@@ -666,7 +666,7 @@ impl<'a> IrBuilder<'a> {
                 let span;
                 let struct_reg = if let Some(struct_value) = struct_value {
                     span = struct_value.span.clone();
-                    self.build_expr_ref(struct_value, span.clone())?
+                    self.build_expr_ref(struct_value, None, span.clone())?
                 } else {
                     span = dot_span.clone();
                     self.get_self(span.clone())?
@@ -680,12 +680,17 @@ impl<'a> IrBuilder<'a> {
     }
 
     /// Build an expression and return a pointer to its value. If it's a place expression, this will be a pointer to its memory region. Otherwise, this will create a new stack allocation and return a pointer to that.
-    fn build_expr_ref(&mut self, expr: &ast::Expr, span: Span) -> Result<Register> {
+    fn build_expr_ref(
+        &mut self,
+        expr: &ast::Expr,
+        is_mut: Option<IsMut>,
+        span: Span,
+    ) -> Result<Register> {
         let maybe_var = match &expr.kind {
-            ast::ExprKind::Place(kind) => self.build_place(kind, span)?,
-            _ => MaybeVar::Constant(self.build_expr_unvoid(expr, span)?),
+            ast::ExprKind::Place(kind) => self.build_place(kind, span.clone())?,
+            _ => MaybeVar::Constant(self.build_expr_unvoid(expr, span.clone())?),
         };
-        let r = match maybe_var {
+        let mut r = match maybe_var {
             MaybeVar::Variable(r) => r,
             MaybeVar::Constant(c) => {
                 let r = self.push_store(Sk::StackAlloc(self.tys[&c]), expr.span.clone());
@@ -693,6 +698,15 @@ impl<'a> IrBuilder<'a> {
                 r
             }
         };
+        // match on this early just to make sure this invariant actually holds
+        let TyKind::Pointer(pointer) = self.program_tys[self.tys[&r]] else {
+            unreachable!()
+        };
+        if let Some(is_mut) = is_mut {
+            if is_mut != pointer.is_mut {
+                r = self.push_store(Sk::PtrCast(r, Pointer { is_mut, ..pointer }), span);
+            }
+        }
         Ok(r)
     }
 

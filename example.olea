@@ -1,4 +1,3 @@
-fn read(ptr: usize^) usize:
-    let evil = ptr as usize^mut
-    evil^ = 42
-    evil^
+fn main():
+    let v = 0
+    v@^ = 42
