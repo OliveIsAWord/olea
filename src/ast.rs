@@ -88,7 +88,7 @@ pub enum StmtKind {
     /// Store a value in a memory location.
     Assign(Place, Expr),
     /// A local variable declaration. This introduces a name which is bound to a value and can be accessed by all following statements in the block.
-    Let(Name, Option<Ty>, Expr),
+    Let(IsMut, Name, Option<Ty>, Expr),
     Return(Option<Expr>),
     Break(Option<Expr>),
     Continue,

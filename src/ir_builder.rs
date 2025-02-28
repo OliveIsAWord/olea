@@ -245,8 +245,8 @@ impl<'a> IrBuilder<'a> {
             let reg = self.new_reg(ir_ty, p_name.span.clone());
             self.parameters.push(reg);
             // Currently, we assume all variables are stack allocated, so we copy the argument to a stack allocation.
-            let var_reg = self.new_var(p_name.clone(), ir_ty);
-            self.push_write(var_reg, reg);
+            let is_mut = IsMut::Const; // TODO: mutable function parameters
+            let var_reg = self.new_var(p_name.clone(), ir_ty, is_mut, reg);
             if i == 0 && underscore_self.is_none() {
                 self.self_reg = Some(var_reg);
             }
@@ -346,14 +346,13 @@ impl<'a> IrBuilder<'a> {
                 self.push_write(place_reg, value_reg);
                 None
             }
-            S::Let(name, ty, body) => {
+            S::Let(is_mut, name, ty, body) => {
                 let value_reg = self.build_expr_unvoid(body, span)?;
                 let alloc_ty = match ty {
                     Some(t) => self.build_ty(t)?,
                     None => self.tys[&value_reg],
                 };
-                let alloc_reg = self.new_var(name.clone(), alloc_ty);
-                self.push_write(alloc_reg, value_reg);
+                self.new_var(name.clone(), alloc_ty, *is_mut, value_reg);
                 None
             }
             S::Continue => return Err(todo("continue", span)),
@@ -892,8 +891,12 @@ impl<'a> IrBuilder<'a> {
         self.defined_tys.build_ty(ty, self.program_tys)
     }
 
-    fn new_var(&mut self, name: Name, ty: Ty) -> Register {
-        let reg = self.push_store(Sk::StackAlloc(ty), name.span);
+    fn new_var(&mut self, name: Name, ty: Ty, is_mut: IsMut, value_reg: Register) -> Register {
+        let mut reg = self.push_store(Sk::StackAlloc(ty), name.span.clone());
+        self.push_write(reg, value_reg);
+        if is_mut == IsMut::Const {
+            reg = self.push_store(Sk::PtrCast(reg, Pointer { inner: ty, is_mut }), name.span);
+        }
         self.scopes.last_mut().unwrap().insert(name.kind, reg);
         reg
     }

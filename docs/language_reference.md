@@ -185,10 +185,14 @@ An expression statement evaluates its expression, either discarding or yielding 
 ### `let` Bindings
 
 ```rs
-let <name> {type} = <expression>
+let {mut} <name> {type} = <expression>
 ```
 
-Creates a local variable that can be accessed by name and by pointer in expressions. Olea is "lexically scoped", meaning this variable can be accessed in any following statements of the block this `let` binding appears in. Olea also allows local variables to "shadow" outer items of the same name, meaning the latter is no longer accessible for the lifetime of the variable. The lifetime of the variable's memory region is the same as the variable's scope (shadowing does not affect this).
+Creates a local variable that can be accessed by name and by pointer in expressions. Olea is "lexically scoped", meaning this variable can be accessed in any following statements of the block this `let` binding appears in. If not marked as `mut`, the variable's value cannot by modified nor can a mutable reference be taken to it.
+
+Olea also allows local variables to "shadow" outer items of the same name, meaning the latter is no longer accessible for the lifetime of the variable.
+
+The lifetime of the variable's memory region is the same as the variable's scope (shadowing does not affect this).
 
 ### Assignments
 

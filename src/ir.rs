@@ -54,7 +54,7 @@ pub enum TyKind {
 pub struct Pointer {
     /// The type of the value pointed to.
     pub inner: Ty,
-    /// WHether or not the value may be modified through this pointer.
+    /// Whether or not the value may be modified through this pointer.
     pub is_mut: IsMut,
 }
 

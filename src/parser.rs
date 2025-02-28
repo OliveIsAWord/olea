@@ -619,6 +619,7 @@ impl<'src> Parser<'src> {
     }
     fn stmt_kind(&mut self) -> Result<StmtKind> {
         if self.just(P::Let).is_some() {
+            let is_mut = self.just(P::Mut);
             let name = self
                 .name()
                 .ok_or_else(|| self.err("expected name for let statement"))?;
@@ -627,7 +628,7 @@ impl<'src> Parser<'src> {
                 return Err(self.err("expected `=` for let statement"));
             }
             let body = self.expr()?;
-            Ok(StmtKind::Let(name, ty, body))
+            Ok(StmtKind::Let(is_mut.is_some().into(), name, ty, body))
         } else if self.just(P::Return).is_some() {
             self.expr_or_end().map(StmtKind::Return)
         } else if self.just(P::Break).is_some() {
