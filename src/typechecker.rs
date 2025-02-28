@@ -7,6 +7,8 @@ pub enum ErrorKind {
     NotInt(Register),
     /// We dereferenced a register of a non-pointer type.
     NotPointer(Register),
+    /// We wrote a value through a const pointer.
+    MutateThroughConstPointer(Register),
     /// We called a register of a non-function type.
     NotFunction(Register),
     /// We accessed a field of a non-struct type.
@@ -29,7 +31,7 @@ struct TypeChecker<'a> {
     static_values: &'a Map<Str, Value>,
     return_tys: &'a [Ty],
     tys: &'a Tys,
-    name: &'a str,
+    name: &'a Str,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -38,7 +40,7 @@ impl<'a> TypeChecker<'a> {
     }
     fn err(&self, r: Register, kind: &TyKind) -> Result {
         Err((
-            self.name.into(),
+            self.name.clone(),
             ErrorKind::Expected(r, self.ty_map.format_kind(kind)),
         ))
     }
@@ -52,13 +54,13 @@ impl<'a> TypeChecker<'a> {
     fn int(&self, r: Register) -> Result<IntKind> {
         match self.t(r) {
             &TyKind::Int(k) => Ok(k),
-            _ => Err((self.name.into(), ErrorKind::NotInt(r))),
+            _ => Err((self.name.clone(), ErrorKind::NotInt(r))),
         }
     }
-    fn pointer(&self, r: Register) -> Result<&'a TyKind> {
+    fn pointer(&self, r: Register) -> Result<(&'a TyKind, IsMut)> {
         match self.t(r) {
-            &TyKind::Pointer(inner) => Ok(&self.ty_map[inner]),
-            _ => Err((self.name.into(), ErrorKind::NotPointer(r))),
+            &TyKind::Pointer(p) => Ok((&self.ty_map[p.inner], p.is_mut)),
+            _ => Err((self.name.clone(), ErrorKind::NotPointer(r))),
         }
     }
     fn infer_storekind(&self, sk: &StoreKind) -> Result<TyKind> {
@@ -105,9 +107,10 @@ impl<'a> TypeChecker<'a> {
                 }
             }
             Sk::PtrOffset(pointer, ref accesses) => {
-                let &TyKind::Pointer(mut pointee) = self.t(pointer) else {
-                    return Err((self.name.into(), ErrorKind::NotPointer(pointer)));
+                let &TyKind::Pointer(pointer_kind) = self.t(pointer) else {
+                    return Err((self.name.clone(), ErrorKind::NotPointer(pointer)));
                 };
+                let mut pointee = pointer_kind.inner;
                 for access in accesses {
                     match *access {
                         PtrOffset::Index(index) => {
@@ -121,7 +124,7 @@ impl<'a> TypeChecker<'a> {
                         PtrOffset::Field(ref field) => {
                             let TyKind::Struct { fields, .. } = &self.ty_map[pointee] else {
                                 return Err((
-                                    self.name.into(),
+                                    self.name.clone(),
                                     ErrorKind::NotStruct(pointee, pointer),
                                 ));
                             };
@@ -130,14 +133,17 @@ impl<'a> TypeChecker<'a> {
                                 .find_map(|(name, &ty)| (name == field).then_some(ty))
                                 .ok_or_else(|| {
                                     (
-                                        self.name.into(),
+                                        self.name.clone(),
                                         ErrorKind::NoFieldNamed(pointer, field.clone()),
                                     )
                                 })?;
                         }
                     }
                 }
-                TyKind::Pointer(pointee)
+                TyKind::Pointer(Pointer {
+                    inner: pointee,
+                    is_mut: pointer_kind.is_mut,
+                })
             }
             /*
             Sk::FieldOffset(r, ref field) => {
@@ -147,8 +153,11 @@ impl<'a> TypeChecker<'a> {
                 let kind = self.int(rhs)?;
                 TyKind::Int(kind)
             }
-            Sk::StackAlloc(inner) => TyKind::Pointer(inner),
-            Sk::Read(src) => self.pointer(src)?.clone(),
+            Sk::StackAlloc(inner) => TyKind::Pointer(Pointer {
+                inner,
+                is_mut: IsMut::Mut,
+            }),
+            Sk::Read(src) => self.pointer(src)?.0.clone(),
             Sk::Phi(ref rs) => {
                 let mut rs = rs.values().copied();
                 let ty = self.t(rs.next().expect("empty phi"));
@@ -160,7 +169,8 @@ impl<'a> TypeChecker<'a> {
             Sk::Function(ref name) => self.ty_map[self.function_tys[name.as_ref()]].clone(),
             Sk::Static(ref name) => {
                 let inner = self.static_values[name.as_ref()].ty;
-                TyKind::Pointer(inner)
+                let is_mut = IsMut::Const; // TODO: mutable statics
+                TyKind::Pointer(Pointer { inner, is_mut })
             }
         };
         Ok(ty)
@@ -173,7 +183,10 @@ impl<'a> TypeChecker<'a> {
                 self.expect(r, &got)
             }
             &Inst::Write(dst, src) => {
-                let inner = self.pointer(dst)?;
+                let (inner, is_mut) = self.pointer(dst)?;
+                if is_mut == IsMut::Const {
+                    return Err((self.name.clone(), ErrorKind::MutateThroughConstPointer(dst)));
+                }
                 self.expect(src, inner)
             }
             Inst::Nop => Ok(()),
@@ -189,7 +202,7 @@ impl<'a> TypeChecker<'a> {
                     returns: fn_returns,
                 } = self.t(callee)
                 else {
-                    return Err((self.name.into(), ErrorKind::NotFunction(callee)));
+                    return Err((self.name.clone(), ErrorKind::NotFunction(callee)));
                 };
                 for (&(_, expected), &r) in zip(fn_params.values(), args) {
                     self.expect(r, &self.ty_map[expected])?;
@@ -223,7 +236,7 @@ impl<'a> TypeChecker<'a> {
     }
     fn visit_function(
         f: &'a Function,
-        name: &'a str,
+        name: &'a Str,
         function_tys: &'a Map<Str, Ty>,
         static_values: &'a Map<Str, Value>,
         ty_map: &'a TyMap,

@@ -39,7 +39,7 @@ struct SizeFinder<'a>(&'a TyMap);
 impl SizeFinder<'_> {
     fn of_ty(self, ty: Ty) -> Size {
         self.of_ty_or(ty)
-            .unwrap_or_else(|_| unreachable!("aggregate type {ty} encountered during codegen"))
+            .unwrap_or_else(|_| unreachable!("aggregate type {ty:?} encountered during codegen"))
     }
     fn of_ty_or(self, ty: Ty) -> Result<Size, u32> {
         match &self.0[ty] {
@@ -58,22 +58,16 @@ impl SizeFinder<'_> {
     }
     fn of_inner(self, ty: Ty) -> Size {
         match &self.0[ty] {
-            &TyKind::Pointer(inner) => self.of_ty(inner),
-            t => unreachable!("accessing inner type of non-pointer type `{t}`"),
+            &TyKind::Pointer(p) => self.of_ty(p.inner),
+            t => unreachable!("accessing inner type of non-pointer type `{t:?}`"),
         }
     }
     fn of_in_bytes(self, ty: Ty) -> u32 {
         self.of_ty_or(ty).map_or_else(|x| x, Size::in_bytes)
     }
-    fn _of_inner_in_bytes(self, ty: Ty) -> u32 {
-        match &self.0[ty] {
-            &TyKind::Pointer(inner) => self.of_in_bytes(inner),
-            t => unreachable!("accessing inner type of non-pointer type `{t}`"),
-        }
-    }
     fn field_offset(self, ty: Ty, accessed_field: &Str) -> u32 {
         let TyKind::Struct { fields, .. } = &self.0[ty] else {
-            unreachable!("field offset {ty} {} {accessed_field}", self.0[ty]);
+            unreachable!("field offset {ty:?} {:?} {accessed_field}", self.0[ty]);
         };
         let mut offset: u32 = 0;
         for (field_name, field_ty) in fields {
@@ -457,9 +451,10 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                                     write_inst!(code, "mov {}, {}", reg.foo(), pointer_reg.foo());
                                 }
                             }
-                            let TyKind::Pointer(mut pointee_ty) = get_size.0[f.tys[pointer]] else {
+                            let TyKind::Pointer(pointer) = get_size.0[f.tys[pointer]] else {
                                 unreachable!();
                             };
+                            let mut pointee_ty = pointer.inner;
                             for access in accesses {
                                 match access {
                                     PtrOffset::Field(name) => {

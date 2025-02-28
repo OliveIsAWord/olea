@@ -70,6 +70,10 @@ fn typecheck(ir: &ir::Program, src: &str, file_path: &str, error_mode: ErrorMode
                     format!("cannot dereference a value of type {}", t(reg),),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
+                E::MutateThroughConstPointer(reg) => (
+                    "cannot mutate through a const pointer".to_owned(),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
                 E::NotFunction(reg) => (
                     format!("expected function, got {}", t(reg),),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),

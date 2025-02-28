@@ -28,7 +28,7 @@ pub enum TyKind {
     /// An integer.
     Int(IntKind),
     /// A pointer into memory storing a value of a given type.
-    Pointer(Ty),
+    Pointer(Pointer),
     /// A function pointer accepting and returning some values.
     Function {
         /// Can this function be called with method call notation?
@@ -47,6 +47,15 @@ pub enum TyKind {
     },
     /// A contiguous fixed-length list of values of a type.
     Array(Ty, u128),
+}
+
+/// A pointer type.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct Pointer {
+    /// The type of the value pointed to.
+    pub inner: Ty,
+    /// WHether or not the value may be modified through this pointer.
+    pub is_mut: IsMut,
 }
 
 /// The sizes an integer type can be.
@@ -123,7 +132,7 @@ impl TyMap {
     pub fn insert_at(&mut self, index: Ty, kind: TyKind) {
         if let Some(previous) = self.get(index) {
             panic!(
-                "inserted two types at the same id\n  id: {index}\n  type 1: {previous}\n  type 2: {kind}"
+                "inserted two types at the same id\n  id: {index:?}\n  type 1: {previous:?}\n  type 2: {kind:?}"
             )
         }
         self.inner.insert(index, kind);
@@ -142,7 +151,11 @@ impl TyMap {
         match kind {
             TyKind::Bool => "bool".to_owned(),
             TyKind::Int(size) => size.to_string(),
-            &TyKind::Pointer(inner) => format!("{}^", self.format(inner)),
+            &TyKind::Pointer(Pointer { inner, is_mut }) => format!(
+                "{}^{}",
+                self.format(inner),
+                if is_mut.into() { "mut" } else { "" }
+            ),
             TyKind::Function {
                 has_self,
                 params,
@@ -212,7 +225,18 @@ impl TyMap {
         match (a, b) {
             (T::Bool, T::Bool) => true,
             (T::Int(a), T::Int(b)) => a == b,
-            (&T::Pointer(a), &T::Pointer(b)) => self.equals(a, b),
+            (
+                &T::Pointer(Pointer {
+                    inner: a_inner,
+                    is_mut: a_is_mut,
+                }),
+                &T::Pointer(b),
+            ) => {
+                if a_is_mut != b.is_mut {
+                    return false;
+                }
+                self.equals(a_inner, b.inner)
+            }
             (
                 T::Function {
                     has_self: a_self,
@@ -751,8 +775,8 @@ pub enum StoreKind {
     BinOp(BinOp, Register, Register),
     /// Casting an integer value to another integer type.
     IntCast(Register, IntKind),
-    /// Casting an pointer inner type to a different type.
-    PtrCast(Register, Ty),
+    /// Casting from one pointer type to another.
+    PtrCast(Register, Pointer),
     /// A pointer offset from the first register by an ordered sequence of inner accesses.
     PtrOffset(Register, Vec<PtrOffset>),
     /// A pointer to a unique allocation for a value of a given type.

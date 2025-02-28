@@ -1,5 +1,2 @@
-fn promote(x: u8) u16:
-    x as u16
-
-fn main() u16:
-    42_u8.promote()
+fn write(ptr: usize^mut):
+    ptr^ = 42

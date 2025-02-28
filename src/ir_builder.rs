@@ -104,9 +104,10 @@ impl DefinedTys {
                     span: ty.span.clone(),
                 }),
             },
-            T::Pointer(inner) => {
-                let inner_kind = self.build_ty(inner, program_tys)?;
-                Ok(program_tys.insert(TyKind::Pointer(inner_kind)))
+            &T::Pointer(ref inner, is_mut) => {
+                let inner = self.build_ty(inner, program_tys)?;
+                let pointer = Pointer { inner, is_mut };
+                Ok(program_tys.insert(TyKind::Pointer(pointer)))
             }
             T::Array(inner, count) => {
                 let inner_kind = self.build_ty(inner, program_tys)?;
@@ -403,7 +404,11 @@ impl<'a> IrBuilder<'a> {
                 let static_name = Str::from(format!("__olea_string_{}", self.static_values.len()));
                 self.static_values.insert(static_name.clone(), value);
                 let pointer_to_byte_array = self.push_store(Sk::Static(static_name), span.clone());
-                self.push_store(Sk::PtrCast(pointer_to_byte_array, u8_ty), span)
+                let pointer_ty = Pointer {
+                    inner: u8_ty,
+                    is_mut: IsMut::Const,
+                };
+                self.push_store(Sk::PtrCast(pointer_to_byte_array, pointer_ty), span)
                     .some()
             }
             E::Tuple(items) => {
@@ -928,9 +933,10 @@ impl<'a> IrBuilder<'a> {
             Sk::PtrOffset(ptr, accesses) => {
                 assert_eq!(accesses.len(), 1);
                 let access = &accesses[0];
-                let TyKind::Pointer(mut pointee_ty) = self.program_tys[t(ptr)] else {
+                let TyKind::Pointer(pointer) = self.program_tys[t(ptr)] else {
                     return dummy_ty;
                 };
+                let mut pointee_ty = pointer.inner;
                 match access {
                     PtrOffset::Index(_) => {
                         if let TyKind::Array(item, _count) = self.program_tys[pointee_ty] {
@@ -950,18 +956,26 @@ impl<'a> IrBuilder<'a> {
                         pointee_ty = item;
                     }
                 }
-                self.program_tys.insert(TyKind::Pointer(pointee_ty))
+                self.program_tys.insert(TyKind::Pointer(Pointer {
+                    inner: pointee_ty,
+                    is_mut: pointer.is_mut,
+                }))
             }
-            &Sk::StackAlloc(ty) => self.program_tys.insert(TyKind::Pointer(ty)),
+            &Sk::StackAlloc(ty) => self.program_tys.insert(TyKind::Pointer(Pointer {
+                inner: ty,
+                is_mut: IsMut::Mut,
+            })),
             Sk::Copy(r) | Sk::UnaryOp(UnaryOp::Neg, r) => t(r),
             Sk::Read(r) => match self.program_tys[self.tys[r]] {
-                TyKind::Pointer(inner) => inner,
+                TyKind::Pointer(p) => p.inner,
                 _ => dummy_ty,
             },
             Sk::Function(name) => self.function_tys[name],
             Sk::Static(name) => {
                 let inner = self.static_values[name].ty;
-                self.program_tys.insert(TyKind::Pointer(inner))
+                let is_mut = IsMut::Const; // TODO: mutable statics
+                self.program_tys
+                    .insert(TyKind::Pointer(Pointer { inner, is_mut }))
             }
             &Sk::Struct { ty, .. } => ty,
         }
@@ -1073,7 +1087,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                     fn recursively_stores(field_kind: &ast::TyKind) -> Option<Str> {
                         // does this field store a possibly recursive type by value?
                         match &field_kind {
-                            Tk::Pointer(_) | Tk::Function { .. } => None,
+                            Tk::Pointer(_, _) | Tk::Function { .. } => None,
                             Tk::Name(name) => Some(name.kind.clone()),
                             Tk::Array(item_ty, _count) => {
                                 // Open question: Do we consider arrays of length 0? Rust has an open issue for it: https://github.com/rust-lang/rust/issues/11924
@@ -1190,7 +1204,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 let struct_ty = defined_tys.tys[&name.kind].0;
                 let TyKind::Struct { fields, .. } = &program_tys[struct_ty] else {
                     unreachable!(
-                        "struct has non-struct type: {struct_ty} {}",
+                        "struct has non-struct type: {struct_ty:?} {}",
                         program_tys.format(struct_ty)
                     );
                 };

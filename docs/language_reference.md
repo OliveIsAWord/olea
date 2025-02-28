@@ -109,9 +109,10 @@ Structs and built-in types are accessed by name. The built-in types include the 
 
 ```rs
 <type>^
+<type>^mut
 ```
 
-A pointer is a value that can be used to access a region of memory.
+A pointer is a value that can be used to access a region of memory. A `mut` pointer can read and write to this memory. A "const" pointer can only read memory.
 
 ### Function Pointers
 

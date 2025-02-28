@@ -57,7 +57,7 @@ pub fn destructure_program(program: &mut Program) {
     };
 
     for (a, b) in &destructed_tys {
-        eprintln!("{a} {{");
+        eprintln!("{a:?} {{");
         for b in b {
             eprintln!(" , {b:?}");
         }
@@ -210,7 +210,10 @@ fn visit_block(
                 for (&scalar, &(ref accesses, ty)) in zip(scalar_regs, fields) {
                     let new_ptr = Register(*next_register);
                     *next_register += 1;
-                    let ty = ty_map.insert(TyKind::Pointer(ty));
+                    let ty = ty_map.insert(TyKind::Pointer(Pointer {
+                        inner: ty,
+                        is_mut: IsMut::Mut,
+                    }));
                     tys.insert(new_ptr, ty);
                     let accesses = accesses.clone();
                     insts.insert(i, Inst::Store(new_ptr, Sk::PtrOffset(dst, accesses)));
@@ -294,7 +297,10 @@ fn visit_block(
                         for (&field_r, &(ref accesses, ty)) in zip(scalar_regs, fields) {
                             let new_ptr = Register(*next_register);
                             *next_register += 1;
-                            let ty = ty_map.insert(TyKind::Pointer(ty));
+                            let ty = ty_map.insert(TyKind::Pointer(Pointer {
+                                inner: ty,
+                                is_mut: IsMut::Const,
+                            }));
                             tys.insert(new_ptr, ty);
                             let accesses = accesses.clone();
                             insts.insert(i, Inst::Store(new_ptr, Sk::PtrOffset(src, accesses)));

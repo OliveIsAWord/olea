@@ -55,6 +55,27 @@ pub enum Cmp {
     Ge,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum IsMut {
+    Const,
+    Mut,
+}
+
+impl From<bool> for IsMut {
+    fn from(b: bool) -> Self {
+        if b { Self::Mut } else { Self::Const }
+    }
+}
+
+impl From<IsMut> for bool {
+    fn from(is_mut: IsMut) -> Self {
+        match is_mut {
+            IsMut::Const => false,
+            IsMut::Mut => true,
+        }
+    }
+}
+
 /// The presence or absence of the `anon` keyword in a function parameter or struct field.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum IsAnon {

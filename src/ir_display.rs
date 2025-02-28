@@ -40,7 +40,7 @@ impl<T: Display + ?Sized> Display for WithTy<'_, T> {
     fn fmt(&self, f: F) -> Result {
         write!(f, "{}", self.0)?;
         if DISPLAY_TYS {
-            write!(f, " {}", self.1)?;
+            write!(f, " {:?}", self.1)?;
         }
         Ok(())
     }
@@ -139,7 +139,7 @@ impl DisplayWithName for Function {
                         use StoreKind as Sk;
                         write!(f, "{} = ", reg_def(r))?;
                         match sk {
-                            Sk::StackAlloc(ty) => write!(f, "StackAlloc({ty})"),
+                            Sk::StackAlloc(ty) => write!(f, "StackAlloc({ty:?})"),
                             Sk::Bool(b) => write!(f, "{b}"),
                             Sk::Int(i, kind) => write!(f, "{i}_{kind}"),
                             Sk::Copy(r) => write!(f, "{r}"),
@@ -159,8 +159,8 @@ impl DisplayWithName for Function {
                                 BinOp::Cmp(Cmp::Gt) => ">",
                                 BinOp::Cmp(Cmp::Ge) => ">=",
                             }),
-                            Sk::IntCast(inner, ty) => write!(f, "{inner} as {ty}"),
-                            Sk::PtrCast(pointer, ty) => write!(f, "{pointer} as {ty}^"),
+                            Sk::IntCast(inner, ty) => write!(f, "{inner} as {ty:?}"),
+                            Sk::PtrCast(pointer, ty) => write!(f, "{pointer} as {ty:?}"),
                             Sk::PtrOffset(pointer, accesses) => {
                                 write!(f, "{pointer}")?;
                                 for access in accesses {
@@ -176,7 +176,7 @@ impl DisplayWithName for Function {
 
                             Sk::Function(name) | Sk::Static(name) => write!(f, "{name}"),
                             Sk::Struct { ty, fields } => {
-                                write!(f, "struct {ty}(")?;
+                                write!(f, "struct {ty:?}(")?;
                                 for (i, val) in fields.iter().enumerate() {
                                     if i != 0 {
                                         write!(f, ", ")?;
@@ -232,46 +232,6 @@ impl Display for Program {
             write!(f, "{}", function.with_name(name))?;
         }
         Ok(())
-    }
-}
-
-impl Display for Ty {
-    fn fmt(&self, f: F) -> Result {
-        write!(f, "ty_{}", self.0)
-    }
-}
-
-impl Display for TyKind {
-    fn fmt(&self, f: F) -> Result {
-        match self {
-            Self::Bool => write!(f, "bool"),
-            Self::Int(kind) => write!(f, "{kind}"),
-            Self::Pointer(inner) => write!(f, "{inner}^"),
-            Self::Function {
-                has_self,
-                params,
-                returns,
-            } => {
-                write!(f, "fn(")?;
-                if *has_self {
-                    write!(f, "_, ")?;
-                }
-                write!(
-                    f,
-                    "{}){}",
-                    Commas(params.iter().map(|(name, (anon, ty))| if anon.into() {
-                        format!("anon {name}: {ty}")
-                    } else {
-                        format!("{name}: {ty}")
-                    })),
-                    ReturnsSpace(returns)
-                )
-            }
-            Self::Struct { name, .. } => {
-                write!(f, "{name}")
-            }
-            Self::Array(item, count) => write!(f, "{item}[{count}]"),
-        }
     }
 }
 

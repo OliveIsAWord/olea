@@ -278,9 +278,10 @@ impl<'src> Parser<'src> {
         };
         loop {
             if let Some(deref_span) = self.just(P::Hat) {
+                let is_mut = self.just(P::Mut).is_some().into();
                 let span = ty.span.start..deref_span.end;
                 ty = Ty {
-                    kind: TyKind::Pointer(Box::new(ty)),
+                    kind: TyKind::Pointer(Box::new(ty), is_mut),
                     span,
                 };
             } else if let Some(Spanned {
