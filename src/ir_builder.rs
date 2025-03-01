@@ -283,26 +283,19 @@ impl<'a> IrBuilder<'a> {
         else {
             unreachable!();
         };
-        let mut parameters: Map<&str, Register> = Map::new();
-        let field_args = zip(&ir_fields, fields)
-            .map(|((name, ty), ast_field)| {
-                let span = ast_field.1.span.clone();
-                let reg = self.new_reg(*ty, span);
-                parameters.insert(name, reg);
-                reg
-            })
+        let parameters: Vec<_> = zip(ir_fields.values(), fields)
+            .map(|(&ty, ast_field)| self.new_reg(ty, ast_field.1.span.clone()))
             .collect();
-        self.parameters.extend(parameters.values());
         let struct_reg = self.push_store(
             Sk::Struct {
                 ty,
-                fields: field_args,
+                fields: parameters.clone(),
             },
             name.span.clone(),
         );
         self.switch_to_new_block(Exit::Return(vec![struct_reg]), BlockId::DUMMY);
         Function::new(
-            self.parameters,
+            parameters,
             self.blocks,
             self.tys,
             self.spans,
