@@ -281,7 +281,7 @@ impl<'src> Parser<'src> {
                 let is_mut = self.just(P::Mut).is_some().into();
                 let span = ty.span.start..deref_span.end;
                 ty = Ty {
-                    kind: TyKind::Pointer(Box::new(ty), is_mut),
+                    kind: TyKind::Pointer(Box::new(ty), PointerKind::Single, is_mut),
                     span,
                 };
             } else if let Some(Spanned {
@@ -292,21 +292,41 @@ impl<'src> Parser<'src> {
                 self.next().unwrap();
                 let span = ty.span.start..index_span.end;
                 if *multi {
+                    let msg = if lengths.is_empty() {
+                        "not yet implemented: slices"
+                    } else {
+                        "not yet implemented: multidimensional arrays"
+                    };
                     return Err(Error {
-                        kind: ErrorKind::Custom("not yet implemented: multidimensional arrays"),
+                        kind: ErrorKind::Custom(msg),
                         span: index_span,
                     });
                 }
-                let length = self.item(
-                    Self::expr,
-                    &lengths[0],
-                    index_span.start..index_span.start,
-                    index_span.end..index_span.end,
-                )?;
-                ty = Ty {
-                    kind: TyKind::Array(Box::new(ty), Box::new(length)),
-                    span,
+                enum PointerIndex {
+                    Array(Box<Expr>),
+                    Multi(IsMut),
+                }
+                use PointerIndex::{Array, Multi};
+                let length = &lengths[0];
+                let span_start = || index_span.start..index_span.start;
+                let span_end = || index_span.end..index_span.end;
+                let pointer_index = if let Ok(Some(_)) = self.item(
+                    |this| Ok(this.just(P::Hat)),
+                    length,
+                    span_start(),
+                    span_end(),
+                ) {
+                    let is_mut = self.just(P::Mut).is_some();
+                    Multi(is_mut.into())
+                } else {
+                    let e = self.item(Self::expr, length, span_start(), span_end())?;
+                    Array(Box::new(e))
                 };
+                let kind = match pointer_index {
+                    Array(length) => TyKind::Array(Box::new(ty), length),
+                    Multi(is_mut) => TyKind::Pointer(Box::new(ty), PointerKind::Multi, is_mut),
+                };
+                ty = Ty { kind, span };
             } else {
                 break;
             }

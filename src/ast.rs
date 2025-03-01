@@ -69,7 +69,7 @@ pub enum TyKind {
     /// A type accessed by an identifier.
     Name(Name),
     /// A pointer to a value of a given type.
-    Pointer(Box<Ty>, IsMut),
+    Pointer(Box<Ty>, PointerKind, IsMut),
     /// A contiguous collection of elements of a known length.
     Array(Box<Ty>, Box<Expr>),
     /// A function accepting and returning values of given types. The `Option<Span>` is the leading underscore.

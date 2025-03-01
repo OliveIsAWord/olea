@@ -54,6 +54,8 @@ pub enum TyKind {
 pub struct Pointer {
     /// The type of the value pointed to.
     pub inner: Ty,
+    /// Whether this pointer is single- or multi-item.
+    pub kind: PointerKind,
     /// Whether or not the value may be modified through this pointer.
     pub is_mut: IsMut,
 }
@@ -151,10 +153,18 @@ impl TyMap {
         match kind {
             TyKind::Bool => "bool".to_owned(),
             TyKind::Int(size) => size.to_string(),
-            &TyKind::Pointer(Pointer { inner, is_mut }) => format!(
-                "{}^{}",
+            &TyKind::Pointer(Pointer {
+                inner,
+                kind,
+                is_mut,
+            }) => format!(
+                "{}{}{}",
                 self.format(inner),
-                if is_mut.into() { "mut" } else { "" }
+                match kind {
+                    PointerKind::Single => "^",
+                    PointerKind::Multi => "[^]",
+                },
+                if is_mut.into() { "mut" } else { "" },
             ),
             TyKind::Function {
                 has_self,
@@ -228,11 +238,12 @@ impl TyMap {
             (
                 &T::Pointer(Pointer {
                     inner: a_inner,
+                    kind: a_kind,
                     is_mut: a_is_mut,
                 }),
                 &T::Pointer(b),
             ) => {
-                if a_is_mut != b.is_mut {
+                if a_kind != b.kind || a_is_mut != b.is_mut {
                     return false;
                 }
                 self.equals(a_inner, b.inner)

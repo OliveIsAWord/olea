@@ -1,3 +1,8 @@
-fn main():
-    let v = 0
-    v = 42
+fn correct_accesses():
+    # well, they do exhibit undefined behavior, but at least they type check!
+    let x u8[5]^ = (0@ as u8[5][^])[1]@
+    let y u8^ = (0@ as u8[5]^)[1]@
+
+fn incorrect_accesses():
+    ""^
+    0@[0]

@@ -105,3 +105,9 @@ impl From<&IsAnon> for bool {
         Self::from(*anon)
     }
 }
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum PointerKind {
+    Single,
+    Multi,
+}

@@ -86,6 +86,14 @@ fn typecheck(ir: &ir::Program, src: &str, file_path: &str, error_mode: ErrorMode
                     "cannot mutably reference an immutable variable".to_owned(),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
+                E::CantDerefMultiPointer(reg) => (
+                    "cannot dereference a multi-item pointer".to_owned(),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
+                E::CantIndexSinglePointer(reg) => (
+                    "cannot index through a single-item pointer".to_owned(),
+                    snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
+                ),
                 E::NotFunction(reg) => (
                     format!("expected function, got {}", t(reg),),
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),

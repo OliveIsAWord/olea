@@ -160,7 +160,26 @@ impl DisplayWithName for Function {
                                 BinOp::Cmp(Cmp::Ge) => ">=",
                             }),
                             Sk::IntCast(inner, ty) => write!(f, "{inner} as {ty:?}"),
-                            Sk::PtrCast(pointer, ty) => write!(f, "{pointer} as {ty:?}"),
+                            Sk::PtrCast(
+                                pointer,
+                                Pointer {
+                                    inner,
+                                    kind,
+                                    is_mut,
+                                },
+                            ) => write!(
+                                f,
+                                "{pointer} as ty_{}{}{}",
+                                inner.0,
+                                match kind {
+                                    PointerKind::Single => "^",
+                                    PointerKind::Multi => "[^]",
+                                },
+                                match is_mut {
+                                    IsMut::Const => "",
+                                    IsMut::Mut => "mut",
+                                }
+                            ),
                             Sk::PtrOffset(pointer, accesses) => {
                                 write!(f, "{pointer}")?;
                                 for access in accesses {

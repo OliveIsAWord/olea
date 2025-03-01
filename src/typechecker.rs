@@ -15,6 +15,10 @@ pub enum ErrorKind {
     CantCastPointerToMut(Register),
     /// We tried to mutably reference an immutable variable.
     MutRefToConstVariable(Register),
+    /// We tried to use the deref operator on a multi-item pointer.
+    CantDerefMultiPointer(Register),
+    /// We tried to use the index operator on a single-item pointer to a type that wasn't an array.
+    CantIndexSinglePointer(Register),
     /// We called a register of a non-function type.
     NotFunction(Register),
     /// We accessed a field of a non-struct type.
@@ -64,9 +68,9 @@ impl<'a> TypeChecker<'a> {
             _ => Err((self.name.clone(), ErrorKind::NotInt(r))),
         }
     }
-    fn pointer(&self, r: Register) -> Result<(&'a TyKind, IsMut)> {
+    fn pointer(&self, r: Register) -> Result<Pointer> {
         match self.t(r) {
-            &TyKind::Pointer(p) => Ok((&self.ty_map[p.inner], p.is_mut)),
+            &TyKind::Pointer(p) => Ok(p),
             _ => Err((self.name.clone(), ErrorKind::NotPointer(r))),
         }
     }
@@ -93,9 +97,14 @@ impl<'a> TypeChecker<'a> {
                 self.int(int)?;
                 TyKind::Int(kind)
             }
-            Sk::PtrCast(pointer, kind) => {
-                let (_, is_mut) = self.pointer(pointer)?;
-                if is_mut == IsMut::Const && kind.is_mut == IsMut::Mut {
+            // A pointer cast returns a value of the provided pointer type, but we must assure the operand is itself a pointer and that we're not casting away a const.
+            Sk::PtrCast(pointer, cast_to) => {
+                let Pointer {
+                    inner: _,
+                    kind: _,
+                    is_mut,
+                } = self.pointer(pointer)?;
+                if is_mut == IsMut::Const && cast_to.is_mut == IsMut::Mut {
                     let kind = if self.variable_set.contains(&pointer) {
                         ErrorKind::MutRefToConstVariable(pointer)
                     } else {
@@ -103,7 +112,7 @@ impl<'a> TypeChecker<'a> {
                     };
                     return Err((self.name.clone(), kind));
                 }
-                TyKind::Pointer(kind)
+                TyKind::Pointer(cast_to)
             }
             Sk::Copy(r) => self.t(r).clone(),
             Sk::BinOp(op, lhs, rhs) => {
@@ -122,57 +131,77 @@ impl<'a> TypeChecker<'a> {
                 }
             }
             Sk::PtrOffset(pointer, ref accesses) => {
-                let &TyKind::Pointer(pointer_kind) = self.t(pointer) else {
-                    return Err((self.name.clone(), ErrorKind::NotPointer(pointer)));
-                };
-                let mut pointee = pointer_kind.inner;
+                let Pointer {
+                    mut inner,
+                    mut kind,
+                    is_mut,
+                } = self.pointer(pointer)?;
                 for access in accesses {
                     match *access {
                         PtrOffset::Index(index) => {
+                            inner = match kind {
+                                PointerKind::Multi => inner,
+                                PointerKind::Single => {
+                                    if let TyKind::Array(item, _count) = self.ty_map[inner] {
+                                        item
+                                    } else {
+                                        return Err((
+                                            self.name.clone(),
+                                            ErrorKind::CantIndexSinglePointer(pointer),
+                                        ));
+                                    }
+                                }
+                            };
+                            kind = PointerKind::Single;
                             if let RegisterOrConstant::Register(index) = index {
                                 self.expect(index, &TyKind::Int(IntKind::Usize))?;
                             }
-                            if let TyKind::Array(item, _count) = self.ty_map[pointee] {
-                                pointee = item;
-                            }
                         }
                         PtrOffset::Field(ref field) => {
-                            let TyKind::Struct { fields, .. } = &self.ty_map[pointee] else {
+                            let TyKind::Struct { fields, .. } = &self.ty_map[inner] else {
                                 return Err((
                                     self.name.clone(),
-                                    ErrorKind::NotStruct(pointee, pointer),
+                                    ErrorKind::NotStruct(inner, pointer),
                                 ));
                             };
-                            pointee = fields
-                                .iter()
-                                .find_map(|(name, &ty)| (name == field).then_some(ty))
-                                .ok_or_else(|| {
-                                    (
-                                        self.name.clone(),
-                                        ErrorKind::NoFieldNamed(pointer, field.clone()),
-                                    )
-                                })?;
+                            inner = *fields.get(field).ok_or_else(|| {
+                                (
+                                    self.name.clone(),
+                                    ErrorKind::NoFieldNamed(pointer, field.clone()),
+                                )
+                            })?;
                         }
                     }
                 }
                 TyKind::Pointer(Pointer {
-                    inner: pointee,
-                    is_mut: pointer_kind.is_mut,
+                    inner,
+                    kind,
+                    is_mut,
                 })
             }
-            /*
-            Sk::FieldOffset(r, ref field) => {
-            }
-            */
             Sk::UnaryOp(UnaryOp::Neg, rhs) => {
                 let kind = self.int(rhs)?;
                 TyKind::Int(kind)
             }
             Sk::StackAlloc(inner) => TyKind::Pointer(Pointer {
                 inner,
+                kind: PointerKind::Single,
                 is_mut: IsMut::Mut,
             }),
-            Sk::Read(src) => self.pointer(src)?.0.clone(),
+            Sk::Read(src) => {
+                let Pointer {
+                    inner,
+                    kind,
+                    is_mut: _,
+                } = self.pointer(src)?;
+                match kind {
+                    PointerKind::Single => {}
+                    PointerKind::Multi => {
+                        return Err((self.name.clone(), ErrorKind::CantDerefMultiPointer(src)));
+                    }
+                }
+                self.ty_map[inner].clone()
+            }
             Sk::Phi(ref rs) => {
                 let mut rs = rs.values().copied();
                 let ty = self.t(rs.next().expect("empty phi"));
@@ -185,7 +214,11 @@ impl<'a> TypeChecker<'a> {
             Sk::Static(ref name) => {
                 let inner = self.static_values[name.as_ref()].ty;
                 let is_mut = IsMut::Const; // TODO: mutable statics
-                TyKind::Pointer(Pointer { inner, is_mut })
+                TyKind::Pointer(Pointer {
+                    inner,
+                    kind: PointerKind::Single,
+                    is_mut,
+                })
             }
         };
         Ok(ty)
@@ -198,7 +231,18 @@ impl<'a> TypeChecker<'a> {
                 self.expect(r, &got)
             }
             &Inst::Write(dst, src) => {
-                let (inner, is_mut) = self.pointer(dst)?;
+                let Pointer {
+                    inner,
+                    kind,
+                    is_mut,
+                } = self.pointer(dst)?;
+                // it's times like these i wish we reported multiple errors
+                match kind {
+                    PointerKind::Single => {}
+                    PointerKind::Multi => {
+                        return Err((self.name.clone(), ErrorKind::CantDerefMultiPointer(dst)));
+                    }
+                }
                 if is_mut == IsMut::Const {
                     let kind = if self.variable_set.contains(&dst) {
                         ErrorKind::MutateConstVariable(dst)
@@ -207,7 +251,7 @@ impl<'a> TypeChecker<'a> {
                     };
                     return Err((self.name.clone(), kind));
                 }
-                self.expect(src, inner)
+                self.expect(src, &self.ty_map[inner])
             }
             Inst::Nop => Ok(()),
             Inst::Call {

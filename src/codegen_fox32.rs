@@ -451,29 +451,42 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                                     write_inst!(code, "mov {}, {}", reg.foo(), pointer_reg.foo());
                                 }
                             }
-                            let TyKind::Pointer(pointer) = get_size.0[f.tys[pointer]] else {
+                            let TyKind::Pointer(Pointer {
+                                mut inner,
+                                mut kind,
+                                is_mut: _,
+                            }) = get_size.0[f.tys[pointer]]
+                            else {
                                 unreachable!();
                             };
-                            let mut pointee_ty = pointer.inner;
                             for access in accesses {
                                 match access {
                                     PtrOffset::Field(name) => {
-                                        let offset = get_size.field_offset(pointee_ty, name);
+                                        let offset = get_size.field_offset(inner, name);
                                         write_inst!(code, "add {}, {offset}", reg.foo());
-                                        let TyKind::Struct { fields, .. } = &get_size.0[pointee_ty]
+                                        let TyKind::Struct { fields, .. } = &get_size.0[inner]
                                         else {
                                             unreachable!();
                                         };
-                                        pointee_ty = fields[name];
+                                        inner = fields[name];
+                                        assert_eq!(kind, PointerKind::Single);
                                     }
                                     PtrOffset::Index(index) => {
-                                        // we could hypothetically do bounds checking if it's a pointer to an array
-                                        if let TyKind::Array(new_inner, _count) =
-                                            get_size.0[pointee_ty]
-                                        {
-                                            pointee_ty = new_inner;
+                                        inner = match kind {
+                                            PointerKind::Multi => inner,
+                                            PointerKind::Single => {
+                                                // we could hypothetically do bounds checking here
+                                                if let TyKind::Array(new_inner, _count) =
+                                                    get_size.0[inner]
+                                                {
+                                                    new_inner
+                                                } else {
+                                                    unreachable!()
+                                                }
+                                            }
                                         };
-                                        let stride = get_size.of_in_bytes(pointee_ty);
+                                        kind = PointerKind::Single;
+                                        let stride = get_size.of_in_bytes(inner);
                                         write_inst!(code, "mov {}, {stride}", TEMP_REG.foo());
                                         let const_storage;
                                         let index_reg = match index {

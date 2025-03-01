@@ -105,9 +105,13 @@ impl DefinedTys {
                     span: ty.span.clone(),
                 }),
             },
-            &T::Pointer(ref inner, is_mut) => {
+            &T::Pointer(ref inner, kind, is_mut) => {
                 let inner = self.build_ty(inner, program_tys)?;
-                let pointer = Pointer { inner, is_mut };
+                let pointer = Pointer {
+                    inner,
+                    kind,
+                    is_mut,
+                };
                 Ok(program_tys.insert(TyKind::Pointer(pointer)))
             }
             T::Array(inner, count) => {
@@ -409,6 +413,7 @@ impl<'a> IrBuilder<'a> {
                 let pointer_to_byte_array = self.push_store(Sk::Static(static_name), span.clone());
                 let pointer_ty = Pointer {
                     inner: u8_ty,
+                    kind: PointerKind::Multi,
                     is_mut: IsMut::Const,
                 };
                 self.push_store(Sk::PtrCast(pointer_to_byte_array, pointer_ty), span)
@@ -899,7 +904,12 @@ impl<'a> IrBuilder<'a> {
         let mut reg = self.push_store(Sk::StackAlloc(ty), name.span.clone());
         self.push_write(reg, value_reg);
         if is_mut == IsMut::Const {
-            reg = self.push_store(Sk::PtrCast(reg, Pointer { inner: ty, is_mut }), name.span);
+            let pointer_ty = Pointer {
+                inner: ty,
+                kind: PointerKind::Single,
+                is_mut,
+            };
+            reg = self.push_store(Sk::PtrCast(reg, pointer_ty), name.span);
         }
         self.scopes.last_mut().unwrap().insert(name.kind, reg);
         reg
@@ -955,36 +965,48 @@ impl<'a> IrBuilder<'a> {
             Sk::PtrOffset(ptr, accesses) => {
                 assert_eq!(accesses.len(), 1);
                 let access = &accesses[0];
-                let TyKind::Pointer(pointer) = self.program_tys[t(ptr)] else {
+                let TyKind::Pointer(Pointer {
+                    mut inner,
+                    mut kind,
+                    is_mut,
+                }) = self.program_tys[t(ptr)]
+                else {
                     return dummy_ty;
                 };
-                let mut pointee_ty = pointer.inner;
                 match access {
                     PtrOffset::Index(_) => {
-                        if let TyKind::Array(item, _count) = self.program_tys[pointee_ty] {
-                            pointee_ty = item;
-                        }
+                        inner = match kind {
+                            PointerKind::Multi => inner,
+                            PointerKind::Single => {
+                                if let TyKind::Array(item, _count) = self.program_tys[inner] {
+                                    item
+                                } else {
+                                    return dummy_ty;
+                                }
+                            }
+                        };
+                        kind = PointerKind::Single;
                     }
                     PtrOffset::Field(field) => {
-                        let TyKind::Struct { fields, .. } = &self.program_tys[pointee_ty] else {
+                        let TyKind::Struct { fields, .. } = &self.program_tys[inner] else {
                             return dummy_ty;
                         };
-                        let Some(item) = fields
-                            .iter()
-                            .find_map(|(name, &ty)| (name == field).then_some(ty))
-                        else {
+                        let Some(&item) = fields.get(field) else {
                             return dummy_ty;
                         };
-                        pointee_ty = item;
+                        inner = item;
+                        kind = PointerKind::Single;
                     }
                 }
                 self.program_tys.insert(TyKind::Pointer(Pointer {
-                    inner: pointee_ty,
-                    is_mut: pointer.is_mut,
+                    inner,
+                    kind,
+                    is_mut,
                 }))
             }
             &Sk::StackAlloc(ty) => self.program_tys.insert(TyKind::Pointer(Pointer {
                 inner: ty,
+                kind: PointerKind::Single,
                 is_mut: IsMut::Mut,
             })),
             Sk::Copy(r) | Sk::UnaryOp(UnaryOp::Neg, r) => t(r),
@@ -996,8 +1018,11 @@ impl<'a> IrBuilder<'a> {
             Sk::Static(name) => {
                 let inner = self.static_values[name].ty;
                 let is_mut = IsMut::Const; // TODO: mutable statics
-                self.program_tys
-                    .insert(TyKind::Pointer(Pointer { inner, is_mut }))
+                self.program_tys.insert(TyKind::Pointer(Pointer {
+                    inner,
+                    kind: PointerKind::Single,
+                    is_mut,
+                }))
             }
             &Sk::Struct { ty, .. } => ty,
         }
@@ -1109,7 +1134,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                     fn recursively_stores(field_kind: &ast::TyKind) -> Option<Str> {
                         // does this field store a possibly recursive type by value?
                         match &field_kind {
-                            Tk::Pointer(_, _) | Tk::Function { .. } => None,
+                            Tk::Pointer(..) | Tk::Function { .. } => None,
                             Tk::Name(name) => Some(name.kind.clone()),
                             Tk::Array(item_ty, _count) => {
                                 // Open question: Do we consider arrays of length 0? Rust has an open issue for it: https://github.com/rust-lang/rust/issues/11924

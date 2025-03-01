@@ -213,6 +213,7 @@ fn visit_block(
                     *next_register += 1;
                     let ty = ty_map.insert(TyKind::Pointer(Pointer {
                         inner: ty,
+                        kind: PointerKind::Single,
                         is_mut: IsMut::Mut,
                     }));
                     tys.insert(new_ptr, ty);
@@ -300,6 +301,7 @@ fn visit_block(
                             *next_register += 1;
                             let ty = ty_map.insert(TyKind::Pointer(Pointer {
                                 inner: ty,
+                                kind: PointerKind::Single,
                                 is_mut: IsMut::Const,
                             }));
                             tys.insert(new_ptr, ty);

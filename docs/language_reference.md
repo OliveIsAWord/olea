@@ -110,9 +110,11 @@ Structs and built-in types are accessed by name. The built-in types include the 
 ```rs
 <type>^
 <type>^mut
+<type>[^]
+<type>[^]mut
 ```
 
-A pointer is a value that can be used to access a region of memory. A `mut` pointer can read and write to this memory. A "const" pointer can only read memory.
+A pointer is a value that can be used to access a region of memory. A `mut` pointer can read and write to this memory. A "const" pointer can only read memory. A single-item pointer, notated `^`, can be dereferenced with the `^` operator. A multi-item pointer, notated `[^]`, can be indexed with the `[]` operator.
 
 ### Function Pointers
 
@@ -236,7 +238,7 @@ Operations in the same row have equal precedence, and higher precedence (a stron
 
 Operator Category | Operators | Associativity
 --- | --- | ---
-Postfix | `^`, `@`, `as`, function calls, array indexing, field access, method calls |  Left-to-right
+Postfix | `^`, `@`, `as`, function calls `()`, array indexing `[]`, field access, method calls |  Left-to-right
 Prefix | negation `-` | Right-to-left
 Multiplication | `*`, `/` | Left-to-right
 Addition | `+`, subtraction `-` | Left-to-right
@@ -432,15 +434,17 @@ Yields a (possibly mutable) pointer to the value of the expression. If referenci
 <expression>^
 ```
 
-Yields the value that a pointer refers to.
+Yields the value that a single-item pointer refers to.
 
 ### Array Indexing
 
-TODO: Currently, indexing can only be done through a pointer.
+TODO: Currently, indexing can only be done through pointers.
 
 ```rs
 <expression>[<expression>]
 ```
+
+Access the nth value of an array, a multi-item pointer, a single-item pointer to an array.
 
 ### Field Accesses
 
