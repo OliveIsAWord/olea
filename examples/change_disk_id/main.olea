@@ -1,7 +1,7 @@
 extern fn get_current_disk_id() usize
-extern fn set_current_disk_id(usize)
+extern fn set_current_disk_id(anon id: usize)
 
 fn main():
-    let x = get_current_disk_id()
+    let mut x = get_current_disk_id()
     x = x + 1
     set_current_disk_id(x)

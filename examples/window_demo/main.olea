@@ -1,56 +1,79 @@
+struct void
+struct Window
+
+struct Event:
+    kind: usize
+    parameters: usize[7]
+
 extern fn yield_task()
 extern fn end_current_task()
 
-extern fn allocate_memory(usize) usize^
-extern fn free_memory(usize^)
+extern fn allocate_memory(anon size: usize) void^mut
+extern fn free_memory(anon allocation: void^mut)
 
-extern fn new_window(usize^, usize^, usize, usize, usize, usize, usize, usize)
-extern fn destroy_window(usize^)
-extern fn get_next_window_event(usize^, usize^, usize^) usize
-extern fn get_window_overlay_number(usize^) usize
-extern fn start_dragging_window(usize^)
+extern fn new_window(anon window: Window^mut, title: u8[^], width: usize, height: usize, x: usize, y: usize, menu_bar: void^, widgets: void^)
+extern fn destroy_window(anon window: Window^mut)
+extern fn get_next_window_event(anon window: Window^mut) Event
+extern fn get_window_overlay_number(anon window: Window^mut) u8
+extern fn start_dragging_window(anon window: Window^mut)
 
-extern fn draw_str_to_overlay(usize^, usize, usize, usize, usize, usize)
+extern fn draw_str_to_overlay(string: u8[^], x: usize, y: usize, foreground_color: u32, background_color: u32, overlay: u8)
 
-extern fn break()
+extern fn breakpoint()
 
-fn main(stream usize):
-    let title = allocate_memory(12)
-    title[0] = 1684957527
-    title[1] = 1142978415
-    title[2] = 7302501
+fn main(_: void^):
+    let title = allocate_memory(12) as u32[^]mut
+    title[0] = 1684957527_u32
+    title[1] = 1142978415_u32
+    title[2] = 7302501_u32
     
-    let string = allocate_memory(16)
-    string[0] = 1819043144
-    string[1] = 1998597231
-    string[2] = 1684828783
-    string[3] = 33
+    let string = allocate_memory(16) as u32[^]mut
+    string[0] = 1819043144_u32
+    string[1] = 1998597231_u32
+    string[2] = 1684828783_u32
+    string[3] = 33_u32
 
-    let window = allocate_memory(40)
-    new_window(window, title, 256, 256, 64, 64, 0, 0)
+    let window = allocate_memory(40) as Window^mut
+    window.new_window(
+        title: title as u8[^]
+        width: 256
+        height: 256
+        x: 64
+        y: 64
+        menu_bar: null()
+        widgets: null()
+    )
 
-    let color_black = 16777216
-    let color_gray = 2155905152
-    let color_white = 0 - 1
-    draw_str_to_overlay(string, 16, 32, color_black, color_white, get_window_overlay_number(window))
+    let color_black = 16777216_u32
+    let color_gray = 2155905152_u32
+    let color_white = (0 - 1) as u32
+    draw_str_to_overlay(
+        string: string as u8[^]
+        x: 16
+        y: 32
+        foreground_color: color_black
+        background_color: color_white
+        overlay: window.get_window_overlay_number()
+    )
 
-    let running = 1
+    let mut running = true
     while running:
         yield_task()
-        let x = 0
-        let y = 0
-        let event = 0
-        while event + 1:
-            event = get_next_window_event(window, x@, y@)
-            if event:
-                0
-            else:
-                if y <= 15:
-                    if x <= 7:
-                        running = 0
+        let mut event = Event(kind: 0, parameters: (null() as usize[7]^)^)
+        while event.kind != 0 - 1:
+            event = window.get_next_window_event()
+            if event.kind == 0:
+                let x = event.parameters@[0]
+                let y = event.parameters@[1]
+                if y < 16:
+                    if x < 8:
+                        running = false
                     else:
-                        start_dragging_window(window)
-    destroy_window(window)
-    free_memory(window)
-    free_memory(string)
-    free_memory(title)
+                        window.start_dragging_window()
+    window.destroy_window()
+    free_memory(window as void^mut)
+    free_memory(string as void^mut)
+    free_memory(title as void^mut)
+
+fn null() void^:
+    (0@ as void^^)^

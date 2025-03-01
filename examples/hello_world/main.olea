@@ -1,20 +1,14 @@
-extern fn write(usize, usize, usize^)
+struct File
 
-fn main(stream usize):
-    print_char(stream, 72)
-    print_char(stream, 101)
-    print_char(stream, 108)
-    print_char(stream, 108)
-    print_char(stream, 111)
-    print_char(stream, 44)
-    print_char(stream, 32)
-    print_char(stream, 119)
-    print_char(stream, 111)
-    print_char(stream, 114)
-    print_char(stream, 108)
-    print_char(stream, 100)
-    print_char(stream, 33)
-    print_char(stream, 10)
+extern fn write(len: usize, file: File^, buffer: u8[^])
 
-fn print_char(stream usize, c usize):
-    write(1, stream, c@)
+fn main(stream: File^):
+    stream.print_str("Hello, world!")
+
+fn print_str(file: File^, anon str: u8[^]):
+    write(:file, len: str.strlen(), buffer: str)
+
+fn strlen(anon str: u8[^]) usize:
+    let mut len = 0
+    while str[len] != 0_u8: 0
+    len

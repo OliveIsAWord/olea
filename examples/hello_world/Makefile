@@ -1,7 +1,7 @@
 .POSIX:
 .SUFFIXES: .olea .asm
 
-OLEAC := ../../target/release/olea
+OLEAC := ../../target/debug/olea
 
 ASM = main.asm
 SOURCE = $(OBJECTS:.o=.olea)
