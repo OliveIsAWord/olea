@@ -1,14 +1,15 @@
 struct File
 
-extern fn write(len: usize, file: File^, buffer: u8[^])
+extern fn write(_, len: usize, file: File^, buffer: u8[^])
 
 fn main(stream: File^):
-    stream.print_str("Hello, world!")
+    .print_str("Hello, world!\n")
 
-fn print_str(file: File^, anon str: u8[^]):
-    write(:file, len: str.strlen(), buffer: str)
+fn print_str(file: File^, anon string: u8[^]):
+    file.write(:file, len: string.strlen(), buffer: string)
 
-fn strlen(anon str: u8[^]) usize:
+fn strlen(anon string: u8[^]) usize:
     let mut len = 0
-    while str[len] != 0_u8: 0
+    while string[len] != 0_u8:
+        len = len + 1
     len
