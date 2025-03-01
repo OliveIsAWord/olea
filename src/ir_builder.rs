@@ -623,18 +623,16 @@ impl<'a> IrBuilder<'a> {
                 self.build_function_call(callee, args, None, span)?
             }
             E::MethodCall(receiver, method_name, args, dot_span) => {
-                let receiver_span;
                 let receiver = if let Some(receiver) = receiver {
-                    receiver_span = receiver.span.clone();
                     self.build_expr_unvoid(receiver, method_name.span.clone())?
                 } else {
-                    receiver_span = dot_span.clone();
+                    let receiver_span = dot_span.clone();
                     let r = self.get_self(receiver_span.clone())?;
-                    self.push_store(Sk::Read(r), receiver_span.clone())
+                    self.push_store(Sk::Read(r), receiver_span)
                 };
                 let f = self.get_var(&method_name.kind, method_name.span.clone(), "function")?;
                 let f = self.maybe_var_to_value(f, method_name.span.clone());
-                self.build_function_call(f, args, Some((receiver, receiver_span)), span)?
+                self.build_function_call(f, args, Some((receiver, method_name.span.clone())), span)?
             }
         };
         // eprintln!("unvoid {unvoid}\nexpr {expr:?}\nreg {reg:?}\n");
@@ -736,6 +734,7 @@ impl<'a> IrBuilder<'a> {
         &mut self,
         callee: Register,
         args: &[ast::FunctionArg],
+        // this Span is the span of the method
         mut receiver: Option<(Register, Span)>,
         span: Span,
     ) -> Result<Option<Register>> {
@@ -754,14 +753,16 @@ impl<'a> IrBuilder<'a> {
             });
             return Ok(Some(callee));
         };
+        if !has_self || params.is_empty() {
+            if let Some((_, method_span)) = receiver {
+                return Err(Error {
+                    kind: ErrorKind::NotMethod,
+                    span: method_span,
+                });
+            }
+        }
         let (mut evaled_args, evaled_anon) = self.build_function_arguments(args, span.clone())?;
         let mut evaled_anon = evaled_anon.into_iter();
-        if receiver.is_some() && (!has_self || params.is_empty()) {
-            return Err(Error {
-                kind: ErrorKind::NotMethod,
-                span,
-            });
-        }
         let mut missing_args = vec![];
         let args = params
             .iter()
