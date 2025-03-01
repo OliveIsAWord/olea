@@ -270,6 +270,10 @@ fn main() -> ExitCode {
                     };
                     (msg, None)
                 }
+                E::TooManyAnonArgs(n) => (
+                    format!("this function call has {n} too many arguments"), // It feels like "argument" should always be plural. Is that correct?
+                    None,
+                ),
                 E::BadPun => ("this expression can't be name punned".to_owned(), None),
                 E::IllFormedComparison => ("ill formed comparison chain".to_owned(), None),
                 E::NoSelf(span) => (

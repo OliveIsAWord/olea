@@ -48,6 +48,7 @@ pub enum ErrorKind {
     InfiniteType(Vec<Str>),
     MissingArgs(Vec<Str>, Option<Span>),
     InvalidArgs(Vec<Str>),
+    TooManyAnonArgs(usize),
     BadPun,
     IllFormedComparison,
     NoSelf(Option<Span>),
@@ -797,6 +798,12 @@ impl<'a> IrBuilder<'a> {
         if !evaled_args.is_empty() {
             return Err(Error {
                 kind: ErrorKind::InvalidArgs(evaled_args.into_keys().collect()),
+                span,
+            });
+        }
+        if evaled_anon.len() != 0 {
+            return Err(Error {
+                kind: ErrorKind::TooManyAnonArgs(evaled_anon.len()),
                 span,
             });
         }
