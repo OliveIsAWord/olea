@@ -425,8 +425,8 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                                     let prefix = match cmp {
                                         Cmp::Lt => "iflt",
                                         Cmp::Le => "iflteq",
-                                        Cmp::Eq => "ifeq",
-                                        Cmp::Ne => "ifne",
+                                        Cmp::Eq => "ifz",
+                                        Cmp::Ne => "ifnz",
                                         Cmp::Gt => "ifgt",
                                         Cmp::Ge => "ifgteq",
                                     };
