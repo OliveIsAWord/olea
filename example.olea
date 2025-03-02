@@ -1,6 +1,4 @@
-extern fn use(anon used: usize)
+struct T
 
-fn main():
-    let wiggler = 0
-    let meower = 0
-    use(wiggler)
+fn mut_smuggling(anon ptr: T^) T^mut:
+    (ptr@ as T^mut^)^

@@ -1,17 +1,24 @@
 struct void
-struct Window
+
+struct Window:
+    anon _: usize[10]
 
 struct Event:
     kind: usize
     parameters: usize[7]
 
 extern fn yield_task()
-extern fn end_current_task()
 
-extern fn allocate_memory(anon size: usize) void^mut
-extern fn free_memory(anon allocation: void^mut)
-
-extern fn new_window(anon window: Window^mut, title: u8[^], width: usize, height: usize, x: usize, y: usize, menu_bar: void^, widgets: void^)
+extern fn new_window(
+     anon window: Window^mut
+     title: u8[^]
+     width: usize
+     height: usize
+     x: usize
+     y: usize
+     menu_bar: void^
+     widgets: void^
+)
 extern fn destroy_window(anon window: Window^mut)
 extern fn get_next_window_event(anon window: Window^mut) Event
 extern fn get_window_overlay_number(anon window: Window^mut) u8
@@ -22,22 +29,10 @@ extern fn draw_str_to_overlay(string: u8[^], x: usize, y: usize, foreground_colo
 extern fn breakpoint()
 
 fn main():
-    # "Window Demo"
-    let title = allocate_memory(12) as u32[^]mut
-    title[0] = 1684957527_u32
-    title[1] = 1142978415_u32
-    title[2] = 7302501_u32
-
-    # "Hello, world!"
-    let string = allocate_memory(16) as u32[^]mut
-    string[0] = 1819043144_u32
-    string[1] = 1998597231_u32
-    string[2] = 1684828783_u32
-    string[3] = 33_u32
-
-    let window = allocate_memory(40) as Window^mut
+    let mut window = (null() as Window^)^
+    let window = window@mut
     window.new_window(
-        title: title as u8[^]
+        title: "Window Demo"
         width: 256
         height: 256
         x: 64
@@ -50,7 +45,7 @@ fn main():
     let color_gray = 2155905152_u32
     let color_white = (0 - 1) as u32
     draw_str_to_overlay(
-        string: string as u8[^]
+        string: "Hello, world!"
         x: 16
         y: 32
         foreground_color: color_black
@@ -73,9 +68,6 @@ fn main():
                     else:
                         window.start_dragging_window()
     window.destroy_window()
-    free_memory(window as void^mut)
-    free_memory(string as void^mut)
-    free_memory(title as void^mut)
 
 fn null() void^:
     (0@ as void^^)^
