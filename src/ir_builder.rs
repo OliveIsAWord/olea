@@ -1095,7 +1095,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
             ty: bool_ty,
         }),
         ("false", Value {
-            kind: ValueKind::Bool(true),
+            kind: ValueKind::Bool(false),
             ty: bool_ty,
         }),
     ]
