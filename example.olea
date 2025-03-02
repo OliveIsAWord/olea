@@ -1,3 +1,6 @@
-struct Node:
-    b: u32
-    a: Node^
+extern fn use(anon used: usize)
+
+fn main():
+    let wiggler = 0
+    let meower = 0
+    use(wiggler)

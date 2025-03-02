@@ -1,6 +1,6 @@
 use crate::compiler_prelude::*;
 use crate::ir::*;
-use crate::ir_liveness::{self, FunctionLiveness};
+use crate::ir_liveness::{self, BlockLiveness, FunctionLiveness};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Size {
@@ -81,7 +81,7 @@ impl SizeFinder<'_> {
 }
 
 const NUM_REGISTERS: usize = 31;
-const TEMP_REG: StoreLoc = StoreLoc::Register(31);
+const TEMP_REG: StoreLoc = StoreLoc::Register(31); // Don't depend on the value of this register between IR instructions. You can use it however you want within compiling an IR instruction (?).
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum StoreLoc {
@@ -173,6 +173,18 @@ fn reg_alloc(f: &Function, get_size: SizeFinder) -> RegAllocInfo {
         .collect();
     let mut regs: Map<Register, StoreLoc> = Map::new();
     let mut open: Set<_> = f.tys.keys().copied().collect();
+    {
+        let mut unused = open.clone();
+        let mut remove = |live: &Set<_>| unused.retain(|r| !live.contains(r));
+        for BlockLiveness { start, insts } in liveness.blocks.values() {
+            remove(start);
+            for inst in insts {
+                remove(inst);
+            }
+        }
+        open.retain(|r| !unused.contains(r));
+        regs.extend(unused.into_iter().map(|r| (r, TEMP_REG)));
+    }
     for block in f.blocks.values() {
         for inst in &block.insts {
             let Inst::Store(r, sk) = inst else {
@@ -310,7 +322,7 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
         stack_size,
         liveness,
     } = reg_alloc(f, get_size);
-    if false {
+    if true {
         let locs: Set<_> = regs.values().collect();
         for loc in locs {
             eprint!("{}:", loc.foo());
@@ -345,6 +357,7 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
         let block = f.blocks.get(&i).unwrap();
         write_label!(code, "{function_name}_{}", i.0);
         for (inst_i, inst) in block.insts.iter().enumerate() {
+            write_comment!(code, "{inst:?}");
             match inst {
                 Inst::Store(r, sk) => {
                     let size = get_size.of_ty(f.tys[r]);
