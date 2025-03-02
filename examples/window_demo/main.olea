@@ -21,12 +21,14 @@ extern fn draw_str_to_overlay(string: u8[^], x: usize, y: usize, foreground_colo
 
 extern fn breakpoint()
 
-fn main(_: void^):
+fn main():
+    # "Window Demo"
     let title = allocate_memory(12) as u32[^]mut
     title[0] = 1684957527_u32
     title[1] = 1142978415_u32
     title[2] = 7302501_u32
-    
+
+    # "Hello, world!"
     let string = allocate_memory(16) as u32[^]mut
     string[0] = 1819043144_u32
     string[1] = 1998597231_u32
@@ -73,7 +75,8 @@ fn main(_: void^):
     window.destroy_window()
     free_memory(window as void^mut)
     free_memory(string as void^mut)
-    free_memory(title as void^mut)
+    # for some reason, this causes a page fault
+    # free_memory(title as void^mut)
 
 fn null() void^:
     (0@ as void^^)^

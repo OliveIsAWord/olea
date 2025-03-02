@@ -6,7 +6,7 @@ fn main(stream: File^):
     .print_str("Hello, world!\n")
 
 fn print_str(file: File^, anon string: u8[^]):
-    file.write(:file, len: string.strlen(), buffer: string)
+    write(:file, len: string.strlen(), buffer: string)
 
 fn strlen(anon string: u8[^]) usize:
     let mut len = 0

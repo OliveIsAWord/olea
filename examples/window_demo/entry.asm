@@ -37,12 +37,15 @@ destroy_window:
 get_next_window_event:
     pop rfp
     pop r0
-    pop r10
-    pop r11
     call [0x00000C1C]
+    push r7
+    push r6
+    push r5
+    push r4
+    push r3
+    push r2
+    push r1
     push r0
-    mov [r10], r1
-    mov [r11], r2
     jmp rfp
 
 get_window_overlay_number:
@@ -72,7 +75,7 @@ draw_str_to_overlay:
 yield_task:
     jmp [0x00000A14]
 
-break:
+breakpoint:
     brk
     ret
 
