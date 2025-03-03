@@ -16,6 +16,7 @@
 
 mod arborist;
 pub(crate) mod ast;
+mod binding_fox32;
 mod codegen_fox32;
 pub(crate) mod compiler_prelude;
 pub(crate) mod ir;
@@ -123,7 +124,11 @@ fn typecheck(ir: &ir::Program, src: &str, file_path: &str, error_mode: ErrorMode
 
 fn main() -> ExitCode {
     let args: Vec<_> = std::env::args().collect();
-    if args.len() != 2 {
+    let is_binding = if args.len() == 2 {
+        false
+    } else if args.len() == 3 && args[2] == "--binding=fox32" {
+        true
+    } else {
         let app_name = args
             .first()
             .map_or(env!("CARGO_CRATE_NAME"), String::as_ref);
@@ -314,16 +319,20 @@ fn main() -> ExitCode {
         eprintln!("{ir}\n");
     }
 
-    if true {
-        /*
+    if false {
         for (name, f) in &ir.functions {
             let live = ir_liveness::calculate_liveness(f);
             eprintln!("{name}:");
             live.pretty_print();
         }
         eprintln!();
-        */
+    }
 
+    if is_binding {
+        let asm = binding_fox32::gen_program(&ir);
+        eprintln!("#Binding Codegen");
+        print!("{asm}");
+    } else {
         let asm = codegen_fox32::gen_program(&ir);
         eprintln!("#Codegen");
         print!("{asm}");
