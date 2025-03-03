@@ -37,7 +37,7 @@ fn gen_function(
     for (i, param) in params.keys().enumerate() {
         writeln!(code, "    pop r{i} ; {param}").unwrap();
     }
-    writeln!(code, "    call {}", name.to_ascii_uppercase()).unwrap();
+    writeln!(code, "    call [{}]", name.to_ascii_uppercase()).unwrap();
     for i in 0..returns.len() {
         writeln!(code, "    push r{i}").unwrap();
     }

@@ -148,13 +148,13 @@ fn main() -> ExitCode {
 
     let tokens = lexer::tokenize(&src);
 
-    /*
+    if false {
     dbg!(tokens.has_error);
     for i in 0..tokens.kinds.len() {
         let Spanned { kind, span } = tokens.get(i).unwrap();
         eprintln!("{:?} {:?} {:?}", &src[span.clone()], kind, span);
     }
-    */
+    }
 
     let ttree = match arborist::arborize(&tokens) {
         Ok(x) => x,
@@ -176,7 +176,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    if true {
+    if false {
         eprintln!("# Token tree:");
         ttree_visualize::visualize(&ttree, &src);
         eprintln!();
@@ -299,14 +299,14 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    eprintln!("#IR:\n{ir}\n");
+    // eprintln!("#IR:\n{ir}\n");
     if typecheck(&ir, &src, file_path, ErrorMode::User) {
         return ExitCode::FAILURE;
     }
 
-    eprintln!("#Desugaring phase");
+    // eprintln!("#Desugaring phase");
     ir_destructure::destructure_program(&mut ir);
-    eprintln!("{ir}\n");
+    // eprintln!("{ir}\n");
     if typecheck(&ir, &src, file_path, ErrorMode::Internal) {
         return ExitCode::FAILURE;
     }
