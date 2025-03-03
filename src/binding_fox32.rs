@@ -21,7 +21,7 @@ pub fn gen_program(program: &Program) -> String {
         else {
             unreachable!();
         };
-        gen_function(code, name, params, returns)
+        gen_function(code, name, params, returns);
     }
     code_buffer
 }
@@ -33,13 +33,22 @@ fn gen_function(
     returns: &[Ty],
 ) {
     writeln!(code, "{name}:").unwrap();
-    writeln!(code, "    pop rfp").unwrap();
-    for (i, param) in params.keys().enumerate() {
-        writeln!(code, "    pop r{i} ; {param}").unwrap();
+    let const_address_name = name.to_ascii_uppercase();
+    if !params.is_empty() {
+        writeln!(code, "    pop rfp").unwrap();
+        for (i, param) in params.keys().enumerate() {
+            writeln!(code, "    pop r{i} ; {param}").unwrap();
+        }
+        writeln!(code, "    push rfp").unwrap();
     }
-    writeln!(code, "    call [{}]", name.to_ascii_uppercase()).unwrap();
-    for i in 0..returns.len() {
-        writeln!(code, "    push r{i}").unwrap();
+    if returns.is_empty() {
+        writeln!(code, "    jmp [{const_address_name}]").unwrap();
+    } else {
+        writeln!(code, "    call [{const_address_name}]").unwrap();
+        writeln!(code, "    pop rfp").unwrap();
+        for i in 0..returns.len() {
+            writeln!(code, "    push r{i}").unwrap();
+        }
+        writeln!(code, "    jmp rfp").unwrap();
     }
-    writeln!(code, "    jmp rfp").unwrap();
 }

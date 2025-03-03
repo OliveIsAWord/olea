@@ -149,11 +149,11 @@ fn main() -> ExitCode {
     let tokens = lexer::tokenize(&src);
 
     if false {
-    dbg!(tokens.has_error);
-    for i in 0..tokens.kinds.len() {
-        let Spanned { kind, span } = tokens.get(i).unwrap();
-        eprintln!("{:?} {:?} {:?}", &src[span.clone()], kind, span);
-    }
+        dbg!(tokens.has_error);
+        for i in 0..tokens.kinds.len() {
+            let Spanned { kind, span } = tokens.get(i).unwrap();
+            eprintln!("{:?} {:?} {:?}", &src[span.clone()], kind, span);
+        }
     }
 
     let ttree = match arborist::arborize(&tokens) {
