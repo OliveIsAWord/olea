@@ -66,11 +66,12 @@ pub fn calculate_liveness(f: &Function) -> FunctionLiveness {
         for succ_id in block.successors() {
             last.extend(start_map.get(&succ_id).unwrap());
             let succ_block = f.blocks.get(&succ_id).unwrap();
+            // This pass is necessary because if the phi predecessor register is defined here, it won't have been stored in any `start`. This is obviously not the best approach, but it (hopefully) works.
             for inst in &succ_block.insts {
                 let Inst::Store(_, StoreKind::Phi(regs)) = inst else {
                     continue;
                 };
-                assert!(last.contains(&regs[&id]), "wtf {regs:?} {id:?} {last:?}");
+                last.insert(regs[&id]);
             }
         }
         let mut insts_live: Vec<_> = (0..insts.len()).map(|_| Set::new()).collect();

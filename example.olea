@@ -1,6 +1,2 @@
-extern fn meow() usize
-fn main():
-    let foo = if true:
-        meow()
-    else:
-        meow()
+fn bad():
+    0 <= 0
