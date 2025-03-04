@@ -125,16 +125,31 @@ impl<'src> Parser<'src> {
         let mut src_str = &self.source[span.clone()];
         let original_len = src_str.len();
         let mut int: u64 = 0;
-        while let Some(c) = src_str.chars().next() {
-            match c {
-                '_' => {}
-                '0'..='9' => {
-                    let digit = u64::from(c as u8 - b'0');
-                    int = int.wrapping_mul(10).wrapping_add(digit);
+        if let Some(hex_literal) = src_str.strip_prefix("0x") {
+           src_str = hex_literal;
+            while let Some(c) = src_str.chars().next() {
+                match c {
+                    '_' => {}
+                    '0'..='9' | 'a'..='f' | 'A'..='F' => {
+                        let digit = u64::from_str_radix(&src_str[..c.len_utf8()], 16).unwrap();
+                        int = int.wrapping_mul(16).wrapping_add(digit);
+                    }
+                    _ => break,
                 }
-                _ => break,
+                src_str = &src_str[c.len_utf8()..];
             }
-            src_str = &src_str[c.len_utf8()..];
+        } else {
+            while let Some(c) = src_str.chars().next() {
+                match c {
+                    '_' => {}
+                    '0'..='9' => {
+                        let digit = u64::from(c as u8 - b'0');
+                        int = int.wrapping_mul(10).wrapping_add(digit);
+                    }
+                    _ => break,
+                }
+                src_str = &src_str[c.len_utf8()..];
+            }
         }
         let suffix = if src_str.is_empty() {
             None
