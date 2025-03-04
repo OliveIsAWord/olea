@@ -61,7 +61,7 @@ fn typecheck(ir: &ir::Program, src: &str, file_path: &str, error_mode: ErrorMode
             use typechecker::ErrorKind as E;
             let fun = ir.functions.get(&fn_name).unwrap();
             let snippet = Snippet::source(src).origin(file_path).fold(true);
-            let t = |r: ir::Register| ir.tys.format(fun.tys[&r]);
+            let t = |r: ir::Register| ir.tys.ty_to_string(fun.tys[&r]);
             let (title, snippet): (String, _) = match e {
                 E::NotInt(reg) => (
                     format!("expected integer, got {}", t(reg)),
@@ -100,7 +100,10 @@ fn typecheck(ir: &ir::Program, src: &str, file_path: &str, error_mode: ErrorMode
                     snippet.annotation(Level::Error.span(fun.spans.get(&reg).unwrap().clone())),
                 ),
                 E::NotStruct(ty, span_reg) => (
-                    format!("type {} does not support field access", ir.tys.format(ty)),
+                    format!(
+                        "type {} does not support field access",
+                        ir.tys.ty_to_string(ty)
+                    ),
                     snippet.annotation(Level::Error.span(fun.spans[&span_reg].clone())),
                 ),
                 E::NoFieldNamed(reg, field) => (
@@ -299,7 +302,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // eprintln!("#IR:\n{ir}\n");
+    eprintln!("#IR:\n{ir}\n");
     if typecheck(&ir, &src, file_path, ErrorMode::User) {
         return ExitCode::FAILURE;
     }

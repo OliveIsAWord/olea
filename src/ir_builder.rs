@@ -563,7 +563,7 @@ impl<'a> IrBuilder<'a> {
                     }
                     ref t => {
                         return Err(Error {
-                            kind: ErrorKind::CantCastToTy(self.program_tys.format_kind(t)),
+                            kind: ErrorKind::CantCastToTy(self.program_tys.kind_to_string(t)),
                             span: ty.span.clone(),
                         });
                     }
@@ -1280,7 +1280,7 @@ pub fn build(program: &ast::Program) -> Result<Program> {
                 let TyKind::Struct { fields, .. } = &program_tys[struct_ty] else {
                     unreachable!(
                         "struct has non-struct type: {struct_ty:?} {}",
-                        program_tys.format(struct_ty)
+                        program_tys.ty_to_string(struct_ty)
                     );
                 };
                 let params = zip(ast_fields, fields)

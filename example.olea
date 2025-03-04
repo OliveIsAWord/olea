@@ -1,2 +1,2 @@
-fn bitwise() usize:
+fn bitwise(anon a: u8[^], b: usize) usize:
     9 + 1 << 8 >> 4 * 2

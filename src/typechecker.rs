@@ -52,7 +52,7 @@ impl<'a> TypeChecker<'a> {
     fn err(&self, r: Register, kind: &TyKind) -> Result {
         Err((
             self.name.clone(),
-            ErrorKind::Expected(r, self.ty_map.format_kind(kind)),
+            ErrorKind::Expected(r, self.ty_map.kind_to_string(kind)),
         ))
     }
     fn expect(&self, r: Register, kind: &TyKind) -> Result {
