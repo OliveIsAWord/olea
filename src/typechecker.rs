@@ -63,8 +63,15 @@ impl<'a> TypeChecker<'a> {
         }
     }
     fn int(&self, r: Register) -> Result<IntKind> {
-        match self.t(r) {
-            &TyKind::Int(k) => Ok(k),
+        match *self.t(r) {
+            TyKind::Int(k) => Ok(k),
+            _ => Err((self.name.clone(), ErrorKind::NotInt(r))),
+        }
+    }
+    fn int_or_bool(&self, r: Register) -> Result<Option<IntKind>> {
+        match *self.t(r) {
+            TyKind::Int(k) => Ok(Some(k)),
+            TyKind::Bool => Ok(None),
             _ => Err((self.name.clone(), ErrorKind::NotInt(r))),
         }
     }
@@ -115,27 +122,31 @@ impl<'a> TypeChecker<'a> {
                 TyKind::Pointer(cast_to)
             }
             Sk::Copy(r) => self.t(r).clone(),
-            Sk::BinOp(op, lhs, rhs) => {
-                match op {
-                    BinOp::Add
-                    | BinOp::Sub
-                    | BinOp::Mul
-                    | BinOp::Div
-                    | BinOp::BitAnd
-                    | BinOp::BitOr
-                    | BinOp::Cmp(_) => (),
+            Sk::BinOp(op, lhs, rhs) => match op {
+                BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Cmp(_) => {
+                    let lhs_int = self.int(lhs)?;
+                    let rhs_int = self.int(rhs)?;
+                    if lhs_int != rhs_int {
+                        self.err(rhs, &TyKind::Int(lhs_int))?;
+                    }
+                    if matches!(op, BinOp::Cmp(_)) {
+                        TyKind::Bool
+                    } else {
+                        TyKind::Int(lhs_int)
+                    }
                 }
-                let lhs_int = self.int(lhs)?;
-                let rhs_int = self.int(rhs)?;
-                if lhs_int != rhs_int {
-                    self.err(rhs, &TyKind::Int(lhs_int))?;
+                BinOp::BitAnd | BinOp::BitOr => {
+                    let lhs_ty = self.int_or_bool(lhs)?;
+                    let rhs_ty = self.int_or_bool(rhs)?;
+                    if lhs_ty != rhs_ty {
+                        self.err(rhs, self.t(lhs))?;
+                    }
+                    match lhs_ty {
+                        Some(int_kind) => TyKind::Int(int_kind),
+                        None => TyKind::Bool,
+                    }
                 }
-                if matches!(op, BinOp::Cmp(_)) {
-                    TyKind::Bool
-                } else {
-                    TyKind::Int(lhs_int)
-                }
-            }
+            },
             Sk::PtrOffset(pointer, ref accesses) => {
                 let Pointer {
                     mut inner,

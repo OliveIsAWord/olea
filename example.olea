@@ -1,2 +1,2 @@
-fn bitwise() usize:
-    1 | 2 & 3
+fn bitwise() bool:
+    true | false & true

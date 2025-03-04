@@ -368,7 +368,7 @@ These operations perform addition, subtraction, multiplication, division, and ne
 <expression> | <expression>
 ```
 
-These operations perform bitwise AND and OR respectively on two integer operands.
+These operations perform bitwise AND and OR respectively on two integer or boolean operands.
 
 ### Comparison Operators
 
