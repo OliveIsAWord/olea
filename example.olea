@@ -1,6 +1,8 @@
+fn use(anon _: Foo): 0
+
+struct Foo:
+    anon _: usize
+
 fn main():
-    0
-    defer defer 4
-    1
-    defer 3
-    2
+    let mut foo = Foo(42)
+    use(foo)

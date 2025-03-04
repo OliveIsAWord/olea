@@ -142,6 +142,7 @@ fn visit_function(f: &mut Function, ty_map: &mut TyMap, destructed_tys: &Destruc
             destructed_tys,
             &destructed_regs,
             tys,
+            spans,
             next_register,
         );
     }
@@ -153,6 +154,7 @@ fn visit_block(
     destructed_tys: &DestructedTys,
     destructed_regs: &DestructedRegs,
     tys: &mut Map<Register, Ty>,
+    spans: &mut Map<Register, Span>,
     next_register: &mut u128,
 ) {
     let Block {
@@ -217,6 +219,7 @@ fn visit_block(
                         is_mut: IsMut::Mut,
                     }));
                     tys.insert(new_ptr, ty);
+                    spans.insert(new_ptr, spans[&scalar].clone());
                     let accesses = accesses.clone();
                     insts.insert(i, Inst::Store(new_ptr, Sk::PtrOffset(dst, accesses)));
                     i += 1;
@@ -294,6 +297,9 @@ fn visit_block(
                         }
                     }
                     &mut Sk::Read(src) => {
+                        let TyKind::Pointer(Pointer { is_mut, .. }) = ty_map[tys[&src]] else {
+                            unreachable!()
+                        };
                         i -= 1;
                         insts.remove(i);
                         for (&field_r, &(ref accesses, ty)) in zip(scalar_regs, fields) {
@@ -302,9 +308,10 @@ fn visit_block(
                             let ty = ty_map.insert(TyKind::Pointer(Pointer {
                                 inner: ty,
                                 kind: PointerKind::Single,
-                                is_mut: IsMut::Const,
+                                is_mut,
                             }));
                             tys.insert(new_ptr, ty);
+                            spans.insert(new_ptr, spans[&field_r].clone());
                             let accesses = accesses.clone();
                             insts.insert(i, Inst::Store(new_ptr, Sk::PtrOffset(src, accesses)));
                             i += 1;
