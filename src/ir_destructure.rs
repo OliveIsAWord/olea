@@ -56,12 +56,14 @@ pub fn destructure_program(program: &mut Program) {
             .collect()
     };
 
-    for (a, b) in &destructed_tys {
-        eprintln!("{a:?} {{");
-        for b in b {
-            eprintln!(" , {b:?}");
+    if false {
+        for (a, b) in &destructed_tys {
+            eprintln!("{a:?} {{");
+            for b in b {
+                eprintln!(" , {b:?}");
+            }
+            eprintln!("}}");
         }
-        eprintln!("}}");
     }
 
     for kind in tys.inner.values_mut() {

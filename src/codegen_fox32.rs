@@ -322,7 +322,7 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
         stack_size,
         liveness,
     } = reg_alloc(f, get_size);
-    if true {
+    if false {
         let locs: Set<_> = regs.values().collect();
         for loc in locs {
             eprint!("{}:", loc.foo());
