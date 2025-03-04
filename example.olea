@@ -1,2 +1,2 @@
-fn bitwise() bool:
-    true | false & true
+fn bitwise() usize:
+    9 + 1 << 8 >> 4 * 2

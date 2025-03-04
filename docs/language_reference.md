@@ -357,9 +357,11 @@ A block expression evaluates its statements in order and, if the last statement 
 <expression> * <expression>
 <expression> / <expression>
 - <expression>
+<expression> << <expression>
+<expression> >> <expression>
 ```
 
-These operations perform addition, subtraction, multiplication, division, and negation respectively. Both expressions must be integers (no pointer arithmetic!). Currently, all integers are treated as two's complement unsigned integers.
+These operations perform addition, subtraction, multiplication, division, negation, left shift, and right shift, respectively. Both expressions must be integers (no pointer arithmetic!). Currently, all integers are treated as two's complement unsigned integers.
 
 ### Bitwise Operators
 

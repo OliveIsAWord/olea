@@ -228,6 +228,8 @@ fn constant_propagation_impl(f: &mut Function) {
                     }
                     BinOp::BitAnd => lhs & rhs,
                     BinOp::BitOr => lhs | rhs,
+                    BinOp::Shl => lhs.wrapping_shl(rhs as u32),
+                    BinOp::Shr => lhs.wrapping_shr(rhs as u32),
                     BinOp::Cmp(cmp) => {
                         let b = match cmp {
                             Cmp::Lt => lhs < rhs,

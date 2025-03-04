@@ -201,6 +201,10 @@ pub enum BinOpKind {
     BitAnd,
     /// Bitwise OR.
     BitOr,
+    /// Bitwise left shift.
+    Shl,
+    /// Bitwise right shift.
+    Shr,
 }
 
 /// The different directions of comparison.

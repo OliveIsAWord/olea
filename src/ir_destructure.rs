@@ -251,6 +251,8 @@ fn visit_block(
                         | BinOp::Div
                         | BinOp::BitAnd
                         | BinOp::BitOr
+                        | BinOp::Shl
+                        | BinOp::Shr
                         | BinOp::Cmp(_),
                         _,
                         _,

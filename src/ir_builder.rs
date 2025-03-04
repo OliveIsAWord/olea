@@ -462,6 +462,8 @@ impl<'a> IrBuilder<'a> {
                     A::Div => arithmetic(B::Div)?,
                     A::BitAnd => arithmetic(B::BitAnd)?,
                     A::BitOr => arithmetic(B::BitOr)?,
+                    A::Shl => arithmetic(B::Shl)?,
+                    A::Shr => arithmetic(B::Shr)?,
                     A::And => {
                         let lhs_reg = self.build_expr_unvoid(lhs, span.clone())?;
                         let lhs_id = self.current_block_id;
@@ -977,7 +979,14 @@ impl<'a> IrBuilder<'a> {
             &Sk::PtrCast(_, kind) => self.program_tys.insert(TyKind::Pointer(kind)),
             Sk::Phi(regs) => t(regs.first_key_value().expect("empty phi").1),
             Sk::BinOp(
-                BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::BitAnd | BinOp::BitOr,
+                BinOp::Add
+                | BinOp::Sub
+                | BinOp::Mul
+                | BinOp::Div
+                | BinOp::Shl
+                | BinOp::Shr
+                | BinOp::BitAnd
+                | BinOp::BitOr,
                 lhs,
                 _rhs,
             ) => t(lhs),

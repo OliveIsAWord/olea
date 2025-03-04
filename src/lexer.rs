@@ -53,6 +53,8 @@ pub enum PlainToken {
     GreaterThan,
     LessThanEqual,
     GreaterThanEqual,
+    DoubleLessThan,
+    DoubleGreaterThan,
     Hat,
     At,
 }
@@ -105,6 +107,8 @@ const KEYWORDS: &[(&str, Token)] = &[
 
 // NOTE: Because of how we lex these tokens, shorter tokens should be placed further in this list.
 const PUNCTUATION: &[(&str, Token)] = &[
+    ("<<", Pl(P::DoubleLessThan)),
+    (">>", Pl(P::DoubleGreaterThan)),
     ("<=", Pl(P::LessThanEqual)),
     (">=", Pl(P::GreaterThanEqual)),
     ("==", Pl(P::EqualEqual)),

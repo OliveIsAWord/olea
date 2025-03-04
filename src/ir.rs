@@ -839,6 +839,10 @@ pub enum BinOp {
     BitAnd,
     /// Bitwise OR.
     BitOr,
+    /// Bitwise left shift.
+    Shl,
+    /// Bitwise right shift.
+    Shr,
     /// Unsigned comparison.
     Cmp(Cmp),
 }
