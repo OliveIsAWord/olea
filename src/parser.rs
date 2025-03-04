@@ -126,7 +126,7 @@ impl<'src> Parser<'src> {
         let original_len = src_str.len();
         let mut int: u64 = 0;
         if let Some(hex_literal) = src_str.strip_prefix("0x") {
-           src_str = hex_literal;
+            src_str = hex_literal;
             while let Some(c) = src_str.chars().next() {
                 match c {
                     '_' => {}

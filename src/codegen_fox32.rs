@@ -405,6 +405,17 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                             let rhs_reg = regs.get(rhs).unwrap();
                             let arithmetic = |mnemonic| {
                                 Box::new(move |code: &mut String| {
+                                    let other = if reg == rhs_reg {
+                                        write_inst!(
+                                            *code,
+                                            "mov {}, {}",
+                                            TEMP_REG.foo(),
+                                            rhs_reg.foo(),
+                                        );
+                                        TEMP_REG
+                                    } else {
+                                        rhs_reg.clone()
+                                    };
                                     if reg != lhs_reg {
                                         write_inst!(*code, "mov {}, {}", reg.foo(), lhs_reg.foo());
                                     }
@@ -412,7 +423,7 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                                         *code,
                                         "{mnemonic}{size} {}, {}",
                                         reg.foo(),
-                                        rhs_reg.foo(),
+                                        other.foo(),
                                     );
                                 }) as Box<dyn Fn(&mut String)>
                             };
