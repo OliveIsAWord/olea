@@ -298,10 +298,13 @@ fn is_zero_area(my_rect: Rectangle) bool:
 ### Integers
 
 ```
-<digits>{suffix}
+<decimal digits>{suffix}
+0x<hexidecimal digits>{suffix}
+0o<octal digits>{suffix}
+0b<binary digits>{suffix}
 ```
 
-A decimal integer value. The suffix must be the name of an integer type, which determines the type of the integer. If no suffix is specified, the integer is of type `usize`.
+An integer value written in decimal, hexidecimal, octal, or binary. The suffix must be the name of an integer type, which determines the type of the integer. If no suffix is specified, the integer is of type `usize`.
 
 ### Strings
 

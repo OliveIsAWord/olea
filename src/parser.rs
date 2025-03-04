@@ -138,6 +138,32 @@ impl<'src> Parser<'src> {
                 }
                 src_str = &src_str[c.len_utf8()..];
             }
+        } else if let Some(oct_literal) = src_str.strip_prefix("0o") {
+            src_str = oct_literal;
+            while let Some(c) = src_str.chars().next() {
+                match c {
+                    '_' => {}
+                    '0'..='7' => {
+                        let digit = u64::from(c as u8 - b'0');
+                        int = int.wrapping_mul(8).wrapping_add(digit);
+                    }
+                    _ => break,
+                }
+                src_str = &src_str[c.len_utf8()..];
+            }
+        } else if let Some(bin_literal) = src_str.strip_prefix("0b") {
+            src_str = bin_literal;
+            while let Some(c) = src_str.chars().next() {
+                match c {
+                    '_' => {}
+                    '0' | '1' => {
+                        let digit = u64::from(c as u8 - b'0');
+                        int = int.wrapping_mul(2).wrapping_add(digit);
+                    }
+                    _ => break,
+                }
+                src_str = &src_str[c.len_utf8()..];
+            }
         } else {
             while let Some(c) = src_str.chars().next() {
                 match c {

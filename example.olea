@@ -1,2 +1,5 @@
-fn bad():
-    0 <= 0
+fn int_literals():
+    0b101010
+    0o52
+    42
+    0x2A
