@@ -835,6 +835,10 @@ pub enum BinOp {
     Mul,
     /// Unsigned division.
     Div,
+    /// Bitwise AND.
+    BitAnd,
+    /// Bitwise OR.
+    BitOr,
     /// Unsigned comparison.
     Cmp(Cmp),
 }

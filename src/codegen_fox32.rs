@@ -445,6 +445,8 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                                 BinOp::Sub => arithmetic("sub"),
                                 BinOp::Mul => arithmetic("mul"),
                                 BinOp::Div => arithmetic("div"),
+                                BinOp::BitAnd => arithmetic("and"),
+                                BinOp::BitOr => arithmetic("or"),
                                 BinOp::Cmp(cmp) => {
                                     let prefix = match cmp {
                                         Cmp::Lt => "iflt",

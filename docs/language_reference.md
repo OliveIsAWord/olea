@@ -238,8 +238,8 @@ Operator Category | Operators | Associativity
 --- | --- | ---
 Postfix | `^`, `@`, `as`, function calls `()`, array indexing `[]`, field access, method calls |  Left-to-right
 Prefix | negation `-` | Right-to-left
-Multiplication | `*`, `/` | Left-to-right
-Addition | `+`, subtraction `-` | Left-to-right
+Multiplication | `*`, `/`, '&' | Left-to-right
+Addition | `+`, subtraction `-`, '|' | Left-to-right
 Comparison | `==`, `!=`, `<`, `>`, `<=`, `>=` | See [comparison operators](#comparison-operators)
 And | `and` | Left-to-right
 Or | `or` | Left-to-right
@@ -360,6 +360,15 @@ A block expression evaluates its statements in order and, if the last statement 
 ```
 
 These operations perform addition, subtraction, multiplication, division, and negation respectively. Both expressions must be integers (no pointer arithmetic!). Currently, all integers are treated as two's complement unsigned integers.
+
+### Bitwise Operators
+
+```rs
+<expression> & <expression>
+<expression> | <expression>
+```
+
+These operations perform bitwise AND and OR respectively on two integer operands.
 
 ### Comparison Operators
 

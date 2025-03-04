@@ -245,7 +245,13 @@ fn visit_block(
                     | Sk::Static(_)
                     | Sk::UnaryOp(UnaryOp::Neg, _)
                     | Sk::BinOp(
-                        BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Cmp(_),
+                        BinOp::Add
+                        | BinOp::Sub
+                        | BinOp::Mul
+                        | BinOp::Div
+                        | BinOp::BitAnd
+                        | BinOp::BitOr
+                        | BinOp::Cmp(_),
                         _,
                         _,
                     ) => {

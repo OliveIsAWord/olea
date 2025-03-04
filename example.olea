@@ -1,5 +1,2 @@
-fn int_literals():
-    0b101010
-    0o52
-    42
-    0x2A
+fn bitwise() usize:
+    1 | 2 & 3

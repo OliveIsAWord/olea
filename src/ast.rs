@@ -197,6 +197,10 @@ pub enum BinOpKind {
     And,
     /// Short-circuiting boolean OR.
     Or,
+    /// Bitwise AND.
+    BitAnd,
+    /// Bitwise OR.
+    BitOr,
 }
 
 /// The different directions of comparison.

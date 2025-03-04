@@ -460,6 +460,8 @@ impl<'a> IrBuilder<'a> {
                     A::Sub => arithmetic(B::Sub)?,
                     A::Mul => arithmetic(B::Mul)?,
                     A::Div => arithmetic(B::Div)?,
+                    A::BitAnd => arithmetic(B::BitAnd)?,
+                    A::BitOr => arithmetic(B::BitOr)?,
                     A::And => {
                         let lhs_reg = self.build_expr_unvoid(lhs, span.clone())?;
                         let lhs_id = self.current_block_id;
@@ -974,7 +976,11 @@ impl<'a> IrBuilder<'a> {
             &Sk::Int(_, kind) | &Sk::IntCast(_, kind) => self.program_tys.insert(TyKind::Int(kind)),
             &Sk::PtrCast(_, kind) => self.program_tys.insert(TyKind::Pointer(kind)),
             Sk::Phi(regs) => t(regs.first_key_value().expect("empty phi").1),
-            Sk::BinOp(BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div, lhs, _rhs) => t(lhs),
+            Sk::BinOp(
+                BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::BitAnd | BinOp::BitOr,
+                lhs,
+                _rhs,
+            ) => t(lhs),
             Sk::PtrOffset(ptr, accesses) => {
                 assert_eq!(accesses.len(), 1);
                 let access = &accesses[0];

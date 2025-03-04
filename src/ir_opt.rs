@@ -226,6 +226,8 @@ fn constant_propagation_impl(f: &mut Function) {
                             lhs.wrapping_div(rhs)
                         }
                     }
+                    BinOp::BitAnd => lhs & rhs,
+                    BinOp::BitOr => lhs | rhs,
                     BinOp::Cmp(cmp) => {
                         let b = match cmp {
                             Cmp::Lt => lhs < rhs,
