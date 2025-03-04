@@ -46,7 +46,7 @@ fn gen_function(
     } else {
         writeln!(code, "    call [{const_address_name}]").unwrap();
         writeln!(code, "    pop rfp").unwrap();
-        for i in 0..returns.len() {
+        for i in (0..returns.len()).rev() {
             writeln!(code, "    push r{i}").unwrap();
         }
         writeln!(code, "    jmp rfp").unwrap();
