@@ -647,7 +647,7 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                     write_inst!(code, "ret");
                 } else {
                     write_inst!(code, "pop rfp");
-                    for r in returns {
+                    for r in returns.iter().rev() {
                         let r_reg = regs.get(r).unwrap().foo();
                         write_inst!(code, "push {r_reg}");
                     }
