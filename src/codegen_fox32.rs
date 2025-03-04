@@ -537,7 +537,7 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                     let src_reg = regs.get(src).unwrap();
                     write_inst!(
                         code,
-                        "movz{inner_size} [{}], {}",
+                        "mov{inner_size} [{}], {}",
                         dst_reg.bar(),
                         src_reg.foo()
                     );
