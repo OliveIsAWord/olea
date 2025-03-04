@@ -1,7 +1,0 @@
-fn bar(cond usize) usize:
-    let y = 1
-    if cond:
-        y = 2
-    else:
-        y = 3
-    y
