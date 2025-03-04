@@ -323,6 +323,7 @@ fn visit_block(
             }
         }
     }
+    // block.gen_def_use();
 }
 
 fn destructure_registers(regs: &mut Vec<Register>, destructed_regs: &DestructedRegs) {

@@ -70,7 +70,7 @@ pub fn calculate_liveness(f: &Function) -> FunctionLiveness {
                 let Inst::Store(_, StoreKind::Phi(regs)) = inst else {
                     continue;
                 };
-                last.insert(*regs.get(&id).unwrap());
+                assert!(last.contains(&regs[&id]), "wtf {regs:?} {id:?} {last:?}");
             }
         }
         let mut insts_live: Vec<_> = (0..insts.len()).map(|_| Set::new()).collect();
@@ -98,13 +98,18 @@ pub fn calculate_liveness(f: &Function) -> FunctionLiveness {
         insts_map.insert(id, insts_live);
     }
     assert_eq!(start_map.len(), insts_map.len());
-    let blocks = zip(start_map, insts_map)
+    let blocks: Map<_, _> = zip(start_map, insts_map)
         .map(|((id1, start), (id2, insts))| {
             assert_eq!(id1, id2);
             let block = BlockLiveness { start, insts };
             (id1, block)
         })
         .collect();
+    assert_eq!(
+        blocks[&BlockId::ENTRY].start,
+        f.parameters.iter().copied().collect(),
+        "entry block live registers not matching parameters"
+    );
     FunctionLiveness { blocks }
 }
 
@@ -123,6 +128,14 @@ fn calculate_start(f: &Function) -> Start {
     for (&id, block) in &f.blocks {
         for &r in &block.used_regs {
             add(id, r, f, &mut map);
+        }
+        for inst in &block.insts {
+            let Inst::Store(_, StoreKind::Phi(regs)) = inst else {
+                continue;
+            };
+            for (&pred_block_id, &r) in regs {
+                add(pred_block_id, r, f, &mut map);
+            }
         }
     }
     map

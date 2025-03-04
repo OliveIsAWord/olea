@@ -1,8 +1,6 @@
-fn use(anon _: Foo): 0
-
-struct Foo:
-    anon _: usize
-
+extern fn meow() usize
 fn main():
-    let mut foo = Foo(42)
-    use(foo)
+    let foo = if true:
+        meow()
+    else:
+        meow()

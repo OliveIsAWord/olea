@@ -319,10 +319,10 @@ fn main() -> ExitCode {
         eprintln!("{ir}\n");
     }
 
-    if false {
+    if true {
         for (name, f) in &ir.functions {
-            let live = ir_liveness::calculate_liveness(f);
             eprintln!("{name}:");
+            let live = ir_liveness::calculate_liveness(f);
             live.pretty_print();
         }
         eprintln!();
