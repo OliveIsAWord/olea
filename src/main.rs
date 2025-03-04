@@ -299,7 +299,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // eprintln!("#IR:\n{ir}\n");
+    eprintln!("#IR:\n{ir}\n");
     if typecheck(&ir, &src, file_path, ErrorMode::User) {
         return ExitCode::FAILURE;
     }

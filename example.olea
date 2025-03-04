@@ -1,4 +1,6 @@
-struct T
-
-fn mut_smuggling(anon ptr: T^) T^mut:
-    (ptr@ as T^mut^)^
+fn main():
+    0
+    defer defer 4
+    1
+    defer 3
+    2

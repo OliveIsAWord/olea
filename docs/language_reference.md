@@ -222,13 +222,11 @@ A `break` statement exits the inner-most `while` loop, yielding the value of its
 
 ### `defer`
 
-TODO: Not yet implemented.
-
 ```rs
-defer {expression}
+defer {statement}
 ```
 
-A `defer` statement declares an expression that will be evaluated when control flow exits from the current block.
+A `defer` statement declares a statement that will be evaluated when control flow exits from the current block (e.g. at the end of the block). Multiple `defer`s in a single block are evaluated from bottom to top.
 
 ## Expressions
 

@@ -69,6 +69,7 @@ struct IrBuilder<'a> {
     tys: Map<Register, Ty>,
     spans: Map<Register, Span>,
     scopes: Vec<Map<Str, Register>>,
+    block_end_id: BlockId,
     self_reg: Option<Register>,
     underscore_self: Option<Span>,
     next_reg_id: u128,
@@ -218,6 +219,7 @@ impl<'a> IrBuilder<'a> {
             tys: Map::new(),
             spans: Map::new(),
             scopes: vec![Map::new()],
+            block_end_id: BlockId(usize::MAX),
             self_reg: None,
             underscore_self: None,
             next_reg_id: 0,
@@ -259,9 +261,9 @@ impl<'a> IrBuilder<'a> {
             }
         }
         let return_regs = if let Some(returns) = returns.as_ref() {
-            vec![self.build_block_unvoid(body, returns.span.clone())?]
+            vec![self.build_block_unvoid(&body.0, returns.span.clone())?]
         } else {
-            self.build_block(body, false)?;
+            self.build_block(&body.0, false)?;
             vec![]
         };
         self.switch_to_new_block(Exit::Return(return_regs), BlockId::DUMMY);
@@ -305,19 +307,19 @@ impl<'a> IrBuilder<'a> {
         )
     }
 
-    fn build_block_unvoid(&mut self, block: &ast::Block, outer: Span) -> Result<Register> {
+    fn build_block_unvoid(&mut self, block: &[ast::Stmt], outer: Span) -> Result<Register> {
         let r = self.build_block(block, true)?;
         r.ok_or_else(|| Error {
             kind: ErrorKind::DoesNotYield(outer),
-            span: block.0.last().unwrap().span.clone(),
+            span: block.last().unwrap().span.clone(),
         })
     }
 
-    fn build_block(
-        &mut self,
-        ast::Block(stmts): &ast::Block,
-        unvoid: bool,
-    ) -> Result<Option<Register>> {
+    fn build_block(&mut self, stmts: &[ast::Stmt], unvoid: bool) -> Result<Option<Register>> {
+        // this "block end id" business serves only to support `defer` statements. Compiling a `defer` statement creates a new IR block that ends with jumping to the current `self.block_end_id`, and sets `self.block_end_id` to this new block. In that way, the series of 0 or more defer statements are daisy chained in reverse-declaration order, and at the end of this block, we jump to `self.block_end_id` to link the last executed statement to the start of the daisy chain. Then, we switch to the `block_end_id` (a.k.a. where the first declared `defer` jumps to) to continue IR generation.
+        let old_block_end_id = self.block_end_id;
+        let block_end_id = self.reserve_block_id();
+        self.block_end_id = block_end_id;
         self.enter_scope();
         let mut last_stmt_return = None;
         for (i, stmt) in stmts.iter().enumerate() {
@@ -325,6 +327,8 @@ impl<'a> IrBuilder<'a> {
             last_stmt_return = self.build_stmt(stmt, unvoid && is_last)?;
         }
         self.exit_scope();
+        self.switch_to_new_block(Exit::Jump(self.block_end_id), block_end_id);
+        self.block_end_id = old_block_end_id;
         Ok(last_stmt_return)
     }
 
@@ -357,10 +361,18 @@ impl<'a> IrBuilder<'a> {
                 self.new_var(name.clone(), alloc_ty, *is_mut, value_reg);
                 None
             }
+            S::Defer(stmt) => {
+                let defer_id = self.reserve_block_id();
+                let further_statements_id = self.reserve_block_id();
+                self.switch_to_new_block(Exit::Jump(further_statements_id), defer_id);
+                let _: Option<Register> = self.build_block(std::slice::from_ref(stmt), false)?;
+                self.switch_to_new_block(Exit::Jump(self.block_end_id), further_statements_id);
+                self.block_end_id = defer_id;
+                None
+            }
             S::Continue => return Err(todo("continue", span)),
             S::Return(_e) => return Err(todo("return", span)),
             S::Break(_e) => return Err(todo("break", span)),
-            S::Defer(_e) => return Err(todo("defer", span)),
         };
         Ok(reg)
     }
@@ -555,7 +567,7 @@ impl<'a> IrBuilder<'a> {
             }
             // NOTE: When building Paren and Block, we forget their spans, which means subsequent error diagnostics will only ever point to the inner expression. Is this good or bad? We could change this by creating a Copy of the inner register, assigning the copy the outer span.
             E::Paren(inner) => self.build_expr(inner.as_ref(), unvoid)?,
-            E::Block(b) => self.build_block(b, unvoid)?,
+            E::Block(b) => self.build_block(&b.0, unvoid)?,
             E::If(cond, then_body, else_body) => {
                 let then_id = self.reserve_block_id();
                 let end_id = self.reserve_block_id();
@@ -571,7 +583,7 @@ impl<'a> IrBuilder<'a> {
                 self.switch_to_new_block(Exit::CondJump(cond_reg, then_id, else_id), then_id);
 
                 // evaluate true branch, jump to end
-                let then_yield = self.build_block(then_body, unvoid)?;
+                let then_yield = self.build_block(&then_body.0, unvoid)?;
                 self.exit_scope();
                 let then_id = self.current_block_id;
                 self.switch_to_new_block(Exit::Jump(end_id), else_id);
@@ -581,7 +593,7 @@ impl<'a> IrBuilder<'a> {
                     .as_ref()
                     .map(|e| {
                         self.enter_scope();
-                        let else_yield = self.build_block(e, unvoid)?;
+                        let else_yield = self.build_block(&e.0, unvoid)?;
                         self.exit_scope();
                         let else_id = self.current_block_id;
                         self.switch_to_new_block(Exit::Jump(end_id), end_id);
@@ -611,7 +623,7 @@ impl<'a> IrBuilder<'a> {
                 self.switch_to_new_block(Exit::CondJump(cond_reg, body_id, end_id), body_id);
 
                 // body evaluation, jump back to condition
-                self.build_block(body, true)?;
+                self.build_block(&body.0, true)?;
                 self.exit_scope();
                 self.switch_to_new_block(Exit::Jump(cond_id), end_id);
 
@@ -852,7 +864,7 @@ impl<'a> IrBuilder<'a> {
                 }
                 Vacant(e) => e,
             };
-            let r = self.build_block_unvoid(body, name.span.clone())?;
+            let r = self.build_block_unvoid(&body.0, name.span.clone())?;
             entry.insert((name.span.clone(), r));
         }
         Ok((evaled_args, evaled_anon))
