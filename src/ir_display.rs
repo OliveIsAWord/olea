@@ -17,7 +17,7 @@ impl Display for Program {
 }
 
 impl Program {
-    fn fmt_function(&self, name: &str, function: &Function, f: &mut impl Write) -> Result {
+    pub fn fmt_function(&self, name: &str, function: &Function, f: &mut impl Write) -> Result {
         let Function {
             parameters,
             blocks,
@@ -49,7 +49,7 @@ impl Program {
         }
         Ok(())
     }
-    fn fmt_block(
+    pub fn fmt_block(
         &self,
         name: &str,
         function: &Function,
@@ -73,7 +73,7 @@ impl Program {
         write!(f, "    ")?;
         self.fmt_exit(name, exit, &mut *f)
     }
-    fn fmt_inst(&self, function: &Function, inst: &Inst, f: &mut impl Write) -> Result {
+    pub fn fmt_inst(&self, function: &Function, inst: &Inst, f: &mut impl Write) -> Result {
         match *inst {
             Inst::Nop => write!(f, "nop"),
             Inst::Store(r, ref sk) => {
@@ -119,7 +119,7 @@ impl Program {
             }
         }
     }
-    fn fmt_store_kind(&self, sk: &StoreKind, f: &mut impl Write) -> Result {
+    pub fn fmt_store_kind(&self, sk: &StoreKind, f: &mut impl Write) -> Result {
         use StoreKind as Sk;
         match *sk {
             Sk::Bool(b) => write!(f, "{b}"),
@@ -151,7 +151,7 @@ impl Program {
                     if comma {
                         write!(f, ", ")?;
                     }
-                    comma = false;
+                    comma = true;
                     write!(f, "{}: {r}", id.0)?;
                 }
                 write!(f, ")")
@@ -188,7 +188,7 @@ impl Program {
                 for offset in offsets {
                     write!(f, "{offset}")?;
                 }
-                Ok(())
+                write!(f, "@")
             }
             Sk::StackAlloc(ty) => {
                 write!(f, "alloca ")?;
@@ -198,7 +198,7 @@ impl Program {
             Sk::Function(ref name) | Sk::Static(ref name) => write!(f, "{name}"),
         }
     }
-    fn fmt_exit(&self, name: &str, exit: &Exit, f: &mut impl Write) -> Result {
+    pub fn fmt_exit(&self, name: &str, exit: &Exit, f: &mut impl Write) -> Result {
         match *exit {
             Exit::Jump(id) => {
                 write!(f, "goto ")?;
@@ -226,10 +226,10 @@ impl Program {
             }
         }
     }
-    fn fmt_block_id(&self, name: &str, id: BlockId, f: &mut impl Write) -> Result {
+    pub fn fmt_block_id(&self, name: &str, id: BlockId, f: &mut impl Write) -> Result {
         write!(f, "{name}_{}", id.0)
     }
-    fn fmt_ty(&self, ty: Ty, f: &mut impl Write) -> Result {
+    pub fn fmt_ty(&self, ty: Ty, f: &mut impl Write) -> Result {
         self.tys.fmt_ty(ty, f)
     }
 }
@@ -278,7 +278,7 @@ impl TyMap {
             }
         }
     }
-    fn fmt_function_signature(
+    pub fn fmt_function_signature(
         &self,
         has_self: bool,
         params: &IndexMap<Str, (IsAnon, Ty)>,

@@ -31,7 +31,7 @@ pub struct Spanned<T> {
 }
 
 /// "Zips" two iterators together, asserting that the two are equal in length.
-pub fn zip<A, B>(a: A, b: B) -> impl Iterator<Item = (A::Item, B::Item)>
+pub fn zip<A, B>(a: A, b: B) -> std::iter::Zip<A::IntoIter, B::IntoIter>
 where
     A: IntoIterator,
     B: IntoIterator,

@@ -293,7 +293,7 @@ pub fn gen_program(ir: &Program) -> String {
         if i != 0 {
             code.push('\n');
         }
-        let fn_output = gen_function(f, name, get_size);
+        let fn_output = gen_function(ir, f, name, get_size);
         code.push_str(&fn_output);
     }
     code
@@ -314,7 +314,12 @@ fn gen_static(value: &ValueKind, code: &mut String) {
     }
 }
 
-fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> String {
+fn gen_function(
+    program: &Program,
+    f: &Function,
+    function_name: &str,
+    get_size: SizeFinder,
+) -> String {
     let mut code = String::new();
     let RegAllocInfo {
         regs,
@@ -337,9 +342,13 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
     write_label!(code, "{function_name}");
     if !f.parameters.is_empty() {
         write_inst!(code, "pop rfp");
-        for arg in &f.parameters {
+        let TyKind::Function { params, .. } = &program.tys[program.function_tys[function_name]]
+        else {
+            unreachable!();
+        };
+        for (arg, arg_name) in zip(&f.parameters, params.keys()) {
             match regs.get(arg).unwrap() {
-                StoreLoc::Register(i) => write_inst!(code, "pop r{i}"),
+                StoreLoc::Register(i) => write_inst!(code, "pop r{i} ; {arg_name}"),
                 StoreLoc::Constant(_) => unreachable!(),
                 // e @ StoreLoc::Stack(_) => todo!("function argument got assigned {e:?}"),
             }
@@ -357,7 +366,9 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
         let block = f.blocks.get(&i).unwrap();
         write_label!(code, "{function_name}_{}", i.0);
         for (inst_i, inst) in block.insts.iter().enumerate() {
-            write_comment!(code, "{inst:?}");
+            code.push_str("    ; ");
+            program.fmt_inst(f, inst, &mut code).unwrap();
+            code.push('\n');
             match inst {
                 Inst::Store(r, sk) => {
                     let size = get_size.of_ty(f.tys[r]);
@@ -578,9 +589,12 @@ fn gen_function(f: &Function, function_name: &str, get_size: SizeFinder) -> Stri
                             StoreLoc::Constant(_) => {}
                         }
                     }
-                    for r in args.iter().rev() {
+                    let TyKind::Function { params, .. } = &program.tys[f.tys[&callee]] else {
+                        unreachable!();
+                    };
+                    for (r, param_name) in zip(args.iter(), params.keys()).rev() {
                         let reg = regs.get(r).unwrap();
-                        write_inst!(code, "push {}", reg.foo());
+                        write_inst!(code, "push {} ; {param_name}", reg.foo());
                     }
                     let callee_reg = regs.get(callee).unwrap();
                     write_inst!(code, "call {}", callee_reg.foo());
