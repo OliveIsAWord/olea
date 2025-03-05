@@ -589,7 +589,7 @@ fn gen_function(
                             StoreLoc::Constant(_) => {}
                         }
                     }
-                    let TyKind::Function { params, .. } = &program.tys[f.tys[&callee]] else {
+                    let TyKind::Function { params, .. } = &program.tys[f.tys[callee]] else {
                         unreachable!();
                     };
                     for (r, param_name) in zip(args.iter(), params.keys()).rev() {
@@ -614,14 +614,21 @@ fn gen_function(
         }
         let merge_phis = |code: &mut String, jump_index, prefix| {
             let jump_block = f.blocks.get(&jump_index).unwrap();
+            let mut connections = Vec::new();
             for inst in &jump_block.insts {
                 let Inst::Store(dst, Sk::Phi(srcs)) = inst else {
                     continue;
                 };
-                let src = srcs.get(&i).unwrap();
-                let dst_reg = regs.get(dst).unwrap().foo();
+                let src = srcs[&i];
+                connections.push((dst, src));
+            }
+            for (_, src) in connections.iter().rev() {
                 let src_reg = regs.get(src).unwrap().foo();
-                write_inst!(*code, "{prefix}mov {dst_reg}, {src_reg}");
+                write_inst!(*code, "{prefix}push {src_reg}");
+            }
+            for (dst, _) in &connections {
+                let dst_reg = regs.get(dst).unwrap().foo();
+                write_inst!(*code, "{prefix}pop {dst_reg}");
             }
         };
         let next_i = match &block.exit {
