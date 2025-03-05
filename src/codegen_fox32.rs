@@ -402,13 +402,15 @@ fn gen_function(
                         }
                         Sk::UnaryOp(op, inner) => {
                             let inner_reg = regs.get(inner).unwrap();
-                            let op_mnemonic = match op {
-                                UnaryOp::Neg => "neg",
-                            };
                             if reg != inner_reg {
                                 write_inst!(code, "mov {}, {}", reg.foo(), inner_reg.foo());
                             }
-                            write_inst!(code, "{}{size} {}", op_mnemonic, reg.foo());
+                            match op {
+                                UnaryOp::Neg => {
+                                    write_inst!(code, "not{size} {}", reg.foo());
+                                    write_inst!(code, "inc{size} {}", reg.foo());
+                                }
+                            };
                         }
                         Sk::BinOp(op, lhs, rhs) => {
                             let size = get_size.of_ty(f.tys[lhs]);
