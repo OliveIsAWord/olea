@@ -716,7 +716,6 @@ impl<'a> IrBuilder<'a> {
         };
         let ty = self.tys[&r];
         let TyKind::Pointer(pointer) = self.program_tys[ty] else {
-            assert_eq!(ty, self.dummy_ty);
             return Ok(r);
         };
         if let Some(is_mut) = is_mut {
