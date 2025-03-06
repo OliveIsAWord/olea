@@ -714,9 +714,10 @@ impl<'a> IrBuilder<'a> {
                 r
             }
         };
-        // match on this early just to make sure this invariant actually holds
-        let TyKind::Pointer(pointer) = self.program_tys[self.tys[&r]] else {
-            unreachable!()
+        let ty = self.tys[&r];
+        let TyKind::Pointer(pointer) = self.program_tys[ty] else {
+            assert_eq!(ty, self.dummy_ty);
+            return Ok(r);
         };
         if let Some(is_mut) = is_mut {
             if is_mut != pointer.is_mut {
